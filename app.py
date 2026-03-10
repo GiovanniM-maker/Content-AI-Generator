@@ -1762,6 +1762,12 @@ def get_preferences():
     })
 
 
+@app.route("/healthz")
+def healthz():
+    """Lightweight health check for Render / load balancers."""
+    return jsonify({"status": "ok"}), 200
+
+
 @app.route("/api/monitor/health")
 def get_health():
     user_id = _get_user_id()

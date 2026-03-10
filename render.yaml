@@ -16,4 +16,4 @@ services:
       # Required: FLASK_SECRET_KEY, ENCRYPTION_KEY
       # Optional: RESEND_API_KEY, SENTRY_DSN, UPSTASH_REDIS_URL
       # Optional: NTFY_TOPIC, BEEHIIV_PUB_ID, FAL_KEY, POSTHOG_API_KEY
-    healthCheckPath: /api/monitor/health
+    healthCheckPath: /healthz

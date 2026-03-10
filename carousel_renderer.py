@@ -6,7 +6,10 @@ Uses Playwright (headless Chromium) to render HTML/CSS → PNG.
 import hashlib
 import re
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None  # Playwright not installed (e.g. production Docker)
 
 OUTPUT_DIR = Path(__file__).parent / "static" / "carousel_output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -364,6 +367,9 @@ def render_carousel(text: str, palette_idx: int = 0) -> dict:
     prefix = f"carousel_{content_hash}"
 
     image_paths = []
+
+    if sync_playwright is None:
+        raise RuntimeError("Playwright non è installato. Installa con: pip install playwright && playwright install chromium")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
