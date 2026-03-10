@@ -2136,6 +2136,8 @@ function showAuthOverlay() {
 }
 
 function hideAuthOverlay() {
+  // Never hide the overlay if we're in forced landing mode (?landing)
+  if (_forceLandingMode) return;
   const overlay = document.getElementById('auth-overlay');
   if (overlay) {
     overlay.classList.add('hidden');
@@ -2289,11 +2291,13 @@ function updateSidebarUser(user) {
 
 // On page load: check auth state
 // If URL has ?landing, always show landing page regardless of auth
+let _forceLandingMode = false;
+
 function initAuth() {
   const params = new URLSearchParams(window.location.search);
-  const forceLanding = params.has('landing');
+  _forceLandingMode = params.has('landing');
 
-  if (forceLanding) {
+  if (_forceLandingMode) {
     showAuthOverlay();
     // If user is logged in, show "back to dashboard" link
     const data = getAuthData();
