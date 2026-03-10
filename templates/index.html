@@ -1434,6 +1434,8 @@ body::after {
           <button class="auth-btn landing-cta-secondary" onclick="document.getElementById('landing-pricing').scrollIntoView({behavior:'smooth'})">Vedi i piani</button>
         </div>
         <p class="landing-trust">10 generazioni gratuite &bull; Nessuna carta richiesta &bull; Setup in 30 secondi</p>
+        <!-- Shown only for logged-in users viewing the landing via ?landing -->
+        <a href="/" id="landing-back-to-app" style="display:none;margin-top:16px;color:var(--accent2);font-size:14px;font-weight:600;text-decoration:none;">Vai alla Dashboard &rarr;</a>
       </div>
     </div>
 
@@ -2286,7 +2288,22 @@ function updateSidebarUser(user) {
 }
 
 // On page load: check auth state
+// If URL has ?landing, always show landing page regardless of auth
 function initAuth() {
+  const params = new URLSearchParams(window.location.search);
+  const forceLanding = params.has('landing');
+
+  if (forceLanding) {
+    showAuthOverlay();
+    // If user is logged in, show "back to dashboard" link
+    const data = getAuthData();
+    if (data && data.access_token) {
+      const backLink = document.getElementById('landing-back-to-app');
+      if (backLink) backLink.style.display = 'inline-block';
+    }
+    return;
+  }
+
   const data = getAuthData();
   if (data && data.access_token) {
     // Validate token by calling /auth/me
