@@ -119,9 +119,10 @@ def init_rate_limiter(app: Flask) -> Limiter:
         )
 
     # Apply specific limits to sensitive endpoints
+    # auth_signup: 3 per day per IP to slow down multi-account abuse
     for endpoint, limit_str in {
         "auth_login": "5 per minute",
-        "auth_signup": "5 per minute",
+        "auth_signup": "3 per day",
         "auth_refresh": "10 per minute",
         "generate_content": "20 per minute",
         "generate_newsletter": "20 per minute",
@@ -151,7 +152,16 @@ def get_limiter() -> Limiter | None:
 # ---------------------------------------------------------------------------
 
 def init_security_headers(app: Flask):
-    """Add security headers to all responses."""
+    """Add security headers to all responses.
+
+    Includes:
+    - HSTS (force HTTPS)
+    - CSP (Content Security Policy)
+    - X-Frame-Options, X-Content-Type-Options
+    - Referrer-Policy, Permissions-Policy
+    - Cache-Control for API routes
+    """
+    is_production = os.getenv("FLASK_ENV") == "production"
 
     @app.after_request
     def _add_security_headers(response):
@@ -162,6 +172,28 @@ def init_security_headers(app: Flask):
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(), payment=()"
         )
+
+        # HSTS — tell browsers to always use HTTPS (production only)
+        if is_production:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+
+        # Content Security Policy — restrict what can load
+        csp_parts = [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' https://js.stripe.com https://cdn.jsdelivr.net",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
+            "img-src 'self' data: blob: https:",
+            "connect-src 'self' https://*.supabase.co https://api.stripe.com https://*.sentry.io https://*.posthog.com",
+            "frame-src https://js.stripe.com https://hooks.stripe.com",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+        ]
+        response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
+
         # Cache-control for API responses
         if request.path.startswith("/api/") or request.path.startswith("/auth/"):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
@@ -263,23 +295,27 @@ def send_email(to: str, subject: str, html: str) -> bool:
 
 def send_welcome_email(email: str, name: str) -> bool:
     """Send welcome email to new user."""
+    app_url = os.getenv("APP_URL", "https://content-ai-generator-1.onrender.com")
     return send_email(
         to=email,
-        subject="Benvenuto su Content Dashboard! 🚀",
+        subject="Benvenuto su Content AI Generator! 🚀",
         html=f"""
-        <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+        <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#000;color:#fff;border-radius:12px;">
             <h1 style="color:#7c3aed;">Benvenuto, {name or 'Utente'}!</h1>
-            <p>Il tuo account Content Dashboard è stato creato con successo.</p>
+            <p>Il tuo account Content AI Generator è stato creato con successo.</p>
             <p>Con il piano <strong>Free</strong> puoi:</p>
             <ul>
-                <li>Generare fino a 10 contenuti al mese</li>
-                <li>Creare post per LinkedIn</li>
+                <li>Generare fino a <strong>10 contenuti</strong> (totali)</li>
+                <li>Creare post per <strong>LinkedIn</strong> e <strong>Newsletter</strong></li>
                 <li>Gestire fino a 5 feed RSS</li>
             </ul>
-            <p>Per sbloccare tutte le piattaforme e generazioni illimitate,
-            <a href="#" style="color:#7c3aed;">effettua l'upgrade</a>.</p>
-            <p style="color:#999;font-size:12px;margin-top:24px;">
-                Content Dashboard — AI Content Pipeline
+            <p style="margin-top:16px;">Vuoi di più? Con il piano <strong style="color:#7c3aed;">Pro</strong> a €29/mese ottieni
+            50 generazioni/mese su tutte le 5 piattaforme.</p>
+            <a href="{app_url}" style="display:inline-block;margin-top:12px;padding:12px 24px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">
+                Vai alla Dashboard →
+            </a>
+            <p style="color:#666;font-size:12px;margin-top:24px;">
+                Content AI Generator — AI Content Pipeline
             </p>
         </div>
         """,

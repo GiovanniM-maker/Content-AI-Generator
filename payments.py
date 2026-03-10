@@ -29,15 +29,17 @@ stripe.api_key = STRIPE_SECRET_KEY
 # ---------------------------------------------------------------------------
 
 # Maps plan name → limits & features
+# Free plan uses a LIFETIME cap (not monthly).  Pro/Business are monthly.
 PLANS = {
     "free": {
         "name": "Free",
         "price_monthly": 0,
-        "generations_per_month": 10,
-        "platforms": ["linkedin"],
+        "generations_per_month": 0,      # not used — see generations_lifetime
+        "generations_lifetime": 10,      # 10 total generations ever
+        "platforms": ["linkedin", "newsletter"],
         "features": [
-            "10 generazioni/mese",
-            "Solo LinkedIn",
+            "10 generazioni totali",
+            "LinkedIn + Newsletter",
             "RSS feed (max 5)",
             "Storico sessioni (ultime 10)",
         ],
@@ -45,14 +47,16 @@ PLANS = {
     "pro": {
         "name": "Pro",
         "price_monthly": 29,
-        "generations_per_month": 100,
-        "platforms": ["linkedin", "instagram", "twitter", "newsletter"],
+        "generations_per_month": 50,
+        "generations_lifetime": -1,      # no lifetime cap
+        "platforms": ["linkedin", "instagram", "twitter", "newsletter", "video_script"],
         "features": [
-            "100 generazioni/mese",
-            "LinkedIn, Instagram, Twitter, Newsletter",
+            "50 generazioni/mese",
+            "Tutte le 5 piattaforme",
             "RSS illimitati + Web Search",
             "Feedback & prompt enrichment",
             "Carousel generator",
+            "Scheduling & notifiche push",
             "Storico sessioni illimitato",
             "Smart Brief AI",
         ],
@@ -60,16 +64,16 @@ PLANS = {
     "business": {
         "name": "Business",
         "price_monthly": 79,
-        "generations_per_month": -1,  # unlimited
+        "generations_per_month": -1,     # unlimited
+        "generations_lifetime": -1,      # no lifetime cap
         "platforms": ["linkedin", "instagram", "twitter", "newsletter", "video_script"],
         "features": [
             "Generazioni illimitate",
             "Tutte le 5 piattaforme",
-            "Video Script generator",
             "API keys personalizzate",
-            "Scheduling & notifiche push",
             "Pipeline monitoring avanzato",
             "Supporto prioritario",
+            "Tutto ciò che è incluso in Pro",
         ],
     },
 }
@@ -94,18 +98,39 @@ def get_plan_limits(plan: str) -> dict:
 def check_generation_limit(user_id: str, plan: str) -> dict:
     """Check if user can generate content based on their plan limits.
 
-    Returns {"allowed": True/False, "used": N, "limit": N, "plan": "..."}
+    Free plan  → lifetime cap (10 generations total, ever).
+    Pro plan   → monthly cap (50 per calendar month).
+    Business   → unlimited.
+
+    Returns {"allowed": bool, "used": int, "limit": int,
+             "limit_type": "lifetime"|"monthly"|"unlimited", "plan": str}
     """
     import db
-    limits = get_plan_limits(plan)
-    max_gen = limits["generations_per_month"]
-
-    if max_gen == -1:  # unlimited
-        return {"allowed": True, "used": 0, "limit": -1, "plan": plan}
-
-    # Count sessions this month
-    sessions = db.get_sessions(user_id)
     from datetime import datetime, timezone
+
+    limits = get_plan_limits(plan)
+    max_monthly = limits.get("generations_per_month", 0)
+    max_lifetime = limits.get("generations_lifetime", -1)
+
+    # ── Unlimited (Business) ─────────────────────────────
+    if max_monthly == -1:
+        return {"allowed": True, "used": 0, "limit": -1,
+                "limit_type": "unlimited", "plan": plan}
+
+    sessions = db.get_sessions(user_id)
+    total_count = len(sessions)
+
+    # ── Lifetime cap (Free) ──────────────────────────────
+    if max_lifetime > 0:
+        return {
+            "allowed": total_count < max_lifetime,
+            "used": total_count,
+            "limit": max_lifetime,
+            "limit_type": "lifetime",
+            "plan": plan,
+        }
+
+    # ── Monthly cap (Pro) ────────────────────────────────
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -116,9 +141,10 @@ def check_generation_limit(user_id: str, plan: str) -> dict:
             monthly_count += 1
 
     return {
-        "allowed": monthly_count < max_gen,
+        "allowed": monthly_count < max_monthly,
         "used": monthly_count,
-        "limit": max_gen,
+        "limit": max_monthly,
+        "limit_type": "monthly",
         "plan": plan,
     }
 
