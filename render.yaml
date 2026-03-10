@@ -1,9 +1,19 @@
 services:
   - type: web
     name: Content-AI-Generator
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
+      - key: FLASK_ENV
+        value: production
+      # All other env vars are set via Render Dashboard (secrets)
+      # Required: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY
+      # Required: OPENROUTER_API_KEY, SERPER_API_KEY
+      # Required: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_WEBHOOK_SECRET
+      # Required: STRIPE_PRICE_PRO, STRIPE_PRICE_BUSINESS
+      # Required: FLASK_SECRET_KEY, ENCRYPTION_KEY
+      # Optional: RESEND_API_KEY, SENTRY_DSN, UPSTASH_REDIS_URL
+      # Optional: NTFY_TOPIC, BEEHIIV_PUB_ID, FAL_KEY, POSTHOG_API_KEY
+    healthCheckPath: /api/monitor/health

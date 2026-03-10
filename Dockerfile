@@ -20,5 +20,9 @@ RUN mkdir -p data static/carousel_output static/video_output
 # Expose port
 EXPOSE 10000
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:10000/api/monitor/health')" || exit 1
+
 # Start with gunicorn
 CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--workers", "2", "--timeout", "120", "--keep-alive", "5"]
