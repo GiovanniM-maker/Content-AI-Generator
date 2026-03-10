@@ -71,31 +71,65 @@ _limiter: Limiter | None = None
 
 
 def init_rate_limiter(app: Flask) -> Limiter:
-    """Initialize Flask-Limiter with Upstash Redis backend."""
+    """Initialize Flask-Limiter with Upstash Redis backend (fallback: memory)."""
     global _limiter
 
     redis_url = os.getenv("UPSTASH_REDIS_URL", "")
+    storage_uri = "memory://"
 
     if redis_url:
-        storage_uri = redis_url
-    else:
-        storage_uri = "memory://"
+        # Upstash provides HTTPS REST URLs; Flask-Limiter needs redis(s):// protocol.
+        # Try to build a valid redis URI from the Upstash URL + token.
+        redis_token = os.getenv("UPSTASH_REDIS_TOKEN", "")
+        if redis_url.startswith("https://"):
+            # Convert https://xxx.upstash.io → rediss://:token@xxx.upstash.io:6379
+            host = redis_url.replace("https://", "").rstrip("/")
+            if redis_token:
+                storage_uri = f"rediss://:{redis_token}@{host}:6379"
+            else:
+                storage_uri = "memory://"
+        elif redis_url.startswith("redis://") or redis_url.startswith("rediss://"):
+            storage_uri = redis_url
+        # else: keep memory://
 
-    _limiter = Limiter(
-        app=app,
-        key_func=_get_rate_limit_key,
-        default_limits=["200 per minute"],
-        storage_uri=storage_uri,
-        strategy="fixed-window",
-    )
+    # Ensure Upstash URLs use TLS (rediss://)
+    if "upstash.io" in storage_uri and storage_uri.startswith("redis://"):
+        storage_uri = storage_uri.replace("redis://", "rediss://", 1)
+
+    # Swallow backend errors so requests aren't killed when Redis is down
+    app.config["RATELIMIT_SWALLOW_ERRORS"] = True
+
+    try:
+        _limiter = Limiter(
+            app=app,
+            key_func=_get_rate_limit_key,
+            default_limits=["200 per minute"],
+            storage_uri=storage_uri,
+            strategy="fixed-window",
+        )
+        app.logger.info(f"Rate limiter initialized (storage: {storage_uri[:30]}...)")
+    except Exception as e:
+        app.logger.warning(f"Redis rate-limit storage failed ({e}), falling back to memory://")
+        _limiter = Limiter(
+            app=app,
+            key_func=_get_rate_limit_key,
+            default_limits=["200 per minute"],
+            storage_uri="memory://",
+            strategy="fixed-window",
+        )
 
     # Apply specific limits to sensitive endpoints
-    _limiter.limit("5 per minute")(app.view_functions.get("auth_login", lambda: None))
-    _limiter.limit("5 per minute")(app.view_functions.get("auth_signup", lambda: None))
-    _limiter.limit("10 per minute")(app.view_functions.get("auth_refresh", lambda: None))
-    _limiter.limit("20 per minute")(app.view_functions.get("generate_content", lambda: None))
-    _limiter.limit("20 per minute")(app.view_functions.get("generate_newsletter", lambda: None))
-    _limiter.limit("3 per minute")(app.view_functions.get("create_checkout", lambda: None))
+    for endpoint, limit_str in {
+        "auth_login": "5 per minute",
+        "auth_signup": "5 per minute",
+        "auth_refresh": "10 per minute",
+        "generate_content": "20 per minute",
+        "generate_newsletter": "20 per minute",
+        "create_checkout": "3 per minute",
+    }.items():
+        fn = app.view_functions.get(endpoint)
+        if fn:
+            _limiter.limit(limit_str)(fn)
 
     return _limiter
 

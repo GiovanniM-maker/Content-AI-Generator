@@ -1844,4 +1844,4 @@ if __name__ == "__main__":
         pass
 
     print("\n  Content AI Generator running on http://localhost:5001\n")
-    app.run(debug=True, port=5001, use_reloader=False)
+    app.run(debug=True, port=5001, host='0.0.0.0', use_reloader=False)
