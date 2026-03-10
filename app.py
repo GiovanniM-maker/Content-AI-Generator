@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Content Creation Dashboard — Flask backend."""
+"""Content Creation Dashboard — Flask backend (Supabase edition)."""
 
 import json
 import os
+import re
 import threading
 import time
 import uuid
-import webbrowser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -15,32 +15,27 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context
 
+import db
+
 load_dotenv()
 
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-ARTICLES_FILE = DATA_DIR / "articles.json"
-SESSIONS_FILE = DATA_DIR / "sessions.json"
-FEEDBACK_FILE = DATA_DIR / "feedback.json"
-PROMPT_LOG_FILE = DATA_DIR / "prompt_log.json"
-PIPELINE_LOG_FILE = DATA_DIR / "pipeline_log.json"
-SELECTION_PREFS_FILE = DATA_DIR / "selection_prefs.json"
-FEEDS_CONFIG_FILE = DATA_DIR / "feeds_config.json"
-SCHEDULE_FILE = DATA_DIR / "schedule.json"
-WEEKLY_STATUS_FILE = DATA_DIR / "weekly_status.json"
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-MODEL_CHEAP = "google/gemini-2.0-flash-001"  # cheap model for scoring
-MODEL_GENERATION = "anthropic/claude-sonnet-4-5"  # quality model for content
+MODEL_CHEAP = "google/gemini-2.0-flash-001"
+MODEL_GENERATION = "anthropic/claude-sonnet-4-5"
 
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 BEEHIIV_PUB_ID = os.getenv("BEEHIIV_PUB_ID", "")
 
-# Fallback feeds if no config file
 DEFAULT_RSS_FEEDS = [
     "https://huggingface.co/blog/feed.xml",
     "https://techcrunch.com/feed/",
@@ -52,32 +47,25 @@ DEFAULT_RSS_FEEDS = [
     "https://venturebeat.com/ai/feed/",
 ]
 
-FETCH_WINDOW_DAYS = 5  # how many days back to look for articles
+FETCH_WINDOW_DAYS = 5
+
 
 # ---------------------------------------------------------------------------
-# Helpers
+# User context helper
 # ---------------------------------------------------------------------------
 
-def _load_json(path: Path) -> list:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, FileNotFoundError):
-        return []
+def _get_user_id() -> str:
+    """Get current user ID from request context.
+    Phase 2: returns env default.
+    Phase 3: will extract from JWT token.
+    """
+    # TODO: Phase 3 — extract user_id from JWT via request headers
+    return os.getenv("DEFAULT_USER_ID", "00000000-0000-0000-0000-000000000000")
 
 
-def _load_json_obj(path: Path) -> dict:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            return data
-    except (json.JSONDecodeError, FileNotFoundError):
-        pass
-    return {}
-
-
-def _save_json(path: Path, data):
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
+# ---------------------------------------------------------------------------
+# LLM / utility helpers
+# ---------------------------------------------------------------------------
 
 def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3) -> str:
     """Call OpenRouter chat completion and return assistant content."""
@@ -87,16 +75,10 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
         "HTTP-Referer": "http://localhost:5001",
         "X-Title": "Content Dashboard",
     }
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-    }
+    payload = {"model": model, "messages": messages, "temperature": temperature}
     resp = requests.post(
         f"{OPENROUTER_BASE}/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=120,
+        headers=headers, json=payload, timeout=120,
     )
     content_type = resp.headers.get("Content-Type", "")
     if "application/json" not in content_type and "text/json" not in content_type:
@@ -124,13 +106,13 @@ def _parse_published(entry) -> datetime | None:
 
 
 # ---------------------------------------------------------------------------
-# Feeds config (categorized RSS feeds)
+# Feeds config
 # ---------------------------------------------------------------------------
 
 def _load_feeds_config() -> dict:
-    """Load categorized RSS feed configuration."""
-    config = _load_json_obj(FEEDS_CONFIG_FILE)
-    if not config or "categories" not in config:
+    user_id = _get_user_id()
+    config = db.get_feeds_config(user_id)
+    if not config or not config.get("categories"):
         return {"categories": {
             "Tool Pratici": [],
             "Casi Studio": [],
@@ -141,11 +123,11 @@ def _load_feeds_config() -> dict:
 
 
 def _save_feeds_config(config: dict):
-    _save_json(FEEDS_CONFIG_FILE, config)
+    user_id = _get_user_id()
+    db.save_feeds_config(user_id, config)
 
 
 def _get_all_feed_urls() -> list[str]:
-    """Get flat list of all feed URLs from config, or fallback to defaults."""
     config = _load_feeds_config()
     urls = []
     for cat, feeds in config.get("categories", {}).items():
@@ -159,72 +141,31 @@ def _get_all_feed_urls() -> list[str]:
 # Feedback system
 # ---------------------------------------------------------------------------
 
-def _load_feedback() -> dict:
-    """Load feedback memory. Structure: {format: [feedback_entries]}.
-    Migrates legacy entries (missing 'id') by adding UUIDs."""
-    try:
-        data = json.loads(FEEDBACK_FILE.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            migrated = False
-            for fmt, entries in data.items():
-                for entry in entries:
-                    if isinstance(entry, dict) and "id" not in entry:
-                        entry["id"] = str(uuid.uuid4())
-                        migrated = True
-            if migrated:
-                _save_feedback(data)
-            return data
-    except (json.JSONDecodeError, FileNotFoundError):
-        pass
-    return {}
-
-
-def _save_feedback(data: dict):
-    FEEDBACK_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
 def _get_feedback_context(format_type: str) -> str:
-    """Build a prompt section from accumulated feedback for a format."""
-    fb = _load_feedback()
-    entries = fb.get(format_type, [])
+    user_id = _get_user_id()
+    entries = db.get_feedback_by_format(user_id, format_type)
     if not entries:
         return ""
     recent = entries[-10:]
-    lines = []
-    for e in recent:
-        lines.append(f"- {e['feedback']}")
+    lines = [f"- {e['feedback']}" for e in recent]
     return "\n\nFEEDBACK ACCUMULATO (impara da queste indicazioni per migliorare lo stile):\n" + "\n".join(lines)
 
 
 def _add_feedback(format_type: str, feedback: str):
-    """Append a feedback entry for a format. Does NOT auto-modify prompts."""
-    fb = _load_feedback()
-    if format_type not in fb:
-        fb[format_type] = []
-    fb[format_type].append({
-        "id": str(uuid.uuid4()),
-        "feedback": feedback,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    _save_feedback(fb)
+    user_id = _get_user_id()
+    db.add_feedback(user_id, format_type, feedback)
     _log_pipeline("feedback", f"[{format_type}] {feedback}")
 
 
 def _delete_feedback(format_type: str, feedback_id: str) -> bool:
-    """Delete a specific feedback entry by ID."""
-    fb = _load_feedback()
-    entries = fb.get(format_type, [])
-    new_entries = [e for e in entries if e.get("id") != feedback_id]
-    if len(new_entries) == len(entries):
-        return False
-    fb[format_type] = new_entries
-    _save_feedback(fb)
-    _log_pipeline("info", f"Feedback deleted from {format_type}: {feedback_id}")
-    return True
+    user_id = _get_user_id()
+    ok = db.delete_feedback(user_id, feedback_id)
+    if ok:
+        _log_pipeline("info", f"Feedback deleted from {format_type}: {feedback_id}")
+    return ok
 
 
 def _enrich_prompt_with_feedback(format_type: str, feedback_ids: list[str]) -> str:
-    """Use LLM to rewrite a prompt incorporating selected feedback comments."""
     FORMAT_MAP = {
         "linkedin": FORMAT_LINKEDIN,
         "instagram": FORMAT_INSTAGRAM,
@@ -237,10 +178,8 @@ def _enrich_prompt_with_feedback(format_type: str, feedback_ids: list[str]) -> s
     if not current_prompt:
         return ""
 
-    # Get selected feedback entries
-    fb = _load_feedback()
-    entries = fb.get(format_type, [])
-    selected = [e for e in entries if e.get("id") in feedback_ids]
+    user_id = _get_user_id()
+    selected = db.get_feedback_by_ids(user_id, feedback_ids)
     if not selected:
         return current_prompt
 
@@ -267,8 +206,7 @@ ISTRUZIONI:
     try:
         result = _llm_call(
             [{"role": "user", "content": enrichment_msg}],
-            model=MODEL_GENERATION,
-            temperature=0.3,
+            model=MODEL_GENERATION, temperature=0.3,
         )
         return result.strip()
     except Exception as e:
@@ -292,67 +230,38 @@ STOP_WORDS = {
 }
 
 
-def _load_prefs() -> dict:
-    try:
-        data = json.loads(SELECTION_PREFS_FILE.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            return data
-    except (json.JSONDecodeError, FileNotFoundError):
-        pass
-    return {
-        "source_counts": {},
-        "category_counts": {},
-        "keyword_counts": {},
-        "total_selections": 0,
-        "updated_at": None,
-    }
-
-
-def _save_prefs(data: dict):
-    SELECTION_PREFS_FILE.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-
 def _extract_keywords(title: str) -> list[str]:
-    import re
     words = re.findall(r"[a-zA-Z]{3,}", title.lower())
     return [w for w in words if w not in STOP_WORDS]
 
 
 def _track_selection(articles: list[dict]):
-    prefs = _load_prefs()
+    user_id = _get_user_id()
+    prefs = db.get_selection_prefs(user_id)
     for art in articles:
         source = art.get("source", "")
         category = art.get("category", "")
         title = art.get("title", "")
-
         if source:
             prefs["source_counts"][source] = prefs["source_counts"].get(source, 0) + 1
         if category:
             prefs["category_counts"][category] = prefs["category_counts"].get(category, 0) + 1
         for kw in _extract_keywords(title):
             prefs["keyword_counts"][kw] = prefs["keyword_counts"].get(kw, 0) + 1
-
     prefs["total_selections"] = prefs.get("total_selections", 0) + len(articles)
-    prefs["updated_at"] = datetime.now(timezone.utc).isoformat()
-    _save_prefs(prefs)
+    db.save_selection_prefs(user_id, prefs)
     _log_pipeline("info", f"Selection preferences updated: {len(articles)} articles tracked")
 
 
-def _calc_preference_bonus(article: dict) -> float:
-    prefs = _load_prefs()
+def _calc_preference_bonus(article: dict, prefs: dict) -> float:
     if prefs["total_selections"] < 1:
         return 0.0
-
     source_counts = prefs.get("source_counts", {})
     max_source = max(source_counts.values()) if source_counts else 1
     source_w = source_counts.get(article.get("source", ""), 0) / max_source if max_source else 0
-
     cat_counts = prefs.get("category_counts", {})
     max_cat = max(cat_counts.values()) if cat_counts else 1
     cat_w = cat_counts.get(article.get("category", ""), 0) / max_cat if max_cat else 0
-
     kw_counts = prefs.get("keyword_counts", {})
     title_kws = _extract_keywords(article.get("title", ""))
     if title_kws and kw_counts:
@@ -360,7 +269,6 @@ def _calc_preference_bonus(article: dict) -> float:
         kw_w = matching / len(title_kws)
     else:
         kw_w = 0
-
     bonus = source_w * 0.5 + cat_w * 0.8 + kw_w * 0.7
     return round(min(2.0, bonus), 2)
 
@@ -369,61 +277,18 @@ def _calc_preference_bonus(article: dict) -> float:
 # Prompt versioning & pipeline logging
 # ---------------------------------------------------------------------------
 
-def _load_prompt_log() -> list:
-    try:
-        return json.loads(PROMPT_LOG_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, FileNotFoundError):
-        return []
-
-
-def _save_prompt_log(data: list):
-    PROMPT_LOG_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
 def _log_prompt_version(prompt_name: str, content: str, trigger: str = "init"):
-    log = _load_prompt_log()
-    prev = None
-    for entry in reversed(log):
-        if entry["prompt_name"] == prompt_name:
-            prev = entry
-            break
+    user_id = _get_user_id()
+    prev = db.get_latest_prompt_version(user_id, prompt_name)
     if prev and prev["content"] == content:
         return
-    version = sum(1 for e in log if e["prompt_name"] == prompt_name) + 1
-    log.append({
-        "prompt_name": prompt_name,
-        "version": version,
-        "content": content,
-        "trigger": trigger,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    _save_prompt_log(log)
+    version = db.get_prompt_version_count(user_id, prompt_name) + 1
+    db.add_prompt_log(user_id, prompt_name, version, content, trigger)
 
 
-def _load_pipeline_log() -> list:
-    try:
-        return json.loads(PIPELINE_LOG_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, FileNotFoundError):
-        return []
-
-
-def _save_pipeline_log(data: list):
-    PIPELINE_LOG_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _log_pipeline(level: str, message: str, extra: dict | None = None):
-    log = _load_pipeline_log()
-    entry = {
-        "level": level,
-        "message": message,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    if extra:
-        entry["extra"] = extra
-    log.append(entry)
-    if len(log) > 500:
-        log = log[-500:]
-    _save_pipeline_log(log)
+def _log_pipeline(level: str, message: str, extra: dict | None = None, user_id: str | None = None):
+    uid = user_id or _get_user_id()
+    db.add_pipeline_log(uid, level, message, extra)
 
 
 def _snapshot_all_prompts(trigger: str = "init"):
@@ -444,7 +309,6 @@ def _snapshot_all_prompts(trigger: str = "init"):
 # ---------------------------------------------------------------------------
 
 def _send_ntfy(title: str, message: str, url: str | None = None, tags: str = "loudspeaker"):
-    """Send a push notification via ntfy.sh using JSON API (handles emoji/UTF-8)."""
     if not NTFY_TOPIC:
         _log_pipeline("warning", "ntfy notification skipped — no topic configured")
         return False
@@ -457,11 +321,7 @@ def _send_ntfy(title: str, message: str, url: str | None = None, tags: str = "lo
         }
         if url:
             payload["click"] = url
-        resp = requests.post(
-            "https://ntfy.sh/",
-            json=payload,
-            timeout=10,
-        )
+        resp = requests.post("https://ntfy.sh/", json=payload, timeout=10)
         resp.raise_for_status()
         _log_pipeline("info", f"ntfy notification sent: {title}")
         return True
@@ -474,61 +334,47 @@ def _send_ntfy(title: str, message: str, url: str | None = None, tags: str = "lo
 # Scheduling system
 # ---------------------------------------------------------------------------
 
-def _load_schedule() -> list:
-    return _load_json(SCHEDULE_FILE)
-
-
-def _save_schedule(data: list):
-    _save_json(SCHEDULE_FILE, data)
-
-
 def _check_schedules():
     """Background task: check for due scheduled items and send notifications."""
     while True:
         try:
-            schedule = _load_schedule()
+            pending = db.get_all_pending_schedules()
             now = datetime.now(timezone.utc)
-            changed = False
 
-            for item in schedule:
-                if item.get("status") != "pending":
-                    continue
+            for item in pending:
                 scheduled_at = item.get("scheduled_at", "")
                 if not scheduled_at:
                     continue
                 try:
-                    sched_dt = datetime.fromisoformat(scheduled_at)
+                    sched_dt = datetime.fromisoformat(str(scheduled_at))
                     if sched_dt.tzinfo is None:
                         sched_dt = sched_dt.replace(tzinfo=timezone.utc)
                 except (ValueError, TypeError):
                     continue
 
                 if now >= sched_dt:
-                    # Time to publish — send notification
                     platform = item.get("platform", "content")
                     title_text = item.get("title", "Contenuto programmato")
-                    emoji_map = {
-                        "linkedin": "💼",
-                        "instagram": "📸",
-                        "newsletter": "📧",
-                    }
-                    emoji = emoji_map.get(platform, "📢")
+                    emoji_map = {"linkedin": "\U0001f4bc", "instagram": "\U0001f4f8", "newsletter": "\U0001f4e7"}
+                    emoji = emoji_map.get(platform, "\U0001f4e2")
                     _send_ntfy(
                         title=f"{emoji} Pubblica {platform.upper()}",
                         message=f"{title_text}\n\nÈ ora di pubblicare questo contenuto!",
                         tags=f"{platform},bell",
                     )
-                    item["status"] = "notified"
-                    item["notified_at"] = now.isoformat()
-                    changed = True
-                    _log_pipeline("info", f"Schedule notification sent for {platform}: {title_text}")
-
-            if changed:
-                _save_schedule(schedule)
+                    item_user_id = item.get("user_id", _get_user_id())
+                    db.update_schedule(item_user_id, item["id"], {
+                        "status": "notified",
+                        "notified_at": now.isoformat(),
+                    })
+                    _log_pipeline("info", f"Schedule notification sent for {platform}: {title_text}",
+                                  user_id=item_user_id)
         except Exception as e:
-            _log_pipeline("error", f"Schedule checker error: {e}")
-
-        time.sleep(30)  # check every 30 seconds
+            try:
+                _log_pipeline("error", f"Schedule checker error: {e}")
+            except Exception:
+                pass
+        time.sleep(30)
 
 
 # ---------------------------------------------------------------------------
@@ -536,45 +382,21 @@ def _check_schedules():
 # ---------------------------------------------------------------------------
 
 def _get_week_key(dt: datetime | None = None) -> str:
-    """Get ISO week key like '2026-W10'."""
     if dt is None:
         dt = datetime.now(timezone.utc)
     return f"{dt.isocalendar().year}-W{dt.isocalendar().week:02d}"
 
 
-def _load_weekly_status() -> dict:
-    return _load_json_obj(WEEKLY_STATUS_FILE)
-
-
-def _save_weekly_status(data: dict):
-    _save_json(WEEKLY_STATUS_FILE, data)
-
-
 def _update_weekly_status(platform: str, action: str = "generated"):
-    """Track content generation/approval/scheduling per platform per week."""
-    status = _load_weekly_status()
+    user_id = _get_user_id()
     week = _get_week_key()
-    if "weeks" not in status:
-        status["weeks"] = {}
-    if week not in status["weeks"]:
-        status["weeks"][week] = {}
-    wk = status["weeks"][week]
-    if platform not in wk:
-        wk[platform] = {"generated": 0, "approved": 0, "scheduled": 0, "published": 0}
-    if action in wk[platform]:
-        wk[platform][action] += 1
-    _save_weekly_status(status)
+    db.increment_weekly_counter(user_id, week, platform, action)
 
 
 def _get_current_week_status() -> dict:
-    """Get status summary for the current week."""
-    status = _load_weekly_status()
+    user_id = _get_user_id()
     week = _get_week_key()
-    wk = status.get("weeks", {}).get(week, {})
-    return {
-        "week": week,
-        "platforms": wk,
-    }
+    return db.get_weekly_status(user_id, week)
 
 
 # ---------------------------------------------------------------------------
@@ -592,13 +414,11 @@ def index():
 
 @app.route("/api/feeds/config", methods=["GET"])
 def get_feeds_config():
-    """Return current RSS feeds configuration."""
     return jsonify(_load_feeds_config())
 
 
 @app.route("/api/feeds/config", methods=["POST"])
 def save_feeds_config():
-    """Save entire feeds configuration."""
     body = request.json
     if not body or "categories" not in body:
         return jsonify({"error": "Invalid config format"}), 400
@@ -609,28 +429,19 @@ def save_feeds_config():
 
 @app.route("/api/feeds/config/add", methods=["POST"])
 def add_feed():
-    """Add a single feed to a category."""
     body = request.json
     category = body.get("category", "").strip()
     url = body.get("url", "").strip()
     name = body.get("name", "").strip()
-
     if not category or not url:
         return jsonify({"error": "category and url required"}), 400
-
     config = _load_feeds_config()
     if category not in config["categories"]:
         config["categories"][category] = []
-
-    # Check duplicate
     existing_urls = [f["url"] for f in config["categories"][category]]
     if url in existing_urls:
         return jsonify({"error": "Feed URL already exists in this category"}), 409
-
-    config["categories"][category].append({
-        "url": url,
-        "name": name or url,
-    })
+    config["categories"][category].append({"url": url, "name": name or url})
     _save_feeds_config(config)
     _log_pipeline("info", f"Feed added: {url} → {category}")
     return jsonify({"status": "ok", "config": config})
@@ -638,14 +449,11 @@ def add_feed():
 
 @app.route("/api/feeds/config/remove", methods=["POST"])
 def remove_feed():
-    """Remove a single feed from a category."""
     body = request.json
     category = body.get("category", "").strip()
     url = body.get("url", "").strip()
-
     if not category or not url:
         return jsonify({"error": "category and url required"}), 400
-
     config = _load_feeds_config()
     if category in config["categories"]:
         config["categories"][category] = [
@@ -658,12 +466,10 @@ def remove_feed():
 
 @app.route("/api/feeds/config/add-category", methods=["POST"])
 def add_category():
-    """Add a new empty category."""
     body = request.json
     category = body.get("category", "").strip()
     if not category:
         return jsonify({"error": "category name required"}), 400
-
     config = _load_feeds_config()
     if category not in config["categories"]:
         config["categories"][category] = []
@@ -673,12 +479,10 @@ def add_category():
 
 @app.route("/api/feeds/config/remove-category", methods=["POST"])
 def remove_category():
-    """Remove an entire category and its feeds."""
     body = request.json
     category = body.get("category", "").strip()
     if not category:
         return jsonify({"error": "category name required"}), 400
-
     config = _load_feeds_config()
     config["categories"].pop(category, None)
     _save_feeds_config(config)
@@ -696,7 +500,6 @@ _fetch_running = False
 
 @app.route("/api/feeds/fetch", methods=["POST"])
 def fetch_feeds():
-    """Fetch RSS feeds and score articles via LLM. Returns immediately, progress via SSE."""
     global _fetch_running, _fetch_progress
     if _fetch_running:
         return jsonify({"error": "Fetch already in progress"}), 409
@@ -716,7 +519,6 @@ def fetch_feeds():
 
 @app.route("/api/feeds/progress")
 def feed_progress():
-    """SSE stream of fetch progress messages."""
     def generate():
         sent = 0
         while True:
@@ -732,22 +534,18 @@ def feed_progress():
 
 
 def _do_fetch():
-    """Core fetch + score logic. Uses feeds from config."""
-    import re
-
-    existing = _load_json(ARTICLES_FILE)
-    seen_urls = {a["url"] for a in existing}
+    """Core fetch + score logic."""
+    user_id = _get_user_id()
+    seen_urls = db.get_article_urls(user_id)
     cutoff = datetime.now(timezone.utc) - timedelta(days=FETCH_WINDOW_DAYS)
     new_articles = []
 
-    # Get feed URLs from config (with category info)
     config = _load_feeds_config()
     feed_items = []
     for cat, feeds in config.get("categories", {}).items():
         for feed in feeds:
             feed_items.append({"url": feed["url"], "name": feed.get("name", ""), "category": cat})
 
-    # Fallback to defaults
     if not feed_items:
         feed_items = [{"url": u, "name": u, "category": ""} for u in DEFAULT_RSS_FEEDS]
 
@@ -759,7 +557,7 @@ def _do_fetch():
             feed = feedparser.parse(feed_url)
             status = getattr(feed, "status", None)
             if status and status >= 400:
-                _fetch_progress.append(f"  ⚠ HTTP {status} — skipping this feed")
+                _fetch_progress.append(f"  \u26a0 HTTP {status} — skipping this feed")
                 _log_pipeline("warning", f"RSS feed HTTP {status}", {"feed": feed_url})
                 continue
             source = feed.feed.get("title", feed_url)
@@ -784,11 +582,11 @@ def _do_fetch():
                 })
                 seen_urls.add(url)
                 count += 1
-            _fetch_progress.append(f"  → {count} new articles from {source}")
+            _fetch_progress.append(f"  \u2192 {count} new articles from {source}")
             if count > 0:
                 _log_pipeline("info", f"Fetched {count} articles from {source}", {"feed": feed_url})
         except Exception as e:
-            _fetch_progress.append(f"  ⚠ Error fetching {feed_url}: {e}")
+            _fetch_progress.append(f"  \u26a0 Error fetching {feed_url}: {e}")
             _log_pipeline("error", f"RSS fetch error: {e}", {"feed": feed_url})
 
     _fetch_progress.append(f"\nTotal new articles to score: {len(new_articles)}")
@@ -796,12 +594,12 @@ def _do_fetch():
     # Score in batches of 5
     scored = []
     for i in range(0, len(new_articles), 5):
-        batch = new_articles[i:i+5]
-        _fetch_progress.append(f"Scoring articles {i+1}-{i+len(batch)} ...")
+        batch = new_articles[i:i + 5]
+        _fetch_progress.append(f"Scoring articles {i + 1}-{i + len(batch)} ...")
         try:
             articles_text = ""
             for idx, art in enumerate(batch):
-                articles_text += f"\n---\nARTICLE {idx+1}:\nTitle: {art['title']}\nDescription: {art['description']}\n"
+                articles_text += f"\n---\nARTICLE {idx + 1}:\nTitle: {art['title']}\nDescription: {art['description']}\n"
 
             prompt = f"""Analyze these articles about AI/tech. For EACH article return a JSON array element with:
 - "index": article number (1-based)
@@ -829,7 +627,7 @@ Return ONLY a valid JSON array, no markdown, no explanation.
                     art["scored_at"] = datetime.now(timezone.utc).isoformat()
                     scored.append(art)
         except Exception as e:
-            _fetch_progress.append(f"  ⚠ Scoring error: {e}")
+            _fetch_progress.append(f"  \u26a0 Scoring error: {e}")
             _log_pipeline("error", f"LLM scoring error: {e}", {"batch_start": i})
             for art in batch:
                 art["category"] = art.get("feed_category", "News AI Italia")
@@ -839,29 +637,27 @@ Return ONLY a valid JSON array, no markdown, no explanation.
                 scored.append(art)
 
     # Apply preference boost
-    prefs = _load_prefs()
+    prefs = db.get_selection_prefs(user_id)
     if prefs["total_selections"] > 0:
         _fetch_progress.append(f"\nApplying preference boost (based on {prefs['total_selections']} past selections)...")
         boosted_count = 0
         for art in scored:
-            bonus = _calc_preference_bonus(art)
+            bonus = _calc_preference_bonus(art, prefs)
             if bonus > 0:
                 art["base_score"] = art["score"]
                 art["boost"] = bonus
                 art["score"] = min(10, round(art["score"] + bonus))
                 boosted_count += 1
-        _fetch_progress.append(f"  → {boosted_count} articles boosted")
+        _fetch_progress.append(f"  \u2192 {boosted_count} articles boosted")
 
-    # Merge and save
-    all_articles = existing + scored
-    _save_json(ARTICLES_FILE, all_articles)
-    _fetch_progress.append(f"\n✓ Done! {len(scored)} articles scored and saved.")
+    # Save new articles to database
+    db.insert_articles(user_id, scored)
+    _fetch_progress.append(f"\n\u2713 Done! {len(scored)} articles scored and saved.")
     _log_pipeline("info", f"Fetch complete: {len(scored)} articles scored and saved")
 
-    # Send ntfy notification
     if scored:
         _send_ntfy(
-            title="📰 Feed aggiornato",
+            title="\U0001f4f0 Feed aggiornato",
             message=f"{len(scored)} nuovi articoli analizzati e pronti per la selezione.",
             url="http://localhost:5001",
             tags="newspaper",
@@ -870,12 +666,9 @@ Return ONLY a valid JSON array, no markdown, no explanation.
 
 @app.route("/api/articles")
 def get_articles():
-    """Return scored articles, optionally filtered by min_score."""
-    articles = _load_json(ARTICLES_FILE)
+    user_id = _get_user_id()
     min_score = request.args.get("min_score", 0, type=int)
-    if min_score:
-        articles = [a for a in articles if a.get("score", 0) >= min_score]
-    articles.sort(key=lambda a: a.get("score", 0), reverse=True)
+    articles = db.get_articles(user_id, min_score=min_score)
     return jsonify(articles)
 
 
@@ -972,7 +765,7 @@ FORMAT_VIDEO_SCRIPT = """Formato Short Video Script (Reels/TikTok/Shorts — 60-
 
 
 IG_VARIANT_ANGLES = [
-    "",  # default
+    "",
     "\nANGOLO SPECIFICO: Focalizzati sull'aspetto PRATICO e operativo. Come si implementa concretamente? Che workflow o tool servono? Dai step actionable.",
     "\nANGOLO SPECIFICO: Focalizzati sull'aspetto STRATEGICO e di business impact. Perché un imprenditore dovrebbe interessarsi? Quali numeri contano? ROI, risparmio tempo, vantaggio competitivo.",
     "\nANGOLO SPECIFICO: Focalizzati sugli ERRORI COMUNI e le trappole. Cosa sbagliano tutti? Qual è il consiglio controintuitivo? Tono myth-busting, sfida le convinzioni del lettore.",
@@ -984,7 +777,6 @@ IG_VARIANT_ANGLES = [
 # ---------------------------------------------------------------------------
 
 def _serper_search(query: str, num_results: int = 10) -> list[dict]:
-    """Search the web using Serper.dev API. Returns list of result dicts."""
     if not SERPER_API_KEY:
         raise ValueError("SERPER_API_KEY not configured in .env")
     resp = requests.post(
@@ -1009,7 +801,6 @@ def _serper_search(query: str, num_results: int = 10) -> list[dict]:
 
 @app.route("/api/search", methods=["POST"])
 def web_search():
-    """Search the web using Serper API."""
     body = request.json
     query = body.get("query", "").strip()
     if not query:
@@ -1026,15 +817,12 @@ def web_search():
 
 @app.route("/api/search/score", methods=["POST"])
 def search_score():
-    """Score web search results using AI (like RSS article scoring)."""
     body = request.json
     results = body.get("results", [])
     if not results:
         return jsonify({"error": "No results to score"}), 400
-
     scored = []
     for item in results:
-        # Create a pseudo-article dict compatible with the article scoring
         article = {
             "title": item.get("title", ""),
             "summary": item.get("snippet", ""),
@@ -1045,7 +833,6 @@ def search_score():
             "category": "web_search",
             "source_mode": "web_search",
         }
-        # Quick LLM scoring
         try:
             prompt = f"""Sei un content strategist per un consulente AI italiano.
 Valuta questo risultato web per potenziale contenuto:
@@ -1057,8 +844,7 @@ Rispondi SOLO con un JSON: {{"score": N, "reason": "motivo breve"}}
 Score da 1 a 10 (10 = perfetto per content su AI/automazione business)."""
             result = _llm_call(
                 [{"role": "user", "content": prompt}],
-                model=MODEL_CHEAP,
-                temperature=0.1,
+                model=MODEL_CHEAP, temperature=0.1,
             )
             data = json.loads(result.strip().strip("```json").strip("```"))
             article["score"] = data.get("score", 5)
@@ -1067,8 +853,6 @@ Score da 1 a 10 (10 = perfetto per content su AI/automazione business)."""
             article["score"] = 5
             article["score_reason"] = "Scoring failed"
         scored.append(article)
-
-    # Sort by score descending
     scored.sort(key=lambda x: x.get("score", 0), reverse=True)
     return jsonify({"articles": scored})
 
@@ -1079,7 +863,6 @@ Score da 1 a 10 (10 = perfetto per content su AI/automazione business)."""
 
 @app.route("/api/generate", methods=["POST"])
 def generate_content():
-    """Generate content for a single article (LinkedIn or IG)."""
     body = request.json
     article = body.get("article", {})
     opinion = body.get("opinion", "")
@@ -1107,7 +890,6 @@ def generate_content():
     if feedback:
         regen_instruction = f"\n\nISTRUZIONE DI RISCRITTURA (priorità alta, segui questa indicazione):\n{feedback}"
 
-    opinion_section = ""
     if opinion:
         opinion_section = f"\nOPINIONE DI JUAN:\n{opinion}"
     else:
@@ -1143,11 +925,9 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
             ],
-            model=MODEL_GENERATION,
-            temperature=0.7,
+            model=MODEL_GENERATION, temperature=0.7,
         )
         _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
-        # Track weekly status
         _update_weekly_status(format_type, "generated")
         return jsonify({"content": result, "format": format_type})
     except Exception as e:
@@ -1157,19 +937,14 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
 
 @app.route("/api/generate-newsletter", methods=["POST"])
 def generate_newsletter():
-    """Generate aggregated weekly newsletter from multiple articles + opinions."""
     body = request.json
     topics = body.get("topics", [])
     feedback = body.get("feedback", "")
-
     if not topics or len(topics) < 1:
         return jsonify({"error": "At least 1 topic required"}), 400
-
     if feedback:
         _add_feedback("newsletter", feedback)
-
     has_opinions = any(t.get("opinion", "").strip() for t in topics)
-
     topics_text = ""
     for i, t in enumerate(topics, 1):
         art = t.get("article", {})
@@ -1183,10 +958,8 @@ Descrizione: {art.get('description', '')}
 """
         if op:
             topics_text += f"Opinione di Juan: {op}\n"
-
     if not has_opinions:
         topics_text += "\nNOTA: Questa è una prima bozza. Juan non ha ancora aggiunto le sue prospettive personali.\n"
-
     regen_instruction = ""
     if feedback:
         regen_instruction = f"\n\nISTRUZIONE DI RISCRITTURA (priorità alta, segui questa indicazione):\n{feedback}"
@@ -1207,8 +980,7 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
             ],
-            model=MODEL_GENERATION,
-            temperature=0.7,
+            model=MODEL_GENERATION, temperature=0.7,
         )
         _log_pipeline("info", "Generated newsletter")
         _update_weekly_status("newsletter", "generated")
@@ -1220,7 +992,6 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
 
 @app.route("/api/newsletter/html", methods=["POST"])
 def newsletter_to_html():
-    """Convert newsletter plain text to styled HTML for Beehiiv email."""
     body = request.json
     text = (body.get("text") or "").strip()
     if not text:
@@ -1250,10 +1021,8 @@ TESTO NEWSLETTER:
                 {"role": "system", "content": "Sei un esperto di email HTML design. Converti il testo in HTML email con inline CSS perfetto per Beehiiv."},
                 {"role": "user", "content": conversion_prompt + text},
             ],
-            model=MODEL_GENERATION,
-            temperature=0.3,
+            model=MODEL_GENERATION, temperature=0.3,
         )
-        # Clean up — remove markdown code fences if present
         html_result = result.strip()
         if html_result.startswith("```html"):
             html_result = html_result[7:]
@@ -1262,7 +1031,6 @@ TESTO NEWSLETTER:
         if html_result.endswith("```"):
             html_result = html_result[:-3]
         html_result = html_result.strip()
-
         _log_pipeline("info", "Converted newsletter to HTML")
         return jsonify({"html": html_result})
     except Exception as e:
@@ -1276,115 +1044,70 @@ TESTO NEWSLETTER:
 
 @app.route("/api/schedule", methods=["GET"])
 def get_schedule():
-    """Return all scheduled items."""
-    schedule = _load_schedule()
-    schedule.sort(key=lambda s: s.get("scheduled_at", ""))
+    user_id = _get_user_id()
+    schedule = db.get_schedules(user_id)
     return jsonify(schedule)
 
 
 @app.route("/api/schedule", methods=["POST"])
 def create_schedule():
-    """Schedule a content piece for publishing."""
+    user_id = _get_user_id()
     body = request.json
-    item = {
-        "id": str(uuid.uuid4()),
-        "platform": body.get("platform", ""),
-        "title": body.get("title", ""),
-        "content_preview": body.get("content_preview", "")[:200],
-        "content_key": body.get("content_key", ""),
-        "session_id": body.get("session_id", ""),
-        "scheduled_at": body.get("scheduled_at", ""),
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "notified_at": None,
-    }
-
-    schedule = _load_schedule()
-    schedule.append(item)
-    _save_schedule(schedule)
-
-    # Track in weekly status
-    _update_weekly_status(item["platform"], "scheduled")
-
-    _log_pipeline("info", f"Content scheduled: {item['platform']} at {item['scheduled_at']}")
+    item = db.insert_schedule(user_id, body)
+    _update_weekly_status(item.get("platform", ""), "scheduled")
+    _log_pipeline("info", f"Content scheduled: {item.get('platform', '')} at {item.get('scheduled_at', '')}")
     return jsonify(item)
 
 
 @app.route("/api/schedule/bulk", methods=["POST"])
 def create_schedule_bulk():
-    """Schedule multiple content pieces at once."""
+    user_id = _get_user_id()
     body = request.json
     items_data = body.get("items", [])
     scheduled_at = body.get("scheduled_at", "")
-
     if not items_data or not scheduled_at:
         return jsonify({"error": "items and scheduled_at required"}), 400
-
-    schedule = _load_schedule()
-    created = []
-
-    for item_data in items_data:
-        item = {
-            "id": str(uuid.uuid4()),
-            "platform": item_data.get("platform", ""),
-            "title": item_data.get("title", ""),
-            "content_preview": item_data.get("content_preview", "")[:200],
-            "content_key": item_data.get("content_key", ""),
-            "session_id": item_data.get("session_id", ""),
-            "scheduled_at": scheduled_at,
-            "status": "pending",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "notified_at": None,
-        }
-        schedule.append(item)
-        created.append(item)
-        _update_weekly_status(item["platform"], "scheduled")
-
-    _save_schedule(schedule)
+    created = db.insert_schedules_bulk(user_id, items_data, scheduled_at)
+    for item in created:
+        _update_weekly_status(item.get("platform", ""), "scheduled")
     _log_pipeline("info", f"Bulk scheduled {len(created)} items at {scheduled_at}")
     return jsonify({"status": "ok", "count": len(created), "items": created})
 
 
 @app.route("/api/schedule/<item_id>", methods=["DELETE"])
 def delete_schedule(item_id):
-    """Remove a scheduled item."""
-    schedule = _load_schedule()
-    schedule = [s for s in schedule if s.get("id") != item_id]
-    _save_schedule(schedule)
+    user_id = _get_user_id()
+    db.delete_schedule(user_id, item_id)
     return jsonify({"status": "ok"})
 
 
 @app.route("/api/schedule/<item_id>/publish", methods=["POST"])
 def mark_published(item_id):
-    """Mark a scheduled item as published."""
-    schedule = _load_schedule()
-    for item in schedule:
-        if item.get("id") == item_id:
-            item["status"] = "published"
-            item["published_at"] = datetime.now(timezone.utc).isoformat()
-            platform = item.get("platform", "")
-            _update_weekly_status(platform, "published")
-            break
-    _save_schedule(schedule)
+    user_id = _get_user_id()
+    db.update_schedule(user_id, item_id, {
+        "status": "published",
+        "published_at": datetime.now(timezone.utc).isoformat(),
+    })
+    # Get item to know the platform
+    item = db.get_schedule_item(user_id, item_id)
+    if item:
+        _update_weekly_status(item.get("platform", ""), "published")
     return jsonify({"status": "ok"})
 
 
 @app.route("/api/schedule/<item_id>/content")
 def get_schedule_content(item_id):
-    """Return full content for a scheduled item by looking up its session."""
-    schedule = _load_schedule()
-    item = next((s for s in schedule if s.get("id") == item_id), None)
+    user_id = _get_user_id()
+    item = db.get_schedule_item(user_id, item_id)
     if not item:
         return jsonify({"error": "Item not found"}), 404
     session_id = item.get("session_id", "")
     content_key = item.get("content_key", "")
     full_content = ""
     if session_id and content_key:
-        sessions = _load_json(SESSIONS_FILE)
-        session = next((s for s in sessions if s.get("id") == session_id), None)
+        session = db.get_session(user_id, session_id)
         if session:
             full_content = session.get("content", {}).get(content_key, "")
-    # Fallback to content_preview if session lookup fails
     if not full_content:
         full_content = item.get("content_preview", "")
     return jsonify({
@@ -1403,7 +1126,6 @@ def get_schedule_content(item_id):
 
 @app.route("/api/weekly-status")
 def weekly_status():
-    """Return weekly content status summary."""
     return jsonify(_get_current_week_status())
 
 
@@ -1413,7 +1135,6 @@ def weekly_status():
 
 @app.route("/api/approve", methods=["POST"])
 def approve_content():
-    """Track content approval in weekly status."""
     body = request.json
     platform = body.get("platform", "")
     if platform:
@@ -1427,64 +1148,52 @@ def approve_content():
 
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
-    sessions = _load_json(SESSIONS_FILE)
-    sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
+    user_id = _get_user_id()
+    sessions = db.get_sessions(user_id)
     return jsonify(sessions)
 
 
 @app.route("/api/sessions", methods=["POST"])
 def save_session():
+    user_id = _get_user_id()
     body = request.json
-    sessions = _load_json(SESSIONS_FILE)
-    session = {
-        "id": str(uuid.uuid4()),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "article": body.get("article", {}),
-        "topics": body.get("topics", []),
-        "opinion": body.get("opinion", ""),
-        "content": body.get("content", {}),
-        "carousel_images": body.get("carousel_images", {}),
-        "platforms": body.get("platforms", []),
-    }
-    sessions.append(session)
-    _save_json(SESSIONS_FILE, sessions)
+    session = db.insert_session(user_id, body)
     return jsonify(session)
 
 
 @app.route("/api/sessions/<session_id>", methods=["PUT"])
 def update_session(session_id):
+    user_id = _get_user_id()
     body = request.json
-    sessions = _load_json(SESSIONS_FILE)
-    for s in sessions:
-        if s["id"] == session_id:
-            s["content"] = body.get("content", s.get("content", {}))
-            if "carousel_images" in body:
-                s["carousel_images"] = body["carousel_images"]
-            _save_json(SESSIONS_FILE, sessions)
-            return jsonify(s)
-    return jsonify({"error": "Session not found"}), 404
+    updates = {}
+    if "content" in body:
+        updates["content"] = body["content"]
+    if "carousel_images" in body:
+        updates["carousel_images"] = body["carousel_images"]
+    result = db.update_session(user_id, session_id, updates)
+    if result is None:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify(result)
 
 
 @app.route("/api/sessions/<session_id>", methods=["DELETE"])
 def delete_session(session_id):
-    sessions = _load_json(SESSIONS_FILE)
-    before = len(sessions)
-    sessions = [s for s in sessions if s.get("id") != session_id]
-    if len(sessions) == before:
+    user_id = _get_user_id()
+    ok = db.delete_session(user_id, session_id)
+    if not ok:
         return jsonify({"error": "Session not found"}), 404
-    _save_json(SESSIONS_FILE, sessions)
     _log_pipeline("info", f"Deleted session {session_id}")
     return jsonify({"ok": True})
 
 
 @app.route("/api/feedback")
 def get_feedback():
-    return jsonify(_load_feedback())
+    user_id = _get_user_id()
+    return jsonify(db.get_all_feedback(user_id))
 
 
 @app.route("/api/feedback", methods=["POST"])
 def add_feedback_direct():
-    """Add a feedback comment directly (not via regeneration)."""
     body = request.json
     format_type = body.get("format_type") or body.get("format", "")
     feedback = body.get("feedback", "").strip()
@@ -1496,7 +1205,6 @@ def add_feedback_direct():
 
 @app.route("/api/feedback/<format_type>/<feedback_id>", methods=["DELETE"])
 def delete_feedback(format_type, feedback_id):
-    """Delete a specific feedback comment."""
     ok = _delete_feedback(format_type, feedback_id)
     if not ok:
         return jsonify({"error": "Feedback not found"}), 404
@@ -1505,7 +1213,6 @@ def delete_feedback(format_type, feedback_id):
 
 @app.route("/api/prompts/enrich", methods=["POST"])
 def enrich_prompt():
-    """Use LLM to rewrite a prompt incorporating selected feedback."""
     global FORMAT_LINKEDIN, FORMAT_INSTAGRAM, FORMAT_NEWSLETTER, FORMAT_TWITTER, FORMAT_VIDEO_SCRIPT
 
     body = request.json
@@ -1518,7 +1225,6 @@ def enrich_prompt():
     if not feedback_ids:
         return jsonify({"error": "No feedback selected"}), 400
 
-    # Get current prompt BEFORE enrichment
     PROMPT_MAP = {
         "linkedin": FORMAT_LINKEDIN,
         "instagram": FORMAT_INSTAGRAM,
@@ -1527,14 +1233,11 @@ def enrich_prompt():
         "video_script": FORMAT_VIDEO_SCRIPT,
     }
     old_prompt = PROMPT_MAP[format_type]
-
-    # Enrich using LLM
     new_prompt = _enrich_prompt_with_feedback(format_type, feedback_ids)
 
     if new_prompt == old_prompt:
         return jsonify({"error": "Enrichment produced no changes"}), 400
 
-    # Update the global FORMAT variable
     if format_type == "linkedin":
         FORMAT_LINKEDIN = new_prompt
     elif format_type == "instagram":
@@ -1546,21 +1249,14 @@ def enrich_prompt():
     elif format_type == "video_script":
         FORMAT_VIDEO_SCRIPT = new_prompt
 
-    # Log the new prompt version
     prompt_name = f"format_{format_type}"
     _log_prompt_version(prompt_name, new_prompt, trigger="enrichment")
 
-    # Mark selected feedback entries as "used for enrichment"
-    fb = _load_feedback()
-    entries = fb.get(format_type, [])
-    selected_texts = []
-    now_iso = datetime.now(timezone.utc).isoformat()
-    for e in entries:
-        if e.get("id") in feedback_ids:
-            selected_texts.append(e["feedback"])
-            e["enriched_at"] = now_iso
-    _save_feedback(fb)
+    user_id = _get_user_id()
+    db.mark_feedback_enriched(user_id, feedback_ids)
 
+    selected = db.get_feedback_by_ids(user_id, feedback_ids)
+    selected_texts = [e["feedback"] for e in selected]
     _log_pipeline("info", f"Prompt enriched: {format_type} (used {len(feedback_ids)} feedback comments)",
                   {"feedback_used": selected_texts})
 
@@ -1584,8 +1280,8 @@ def track_selections():
 
 @app.route("/api/smart-brief")
 def smart_brief():
-    """Generate AI-powered content suggestions based on user preferences."""
-    prefs = _load_prefs()
+    user_id = _get_user_id()
+    prefs = db.get_selection_prefs(user_id)
     total = prefs.get("total_selections", 0)
     confidence = round(min(total / 100, 1.0), 2)
 
@@ -1597,7 +1293,6 @@ def smart_brief():
             "message": "Seleziona almeno 3 articoli per attivare i suggerimenti intelligenti.",
         })
 
-    # Build a preference summary
     top_sources = sorted(prefs.get("source_counts", {}).items(), key=lambda x: x[1], reverse=True)[:5]
     top_cats = sorted(prefs.get("category_counts", {}).items(), key=lambda x: x[1], reverse=True)[:5]
     top_kws = sorted(prefs.get("keyword_counts", {}).items(), key=lambda x: x[1], reverse=True)[:10]
@@ -1623,8 +1318,7 @@ Rispondi in JSON array: [{{"title": "...", "platform": "...", "hook": "...", "ur
 Solo JSON, niente altro."""
         result = _llm_call(
             [{"role": "user", "content": prompt}],
-            model=MODEL_CHEAP,
-            temperature=0.7,
+            model=MODEL_CHEAP, temperature=0.7,
         )
         suggestions = json.loads(result.strip().strip("```json").strip("```"))
         if not isinstance(suggestions, list):
@@ -1649,10 +1343,8 @@ def render_carousel_images():
     body = request.json
     text = body.get("text", "")
     palette_idx = body.get("palette", 0)
-
     if not text.strip():
         return jsonify({"error": "No carousel text provided"}), 400
-
     try:
         result = render_carousel_async(text, palette_idx=palette_idx)
         _log_pipeline("info", f"Rendered carousel: {len(result['slides'])} slides")
@@ -1668,22 +1360,22 @@ def render_carousel_images():
 
 @app.route("/api/monitor/prompts")
 def get_prompt_log():
-    return jsonify(_load_prompt_log())
+    user_id = _get_user_id()
+    return jsonify(db.get_prompt_logs(user_id))
 
 
 @app.route("/api/monitor/pipeline")
 def get_pipeline_log():
-    log = _load_pipeline_log()
+    user_id = _get_user_id()
     level = request.args.get("level")
-    if level:
-        log = [e for e in log if e["level"] == level]
-    log.reverse()
-    return jsonify(log)
+    logs = db.get_pipeline_logs(user_id, level=level, limit=500)
+    return jsonify(logs)
 
 
 @app.route("/api/monitor/preferences")
 def get_preferences():
-    prefs = _load_prefs()
+    user_id = _get_user_id()
+    prefs = db.get_selection_prefs(user_id)
     source_top = sorted(prefs.get("source_counts", {}).items(), key=lambda x: x[1], reverse=True)[:10]
     category_top = sorted(prefs.get("category_counts", {}).items(), key=lambda x: x[1], reverse=True)[:10]
     keyword_top = sorted(prefs.get("keyword_counts", {}).items(), key=lambda x: x[1], reverse=True)[:20]
@@ -1698,20 +1390,21 @@ def get_preferences():
 
 @app.route("/api/monitor/health")
 def get_health():
-    pipeline = _load_pipeline_log()
-    feedback = _load_feedback()
-    prompts = _load_prompt_log()
-    articles = _load_json(ARTICLES_FILE)
-    sessions = _load_json(SESSIONS_FILE)
+    user_id = _get_user_id()
+    pipeline = db.get_pipeline_logs(user_id, limit=500)
+    feedback = db.get_all_feedback(user_id)
+    prompts = db.get_prompt_logs(user_id)
+    articles = db.get_articles(user_id)
+    sessions = db.get_sessions(user_id)
 
     cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    recent_errors = [e for e in pipeline if e["level"] == "error" and e["created_at"] > cutoff_24h]
-    recent_warnings = [e for e in pipeline if e["level"] == "warning" and e["created_at"] > cutoff_24h]
+    recent_errors = [e for e in pipeline if e.get("level") == "error" and e.get("created_at", "") > cutoff_24h]
+    recent_warnings = [e for e in pipeline if e.get("level") == "warning" and e.get("created_at", "") > cutoff_24h]
 
     feed_urls = _get_all_feed_urls()
     feed_health = {}
     for feed_url in feed_urls:
-        feed_events = [e for e in pipeline if e.get("extra", {}).get("feed") == feed_url]
+        feed_events = [e for e in pipeline if (e.get("extra") or {}).get("feed") == feed_url]
         if feed_events:
             last = feed_events[-1]
             feed_health[feed_url] = {"status": last["level"], "message": last["message"], "last_seen": last["created_at"]}
@@ -1741,9 +1434,8 @@ def get_health():
 
 @app.route("/api/ntfy/test", methods=["POST"])
 def test_ntfy():
-    """Send a test ntfy notification."""
     success = _send_ntfy(
-        title="🧪 Test Content Dashboard",
+        title="\U0001f9ea Test Content Dashboard",
         message="Le notifiche funzionano! Riceverai un avviso quando sarà ora di pubblicare.",
         tags="white_check_mark",
     )
@@ -1757,34 +1449,25 @@ def test_ntfy():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    DATA_DIR.mkdir(exist_ok=True)
-    for f in (ARTICLES_FILE, SESSIONS_FILE, SCHEDULE_FILE):
-        if not f.exists():
-            _save_json(f, [])
-    if not FEEDBACK_FILE.exists():
-        _save_feedback({})
-    if not PROMPT_LOG_FILE.exists():
-        _save_prompt_log([])
-    if not PIPELINE_LOG_FILE.exists():
-        _save_pipeline_log([])
-    if not SELECTION_PREFS_FILE.exists():
-        _save_prefs(_load_prefs())
-    if not WEEKLY_STATUS_FILE.exists():
-        _save_weekly_status({"weeks": {}})
+    # Verify Supabase is configured
+    if not db.is_configured():
+        print("ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env")
+        print("Run: python setup_db.py   (after setting up .env)")
+        exit(1)
 
     # Snapshot prompts on startup
-    _snapshot_all_prompts("init")
+    try:
+        _snapshot_all_prompts("init")
+    except Exception as e:
+        print(f"Warning: Could not snapshot prompts: {e}")
 
     # Start schedule checker background thread
     schedule_thread = threading.Thread(target=_check_schedules, daemon=True)
     schedule_thread.start()
-    _log_pipeline("info", "Schedule checker started")
+    try:
+        _log_pipeline("info", "App started — schedule checker running")
+    except Exception:
+        pass
 
-    # Open browser after short delay
-    def open_browser():
-        time.sleep(1.5)
-        webbrowser.open("http://localhost:5001")
-
-    threading.Thread(target=open_browser, daemon=True).start()
-
+    print("\n  Content AI Generator running on http://localhost:5001\n")
     app.run(debug=True, port=5001, use_reloader=False)
