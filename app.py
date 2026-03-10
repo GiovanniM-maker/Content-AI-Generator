@@ -447,7 +447,14 @@ def _get_current_week_status() -> dict:
 # ---------------------------------------------------------------------------
 
 @app.route("/")
-def index():
+def landing():
+    """Public landing page — always visible, no auth required."""
+    return render_template("landing.html")
+
+
+@app.route("/app")
+def app_dashboard():
+    """SPA dashboard — serves the main application (auth handled client-side)."""
     return render_template("index.html")
 
 

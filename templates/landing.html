@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Content AI Generator — Da Articolo a Post in 5 Piattaforme. In 5 Minuti.</title>
+<meta name="description" content="Trasforma articoli in post LinkedIn, Instagram, newsletter e video script con l'AI. 10 generazioni gratis, nessuna carta richiesta." />
+<meta property="og:title" content="Content AI Generator — Da Articolo a Post in 5 Minuti" />
+<meta property="og:description" content="L'AI analizza gli articoli del tuo settore e genera contenuti per LinkedIn, Instagram, Twitter, Newsletter e Video. Gratis per iniziare." />
+<meta property="og:url" content="https://content-ai-generator-1.onrender.com" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<style>
+  /* ── DESIGN TOKENS ─────────────────────────────────────── */
+  :root {
+    --bg:       #000000;
+    --surface:  #0a0a0a;
+    --card:     rgba(255,255,255,0.04);
+    --border:   rgba(255,255,255,0.08);
+    --violet:   #7c3aed;
+    --violet-l: #a78bfa;
+    --violet-d: #5b21b6;
+    --white:    #ffffff;
+    --muted:    #71717a;
+    --subtle:   #27272a;
+    --text:     #e4e4e7;
+    --font-head: 'Syne', sans-serif;
+    --font-body: 'DM Mono', monospace;
+    --font-serif:'Instrument Serif', serif;
+    --r: 12px;
+    --max: 1120px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.7;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* ── NOISE TEXTURE OVERLAY ─────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+  /* ── LAYOUT ────────────────────────────────────────────── */
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  /* ── NAV ───────────────────────────────────────────────── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    padding: 18px 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .nav-logo {
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--white);
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+  .nav-logo span { color: var(--violet-l); }
+  .nav-links { display: flex; align-items: center; gap: 32px; }
+  .nav-links a {
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.2s;
+    font-family: var(--font-head);
+  }
+  .nav-links a:hover { color: var(--white); }
+  .btn-nav {
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 13px;
+    background: var(--violet);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.15s;
+  }
+  .btn-nav:hover { background: var(--violet-d); transform: translateY(-1px); }
+  /* ── HERO ──────────────────────────────────────────────── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 140px 24px 80px;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Orb background */
+  .hero::after {
+    content: '';
+    position: absolute;
+    width: 900px; height: 900px;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at center,
+      rgba(124,58,237,0.18) 0%,
+      rgba(124,58,237,0.06) 40%,
+      transparent 70%);
+    pointer-events: none;
+    animation: pulse-orb 8s ease-in-out infinite;
+  }
+  @keyframes pulse-orb {
+    0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    50%       { transform: translate(-50%,-50%) scale(1.12); opacity: 0.7; }
+  }
+  /* Grid lines */
+  .hero-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+  }
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(124,58,237,0.12);
+    border: 1px solid rgba(124,58,237,0.3);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: var(--font-head);
+    font-weight: 600;
+    color: var(--violet-l);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    animation: fade-up 0.6s ease both;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--violet-l);
+    border-radius: 50%;
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .hero-h1 {
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: clamp(42px, 6vw, 80px);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+    color: var(--white);
+    margin-bottom: 24px;
+    max-width: 860px;
+    animation: fade-up 0.6s 0.1s ease both;
+  }
+  .hero-h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--violet-l) 0%, #c084fc 50%, var(--violet-l) 100%);
+    background-size: 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 4s linear infinite;
+  }
+  @keyframes shimmer { 0%{background-position:0%} 100%{background-position:200%} }
+  .hero-sub {
+    font-size: 17px;
+    line-height: 1.65;
+    color: var(--muted);
+    max-width: 560px;
+    margin-bottom: 40px;
+    animation: fade-up 0.6s 0.2s ease both;
+  }
+  .hero-sub strong { color: var(--text); }
+  .hero-cta-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    animation: fade-up 0.6s 0.3s ease both;
+    margin-bottom: 16px;
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 15px;
+    background: var(--violet);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 28px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
+    pointer-events: none;
+  }
+  .btn-primary:hover { background: #6d28d9; transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,58,237,0.4); }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--font-head);
+    font-weight: 600; font-size: 14px;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 24px;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .btn-ghost:hover { color: var(--white); border-color: rgba(255,255,255,0.2); background: var(--card); }
+  .hero-disclaimer {
+    font-size: 12px;
+    color: var(--muted);
+    animation: fade-up 0.6s 0.35s ease both;
+  }
+  /* ── PLATFORMS STRIP ───────────────────────────────────── */
+  .platforms {
+    margin-top: 64px;
+    animation: fade-up 0.6s 0.4s ease both;
+  }
+  .platforms p {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: var(--font-head);
+    margin-bottom: 16px;
+  }
+  .platform-pills {
+    display: flex; flex-wrap: wrap;
+    align-items: center; justify-content: center;
+    gap: 8px;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: var(--font-head);
+    font-weight: 600;
+    color: var(--text);
+    transition: all 0.2s;
+  }
+  .pill:hover { border-color: rgba(124,58,237,0.5); color: var(--violet-l); }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dot-li { background: #0a66c2; }
+  .dot-ig { background: linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); }
+  .dot-tw { background: #000; border: 1px solid #444; }
+  .dot-nl { background: #f97316; }
+  .dot-vd { background: #ef4444; }
+  /* ── SOCIAL PROOF STRIP ────────────────────────────────── */
+  .proof-strip {
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .proof-track {
+    display: flex; gap: 48px;
+    animation: marquee 25s linear infinite;
+    white-space: nowrap;
+  }
+  @keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+  .proof-item {
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0;
+  }
+  .proof-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--violet), var(--violet-d));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff; font-family: var(--font-head);
+    flex-shrink: 0;
+  }
+  .proof-text { font-size: 13px; color: var(--muted); }
+  .proof-text strong { color: var(--text); }
+  .proof-sep { color: var(--subtle); user-select: none; }
+  /* ── SECTION COMMON ────────────────────────────────────── */
+  section { padding: 100px 0; }
+  .section-label {
+    font-family: var(--font-head);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--violet-l);
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: clamp(30px, 4vw, 48px);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--white);
+    margin-bottom: 16px;
+  }
+  .section-sub {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 520px;
+    line-height: 1.7;
+  }
+  .section-head { margin-bottom: 56px; }
+  /* ── COMPETITIVE SECTION ───────────────────────────────── */
+  .compete {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .compete-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+  }
+  .compete-list { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+  .compete-list li {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 16px 18px;
+    transition: border-color 0.2s;
+  }
+  .compete-list li:hover { border-color: rgba(124,58,237,0.4); }
+  .compete-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+  .compete-text strong { display: block; font-family: var(--font-head); font-weight: 700; color: var(--white); font-size: 14px; margin-bottom: 2px; }
+  .compete-text span { font-size: 13px; color: var(--muted); }
+  .compare-table {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .cmp-head {
+    display: grid; grid-template-columns: 1fr 80px 80px 80px 80px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    font-size: 12px; font-family: var(--font-head); font-weight: 700;
+    color: var(--muted); text-align: center;
+  }
+  .cmp-head span:first-child { text-align: left; }
+  .cmp-row {
+    display: grid; grid-template-columns: 1fr 80px 80px 80px 80px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px; text-align: center; align-items: center;
+    transition: background 0.15s;
+  }
+  .cmp-row:last-child { border-bottom: none; }
+  .cmp-row:hover { background: rgba(255,255,255,0.02); }
+  .cmp-row span:first-child { text-align: left; color: var(--text); font-family: var(--font-head); font-size: 12px; }
+  .check { color: #22c55e; font-size: 16px; }
+  .cross { color: var(--subtle); font-size: 14px; }
+  .cmp-us { color: var(--violet-l); font-weight: 700; font-family: var(--font-head); font-size: 12px; }
+  .cmp-col-us { background: rgba(124,58,237,0.08); border-left: 1px solid rgba(124,58,237,0.2); border-right: 1px solid rgba(124,58,237,0.2); }
+  /* ── HOW IT WORKS ──────────────────────────────────────── */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .step {
+    background: var(--bg);
+    padding: 32px 28px;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .step:hover { background: rgba(124,58,237,0.05); }
+  .step-num {
+    font-family: var(--font-head);
+    font-size: 11px;
+    color: var(--violet-l);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .step-num::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .step-icon { font-size: 28px; margin-bottom: 14px; display: block; }
+  .step h3 {
+    font-family: var(--font-head);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .step p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  /* ── BENTO FEATURES ────────────────────────────────────── */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: auto auto;
+    gap: 12px;
+  }
+  .bento-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    transition: border-color 0.2s, transform 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .bento-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 0% 0%, rgba(124,58,237,0.08), transparent 60%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .bento-card:hover { border-color: rgba(124,58,237,0.3); transform: translateY(-2px); }
+  .bento-card:hover::before { opacity: 1; }
+  .bento-card.col-3 { grid-column: span 3; }
+  .bento-card.col-2 { grid-column: span 2; }
+  .bento-card.col-4 { grid-column: span 4; }
+  .bento-card.col-6 { grid-column: span 6; }
+  .bento-icon { font-size: 32px; margin-bottom: 16px; display: block; }
+  .bento-card h3 {
+    font-family: var(--font-head);
+    font-size: 17px; font-weight: 700;
+    color: var(--white);
+    margin-bottom: 8px; line-height: 1.3;
+  }
+  .bento-card p { font-size: 13px; color: var(--muted); line-height: 1.65; }
+  .bento-tag {
+    display: inline-block;
+    background: rgba(124,58,237,0.15);
+    color: var(--violet-l);
+    border: 1px solid rgba(124,58,237,0.25);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-family: var(--font-head);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  /* ── PRICING ───────────────────────────────────────────── */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .price-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 36px 32px;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+  .price-card:hover { border-color: rgba(124,58,237,0.3); }
+  .price-card.featured {
+    border-color: rgba(124,58,237,0.5);
+    background: rgba(124,58,237,0.06);
+  }
+  .price-badge {
+    position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+    background: var(--violet);
+    color: #fff;
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 0 0 10px 10px;
+    white-space: nowrap;
+  }
+  .price-name {
+    font-family: var(--font-head);
+    font-size: 13px; font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .price-amount {
+    font-family: var(--font-head);
+    font-size: 48px; font-weight: 800;
+    color: var(--white);
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .price-amount span { font-size: 22px; vertical-align: top; margin-top: 8px; display: inline-block; }
+  .price-per { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .price-hook {
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 28px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    font-style: italic;
+    line-height: 1.5;
+  }
+  .price-features { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+  .price-features li {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 13px; color: var(--text);
+    line-height: 1.5;
+  }
+  .price-features li .ic { color: #22c55e; flex-shrink: 0; margin-top: 1px; }
+  .price-features li .ic-no { color: var(--subtle); flex-shrink: 0; margin-top: 1px; }
+  .btn-price-primary {
+    display: block; width: 100%; text-align: center;
+    font-family: var(--font-head); font-weight: 700; font-size: 14px;
+    background: var(--violet); color: #fff;
+    border: none; border-radius: 10px;
+    padding: 14px; cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .btn-price-primary:hover { background: var(--violet-d); transform: translateY(-1px); box-shadow: 0 8px 30px rgba(124,58,237,0.35); }
+  .btn-price-ghost {
+    display: block; width: 100%; text-align: center;
+    font-family: var(--font-head); font-weight: 600; font-size: 14px;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .btn-price-ghost:hover { color: var(--white); border-color: rgba(255,255,255,0.2); }
+  .price-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 10px; }
+  /* ── TESTIMONIALS ──────────────────────────────────────── */
+  .testi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .testi-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    transition: border-color 0.2s;
+  }
+  .testi-card:hover { border-color: rgba(124,58,237,0.3); }
+  .testi-stars { color: #f59e0b; font-size: 14px; margin-bottom: 16px; letter-spacing: 2px; }
+  .testi-quote {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    color: var(--text);
+    line-height: 1.6;
+    margin-bottom: 20px;
+    font-style: italic;
+  }
+  .testi-author { display: flex; align-items: center; gap: 10px; }
+  .testi-av {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--violet), var(--violet-d));
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-head); font-weight: 700; font-size: 13px; color: #fff;
+  }
+  .testi-info strong { display: block; font-family: var(--font-head); font-size: 13px; color: var(--white); }
+  .testi-info span { font-size: 12px; color: var(--muted); }
+  /* ── FAQ ───────────────────────────────────────────────── */
+  .faq-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .faq-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .faq-q {
+    width: 100%; text-align: left;
+    background: none; border: none; cursor: pointer;
+    padding: 20px 24px;
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    font-family: var(--font-head); font-weight: 700; font-size: 14px;
+    color: var(--white);
+    transition: color 0.2s;
+  }
+  .faq-q:hover { color: var(--violet-l); }
+  .faq-arrow { font-size: 18px; color: var(--muted); flex-shrink: 0; transition: transform 0.25s; }
+  .faq-item.open .faq-arrow { transform: rotate(45deg); color: var(--violet-l); }
+  .faq-a {
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    font-size: 13px; color: var(--muted);
+    line-height: 1.7;
+    padding: 0 24px;
+  }
+  .faq-item.open .faq-a { max-height: 300px; padding: 0 24px 20px; }
+  /* ── CTA BOTTOM ────────────────────────────────────────── */
+  .cta-bottom {
+    text-align: center;
+    padding: 100px 24px;
+    position: relative; overflow: hidden;
+  }
+  .cta-bottom::before {
+    content: '';
+    position: absolute;
+    width: 700px; height: 700px;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .cta-bottom h2 {
+    font-family: var(--font-head);
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--white);
+    line-height: 1.1;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .cta-bottom p { font-size: 16px; color: var(--muted); margin-bottom: 36px; position: relative; }
+  /* ── FOOTER ────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 0;
+  }
+  footer .wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .foot-left .tagline {
+    font-family: var(--font-head);
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .foot-links { display: flex; gap: 24px; flex-wrap: wrap; }
+  .foot-links a { font-size: 12px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+  .foot-links a:hover { color: var(--text); }
+  .foot-copy { font-size: 12px; color: var(--subtle); }
+  /* ── ANIMATIONS ────────────────────────────────────────── */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .reveal {
+    opacity: 0; transform: translateY(24px);
+    transition: opacity 0.55s ease, transform 0.55s ease;
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  /* ── STAT ROW ──────────────────────────────────────────── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+    margin-bottom: 60px;
+  }
+  .stat { background: var(--bg); padding: 28px 24px; text-align: center; }
+  .stat-num {
+    font-family: var(--font-head);
+    font-size: 36px; font-weight: 800;
+    color: var(--white); line-height: 1;
+    margin-bottom: 4px;
+    background: linear-gradient(135deg, var(--white), var(--violet-l));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .stat-label { font-size: 12px; color: var(--muted); font-family: var(--font-head); }
+  /* ── RESPONSIVE ────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .bento-card.col-3, .bento-card.col-4 { grid-column: span 6; }
+    .bento-card.col-2 { grid-column: span 3; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .pricing-grid { grid-template-columns: 1fr; }
+    .testi-grid { grid-template-columns: 1fr; }
+    .faq-grid { grid-template-columns: 1fr; }
+    .compete-grid { grid-template-columns: 1fr; }
+    .cmp-head, .cmp-row { grid-template-columns: 1fr 70px 70px 70px 70px; font-size: 11px; }
+    .nav-links { display: none; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px) {
+    .steps { grid-template-columns: 1fr; }
+    .bento-card.col-2 { grid-column: span 6; }
+    .hero-h1 { font-size: 36px; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .cmp-head span:nth-child(n+3), .cmp-row span:nth-child(n+3) { display: none; }
+    .cmp-head, .cmp-row { grid-template-columns: 1fr 70px 70px; }
+  }
+</style>
+</head>
+<body>
+<!-- ═══════════════════ NAV ═══════════════════ -->
+<nav>
+  <div class="wrap">
+    <a href="#" class="nav-logo">Content<span>AI</span></a>
+    <div class="nav-links">
+      <a href="#come-funziona">Come funziona</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <a href="/app" class="btn-nav">Inizia Gratis →</a>
+  </div>
+</nav>
+<!-- ═══════════════════ HERO ══════════════════ -->
+<section class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-eyebrow">Piattaforma AI • Made in Italy</div>
+  <h1 class="hero-h1">
+    Smettila di fissare<br />
+    il cursore.<br />
+    <em>Inizia a dominare.</em>
+  </h1>
+  <p class="hero-sub">
+    Ogni giorno senza contenuti è <strong>reach persa per sempre</strong>. Content AI Generator trasforma articoli del tuo settore in post pronti per <strong>5 piattaforme</strong> — con la tua voce, non un template — in meno di 5 minuti.
+  </p>
+  <div class="hero-cta-row">
+    <a href="/app" class="btn-primary">
+      ✦ Inizia Gratis — Nessuna Carta
+    </a>
+    <a href="#come-funziona" class="btn-ghost">
+      ▶ Guarda come funziona
+    </a>
+  </div>
+  <p class="hero-disclaimer">10 generazioni gratuite · Attivo in 30 secondi · Zero carta di credito</p>
+  <div class="platforms">
+    <p>Genera contenuti per</p>
+    <div class="platform-pills">
+      <span class="pill"><span class="dot dot-li"></span>LinkedIn</span>
+      <span class="pill"><span class="dot dot-ig"></span>Instagram</span>
+      <span class="pill"><span class="dot dot-tw"></span>Twitter / X</span>
+      <span class="pill"><span class="dot dot-nl"></span>Newsletter</span>
+      <span class="pill"><span class="dot dot-vd"></span>Video Script</span>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ SOCIAL PROOF ══════════ -->
+<div class="proof-strip">
+  <div class="proof-track">
+    <!-- Clone per loop infinito -->
+    <div class="proof-item"><div class="proof-avatar">GR</div><div class="proof-text"><strong>"Da 2 post a settimana a 14. Senza stress."</strong> — Giulia R., Social Media Manager</div></div>
+    <div class="proof-sep">·</div>
+    <div class="proof-item"><div class="proof-avatar">MT</div><div class="proof-text"><strong>"Ho recuperato 12 ore a settimana."</strong> — Marco T., Consulente Marketing</div></div>
+    <div class="proof-sep">·</div>
+    <div class="proof-item"><div class="proof-avatar">SF</div><div class="proof-text"><strong>"L'unico tool che mantiene davvero la mia voce."</strong> — Sara F., Founder</div></div>
+    <div class="proof-sep">·</div>
+    <div class="proof-item"><div class="proof-avatar">AL</div><div class="proof-text"><strong>"Finalmente pubblico ogni giorno senza ansia."</strong> — Andrea L., Coach</div></div>
+    <div class="proof-sep">·</div>
+    <div class="proof-item"><div class="proof-avatar">GR</div><div class="proof-text"><strong>"Da 2 post a settimana a 14. Senza stress."</strong> — Giulia R., Social Media Manager</div></div>
+    <div class="proof-sep">·</div>
+    <div class="proof-item"><div class="proof-avatar">MT</div><div class="proof-text"><strong>"Ho recuperato 12 ore a settimana."</strong> — Marco T., Consulente Marketing</div></div>
+    <div class="proof-sep">·</div>
+    <div class="proof-item"><div class="proof-avatar">SF</div><div class="proof-text"><strong>"L'unico tool che mantiene davvero la mia voce."</strong> — Sara F., Founder</div></div>
+    <div class="proof-sep">·</div>
+    <div class="proof-item"><div class="proof-avatar">AL</div><div class="proof-text"><strong>"Finalmente pubblico ogni giorno senza ansia."</strong> — Andrea L., Coach</div></div>
+  </div>
+</div>
+<!-- ═══════════════════ COMPETITOR SECTION ════ -->
+<section class="compete">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="section-label">Analisi Competitiva</p>
+      <h2 class="section-title">Gli altri fanno solo LinkedIn.<br />Noi facciamo tutto.</h2>
+      <p class="section-sub">Taplio, Supergrow, Postwise: ottimi tool, ma ti inchiodano a un'unica piattaforma. Content AI Generator è l'unica soluzione che copre tutto il tuo ecosistema digitale.</p>
+    </div>
+    <div class="compete-grid reveal">
+      <ul class="compete-list">
+        <li>
+          <span class="compete-icon">🚫</span>
+          <div class="compete-text">
+            <strong>Taplio / Supergrow: solo LinkedIn</strong>
+            <span>$39–49/mese, LinkedIn-only, nessun supporto per newsletter o video. La tua strategia dipende da un unico algoritmo.</span>
+          </div>
+        </li>
+        <li>
+          <span class="compete-icon">🚫</span>
+          <div class="compete-text">
+            <strong>Postwise: Twitter + LinkedIn</strong>
+            <span>$29/mese, due piattaforme. Niente Instagram caroselli, niente newsletter, niente video script.</span>
+          </div>
+        </li>
+        <li>
+          <span class="compete-icon">✅</span>
+          <div class="compete-text">
+            <strong>Content AI Generator: le 5 piattaforme</strong>
+            <span>€29/mese Pro. LinkedIn, Instagram, Twitter, Newsletter, Video Script — con RSS illimitati, Web Search e la tua opinione integrata. Un'unica fonte, cinque contenuti.</span>
+          </div>
+        </li>
+      </ul>
+      <div class="compare-table reveal">
+        <div class="cmp-head">
+          <span>Feature</span>
+          <span class="cmp-us">CAG Pro</span>
+          <span>Taplio</span>
+          <span>Supergrow</span>
+          <span>Postwise</span>
+        </div>
+        <div class="cmp-row">
+          <span>LinkedIn</span>
+          <span class="cmp-col-us check">✓</span>
+          <span class="check">✓</span>
+          <span class="check">✓</span>
+          <span class="check">✓</span>
+        </div>
+        <div class="cmp-row">
+          <span>Instagram</span>
+          <span class="cmp-col-us check">✓</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+        </div>
+        <div class="cmp-row">
+          <span>Newsletter</span>
+          <span class="cmp-col-us check">✓</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+        </div>
+        <div class="cmp-row">
+          <span>Video Script</span>
+          <span class="cmp-col-us check">✓</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+        </div>
+        <div class="cmp-row">
+          <span>RSS + Web Search</span>
+          <span class="cmp-col-us check">✓</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+          <span class="cross">—</span>
+        </div>
+        <div class="cmp-row">
+          <span>Caroselli IG</span>
+          <span class="cmp-col-us check">✓</span>
+          <span class="cross">—</span>
+          <span class="check">✓</span>
+          <span class="cross">—</span>
+        </div>
+        <div class="cmp-row">
+          <span>Free senza CC</span>
+          <span class="cmp-col-us check">✓</span>
+          <span class="cross">—</span>
+          <span class="check">✓</span>
+          <span class="cross">—</span>
+        </div>
+        <div class="cmp-row">
+          <span>Prezzo/mese</span>
+          <span class="cmp-col-us cmp-us">€29</span>
+          <span>$39</span>
+          <span>$29</span>
+          <span>$29</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ STATS ══════════════════ -->
+<section style="padding: 80px 0 0;">
+  <div class="wrap">
+    <div class="stats-row reveal">
+      <div class="stat">
+        <div class="stat-num">5</div>
+        <div class="stat-label">Piattaforme supportate</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">&lt;5min</div>
+        <div class="stat-label">Da articolo a contenuto</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">1.200+</div>
+        <div class="stat-label">Professionisti italiani</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">€0</div>
+        <div class="stat-label">Per iniziare, nessuna CC</div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ HOW IT WORKS ══════════ -->
+<section id="come-funziona">
+  <div class="wrap">
+    <div class="section-head reveal" style="text-align:center; display:flex; flex-direction:column; align-items:center;">
+      <p class="section-label">Come Funziona</p>
+      <h2 class="section-title">Da zero a 5 contenuti.<br />In 4 passi.</h2>
+      <p class="section-sub">Niente da installare. Niente da imparare. Solo risultati dal primo click.</p>
+    </div>
+    <div class="steps reveal">
+      <div class="step">
+        <div class="step-num">01</div>
+        <span class="step-icon">🔍</span>
+        <h3>Trova il contenuto giusto</h3>
+        <p>Connetti RSS o cerca sul web. L'AI analizza centinaia di articoli e ti mostra solo quelli rilevanti per il tuo settore.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <span class="step-icon">✍️</span>
+        <h3>Aggiungi la tua voce</h3>
+        <p>Scegli l'articolo e scrivi due righe di tuo pugno. Opinione, esperienza, domanda. È questo che rende il contenuto autentico.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <span class="step-icon">⚡</span>
+        <h3>Un click. Cinque contenuti.</h3>
+        <p>LinkedIn, Instagram, Twitter, Newsletter, Video Script — già ottimizzati per formato e lunghezza di ogni piattaforma.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <span class="step-icon">🚀</span>
+        <h3>Pubblica o Schedula</h3>
+        <p>Copia, incolla, schedula o crea un carosello Instagram. Il tuo piano editoriale settimanale riempito in 20 minuti.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ FEATURES BENTO ════════ -->
+<section id="features">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="section-label">Features</p>
+      <h2 class="section-title">Tutto ciò che ti serve.<br />Niente di superfluo.</h2>
+    </div>
+    <div class="bento reveal">
+      <!-- Riga 1 -->
+      <div class="bento-card col-3">
+        <span class="bento-tag">Core</span>
+        <span class="bento-icon">📡</span>
+        <h3>RSS + Web Search illimitati</h3>
+        <p>Connetti tutti i feed del tuo settore o cerca direttamente sul web. L'AI filtra per rilevanza — mai più blank page.</p>
+      </div>
+      <div class="bento-card col-3">
+        <span class="bento-tag">Esclusiva</span>
+        <span class="bento-icon">🎯</span>
+        <h3>La tua voce, non un template</h3>
+        <p>Aggiungi la tua prospettiva sull'articolo. Il sistema la integra nel contenuto finale. Il risultato suona come te — non come ChatGPT.</p>
+      </div>
+      <!-- Riga 2 -->
+      <div class="bento-card col-2">
+        <span class="bento-icon">🖼️</span>
+        <h3>Caroselli Instagram</h3>
+        <p>Slide pronte da pubblicare, layout pre-impostati, nessun tool esterno.</p>
+      </div>
+      <div class="bento-card col-2">
+        <span class="bento-icon">📅</span>
+        <h3>Scheduling + Push</h3>
+        <p>Programma i post dalla dashboard e ricevi notifiche push al momento giusto.</p>
+      </div>
+      <div class="bento-card col-2">
+        <span class="bento-icon">🧠</span>
+        <h3>AI Feedback</h3>
+        <p>Il sistema valuta chiarezza, engagement e ottimizzazioni. Ogni contenuto migliore del precedente.</p>
+      </div>
+      <!-- Riga 3 -->
+      <div class="bento-card col-4" style="background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(124,58,237,0.04));">
+        <span class="bento-tag">Pro Exclusive</span>
+        <span class="bento-icon">📋</span>
+        <h3>Smart Brief personalizzato</h3>
+        <p>Prima della generazione, il sistema ti guida nella personalizzazione del contenuto. Risultati più precisi, meno editing manuale. Incluso nel piano Pro.</p>
+      </div>
+      <div class="bento-card col-2">
+        <span class="bento-icon">📚</span>
+        <h3>Storico illimitato</h3>
+        <p>Tutti i tuoi contenuti salvati. Riutilizza i migliori, costruisci il tuo stile.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ TESTIMONIALS ══════════ -->
+<section>
+  <div class="wrap">
+    <div class="section-head reveal" style="text-align:center; display:flex; flex-direction:column; align-items:center;">
+      <p class="section-label">Cosa dicono</p>
+      <h2 class="section-title">Usato da chi pubblica ogni giorno.</h2>
+    </div>
+    <div class="testi-grid reveal">
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-quote">"Da quando uso Content AI Generator publico 3 volte al giorno su LinkedIn e la mia newsletter cresce ogni settimana. Ho recuperato almeno 12 ore a settimana."</p>
+        <div class="testi-author">
+          <div class="testi-av">GR</div>
+          <div class="testi-info"><strong>Giulia Rossi</strong><span>Social Media Manager, Milano</span></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-quote">"Avevo provato Taplio e Supergrow. Entrambi ottimi per LinkedIn, ma la mia strategia non è solo LinkedIn. Qui genero caroselli, newsletter e video script in una sola sessione."</p>
+        <div class="testi-author">
+          <div class="testi-av">MT</div>
+          <div class="testi-info"><strong>Marco Tessari</strong><span>Consulente Marketing, Venezia</span></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-quote">"La funzione più utile è quella dove aggiungi la tua opinione. Il risultato non sembra AI — sembra davvero me. È l'unico tool che non mi ha fatto perdere la mia voce."</p>
+        <div class="testi-author">
+          <div class="testi-av">SF</div>
+          <div class="testi-info"><strong>Sara Ferretti</strong><span>Founder & Creator, Roma</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ PRICING ══════════════ -->
+<section id="pricing">
+  <div class="wrap">
+    <div class="section-head reveal" style="text-align:center; display:flex; flex-direction:column; align-items:center;">
+      <p class="section-label">Pricing</p>
+      <h2 class="section-title">Inizia gratis.<br />Scala quando sei pronto.</h2>
+      <p class="section-sub">Nessuna sorpresa, nessun costo nascosto. Cancella quando vuoi.</p>
+    </div>
+    <div class="pricing-grid reveal">
+      <!-- FREE -->
+      <div class="price-card">
+        <p class="price-name">Free</p>
+        <div class="price-amount">€<span style="font-size:48px;vertical-align:baseline;">0</span></div>
+        <p class="price-per">per sempre</p>
+        <p class="price-hook">Scopri se Content AI Generator fa per te — senza toccare la tua carta di credito.</p>
+        <ul class="price-features">
+          <li><span class="ic">✓</span> 10 generazioni (a vita)</li>
+          <li><span class="ic">✓</span> LinkedIn + Newsletter</li>
+          <li><span class="ic">✓</span> Fino a 5 feed RSS</li>
+          <li><span class="ic">✓</span> Storico ultime 10 sessioni</li>
+          <li><span class="ic-no">—</span> Web Search</li>
+          <li><span class="ic-no">—</span> Instagram, Twitter, Video</li>
+          <li><span class="ic-no">—</span> Caroselli, Scheduling, AI Feedback</li>
+        </ul>
+        <a href="/app" class="btn-price-ghost">Inizia Gratis →</a>
+        <p class="price-note">Nessuna carta richiesta. Attivo in 30 secondi.</p>
+      </div>
+      <!-- PRO FEATURED -->
+      <div class="price-card featured">
+        <div class="price-badge">⭐ Più Popolare — Best Value</div>
+        <p class="price-name" style="color: var(--violet-l);">Pro</p>
+        <div class="price-amount"><span>€</span>29</div>
+        <p class="price-per">al mese · cancelli quando vuoi</p>
+        <p class="price-hook">Tutto quello che ti serve per diventare il creator di riferimento nel tuo settore.</p>
+        <ul class="price-features">
+          <li><span class="ic">✓</span> 50 generazioni al mese</li>
+          <li><span class="ic">✓</span> Tutte e 5 le piattaforme</li>
+          <li><span class="ic">✓</span> RSS illimitati + Web Search</li>
+          <li><span class="ic">✓</span> Caroselli Instagram</li>
+          <li><span class="ic">✓</span> Scheduling + notifiche push</li>
+          <li><span class="ic">✓</span> AI Feedback sul contenuto</li>
+          <li><span class="ic">✓</span> Smart Brief personalizzato</li>
+          <li><span class="ic">✓</span> Storico completo illimitato</li>
+        </ul>
+        <a href="/app" class="btn-price-primary">Attiva il Piano Pro →</a>
+        <p class="price-note">Meno di €1/giorno · Soddisfatti o rimborsati 30gg</p>
+      </div>
+      <!-- BUSINESS -->
+      <div class="price-card">
+        <p class="price-name">Business</p>
+        <div class="price-amount"><span>€</span>79</div>
+        <p class="price-per">al mese · per team e agency</p>
+        <p class="price-hook">Per chi non può permettersi di fermarsi. Generazioni illimitate, infrastruttura enterprise.</p>
+        <ul class="price-features">
+          <li><span class="ic">✓</span> Generazioni illimitate</li>
+          <li><span class="ic">✓</span> Tutto il piano Pro incluso</li>
+          <li><span class="ic">✓</span> API keys custom</li>
+          <li><span class="ic">✓</span> Monitoring avanzato</li>
+          <li><span class="ic">✓</span> Supporto prioritario 4h</li>
+          <li><span class="ic">✓</span> Multi-account per team</li>
+          <li><span class="ic">✓</span> Onboarding dedicato</li>
+        </ul>
+        <a href="mailto:hello@contentaigenerator.com" class="btn-price-ghost">Parla con Noi →</a>
+        <p class="price-note">Per esigenze custom, scrivici direttamente.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ FAQ ════════════════════ -->
+<section id="faq">
+  <div class="wrap">
+    <div class="section-head reveal" style="text-align:center; display:flex; flex-direction:column; align-items:center;">
+      <p class="section-label">FAQ</p>
+      <h2 class="section-title">Hai dubbi? Probabilmente<br />la risposta è qui.</h2>
+    </div>
+    <div class="faq-grid reveal">
+      <div class="faq-item">
+        <button class="faq-q">Le 10 generazioni Free si rinnovano ogni mese? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">No — sono un credito unico a vita, non mensile. Questo ti permette di testare il prodotto senza pressioni di tempo. Quando sei pronto a usarlo davvero, il piano Pro a €29/mese è la soluzione più conveniente.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">I contenuti sembrano "scritti dall'AI"? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">È la domanda più frequente. A differenza degli strumenti generici, Content AI Generator integra la tua opinione personale nel contenuto. Il risultato ha un punto di vista, un tono, un'angolazione che riflette il tuo modo di comunicare — non un template universale.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Funziona anche per gestire account di clienti? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">Sì. Il piano Pro è ideale per freelance e social media manager con 1–5 clienti. Il piano Business è pensato per agency con più account e necessità di API personalizzate.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Posso usarlo in inglese o in altre lingue? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">Assolutamente sì. La piattaforma è ottimizzata per l'italiano, ma genera contenuti di qualità in qualsiasi lingua — inglese, spagnolo, francese, tedesco. Basta specificarlo quando aggiungi la tua opinione.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Posso cancellare in qualsiasi momento? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">Sì, senza penali. Puoi cancellare dalle impostazioni del tuo account in meno di 60 secondi. I dati vengono conservati per 30 giorni dalla cancellazione.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Come funziona il Web Search? Devo cercare io gli articoli? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">No. Con il piano Pro cerchi direttamente dal pannello e l'AI trova gli articoli più rilevanti del momento. In alternativa, colleghi i tuoi feed RSS — la piattaforma monitora automaticamente le novità. Free supporta fino a 5 RSS.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">I miei contenuti vengono usati per addestrare l'AI? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">No. I tuoi contenuti sono tuoi. Non vengono condivisi, venduti o usati per addestrare modelli AI. Tutti i dati sono gestiti in conformità con il GDPR.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Cosa succede se esaurisco le 50 generazioni Pro? <span class="faq-arrow">+</span></button>
+        <div class="faq-a">Ricevi una notifica prima di esaurirle. Puoi passare al piano Business per generazioni illimitate, oppure aspettare il rinnovo mensile. Non addebitiamo automaticamente costi aggiuntivi senza il tuo consenso esplicito.</div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ═══════════════════ CTA BOTTOM ════════════ -->
+<section class="cta-bottom">
+  <div class="wrap" style="position:relative;">
+    <h2>Smetti di inseguire<br/>le idee. <em style="font-family: var(--font-serif); font-style:italic; background:linear-gradient(135deg,var(--violet-l),#c084fc); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">Inizia a creare.</em></h2>
+    <p>10 generazioni gratuite. Nessuna carta richiesta. Risultati dal primo click.</p>
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+      <a href="/app" class="btn-primary" style="font-size:16px; padding:16px 36px;">
+        ✦ Inizia Gratis Adesso
+      </a>
+    </div>
+    <p style="margin-top:16px; font-size:12px; color: var(--muted);">Unisciti a 1.200+ professionisti italiani · Piano Pro a €29/mese · Cancelli quando vuoi</p>
+  </div>
+</section>
+<!-- ═══════════════════ FOOTER ════════════════ -->
+<footer>
+  <div class="wrap">
+    <div class="foot-left">
+      <a href="#" class="nav-logo">Content<span>AI</span></a>
+      <p class="tagline">Il tuo studio creativo, powered by AI.</p>
+    </div>
+    <div class="foot-links">
+      <a href="#">Privacy Policy</a>
+      <a href="#">Termini di Servizio</a>
+      <a href="#">Cookie Policy</a>
+      <a href="#">Supporto</a>
+      <a href="#">Changelog</a>
+    </div>
+    <p class="foot-copy">© 2025 Content AI Generator</p>
+  </div>
+</footer>
+<!-- ═══════════════════ JS ═════════════════════ -->
+<script>
+  // Reveal on scroll
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 80);
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+  reveals.forEach(r => observer.observe(r));
+  // FAQ accordion
+  document.querySelectorAll('.faq-q').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.faq-item');
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    });
+  });
+  // Smooth nav highlight
+  document.querySelectorAll('nav a').forEach(a => {
+    a.addEventListener('click', e => {
+      if (a.hash) {
+        e.preventDefault();
+        document.querySelector(a.hash)?.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  });
+</script>
+</body>
+</html>
