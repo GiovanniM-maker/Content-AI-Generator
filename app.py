@@ -17,6 +17,7 @@ from flask import Flask, jsonify, render_template, request, Response, stream_wit
 
 import db
 import auth
+import payments
 
 load_dotenv()
 
@@ -546,6 +547,115 @@ def auth_me():
 
 
 # ---------------------------------------------------------------------------
+# Routes — Payments (Stripe)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/plans")
+def get_plans():
+    """Return available subscription plans and current user plan."""
+    user_id = _get_user_id()
+    subscription = db.get_subscription(user_id)
+    current_plan = (subscription or {}).get("plan", "free")
+
+    plans_data = {}
+    for key, plan in payments.PLANS.items():
+        plans_data[key] = {
+            **plan,
+            "current": key == current_plan,
+        }
+
+    return jsonify({
+        "plans": plans_data,
+        "current_plan": current_plan,
+        "subscription_status": (subscription or {}).get("status", "active"),
+        "stripe_publishable_key": payments.STRIPE_PUBLISHABLE_KEY,
+    })
+
+
+@app.route("/api/checkout", methods=["POST"])
+@auth.require_auth
+def create_checkout():
+    """Create a Stripe Checkout session for upgrading."""
+    body = request.json or {}
+    plan = body.get("plan", "")
+
+    if plan not in ("pro", "business"):
+        return jsonify({"error": "Piano non valido"}), 400
+
+    # Check if already on this plan
+    subscription = db.get_subscription(g.user_id)
+    if subscription and subscription.get("plan") == plan and subscription.get("status") == "active":
+        return jsonify({"error": "Sei già su questo piano"}), 400
+
+    base_url = request.host_url.rstrip("/")
+
+    try:
+        result = payments.create_checkout_session(
+            user_id=g.user_id,
+            email=g.user_email,
+            plan=plan,
+            base_url=base_url,
+        )
+        return jsonify(result)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        _log_pipeline("error", f"Checkout session error: {e}")
+        return jsonify({"error": "Errore nella creazione della sessione di pagamento"}), 500
+
+
+@app.route("/api/billing/portal", methods=["POST"])
+@auth.require_auth
+def billing_portal():
+    """Create a Stripe Customer Portal session."""
+    base_url = request.host_url.rstrip("/")
+    try:
+        result = payments.create_portal_session(
+            user_id=g.user_id,
+            email=g.user_email,
+            base_url=base_url,
+        )
+        return jsonify(result)
+    except Exception as e:
+        _log_pipeline("error", f"Billing portal error: {e}")
+        return jsonify({"error": "Errore nell'apertura del portale di fatturazione"}), 500
+
+
+@app.route("/api/subscription")
+@auth.require_auth
+def get_subscription_status():
+    """Get current user subscription details."""
+    subscription = db.get_subscription(g.user_id)
+    profile = db.get_profile(g.user_id)
+    plan = (subscription or {}).get("plan", "free")
+
+    # Check generation usage
+    usage = payments.check_generation_limit(g.user_id, plan)
+
+    return jsonify({
+        "subscription": subscription or {"plan": "free", "status": "active"},
+        "plan_details": payments.get_plan_limits(plan),
+        "usage": usage,
+    })
+
+
+@app.route("/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    """Handle Stripe webhook events."""
+    payload = request.get_data()
+    sig_header = request.headers.get("Stripe-Signature", "")
+
+    event = payments.verify_webhook(payload, sig_header)
+    if event is None:
+        return jsonify({"error": "Invalid signature"}), 400
+
+    result = payments.handle_webhook_event(event)
+    _log_pipeline("info", f"Stripe webhook: {event.get('type', 'unknown')} → {result.get('action', 'ignored')}")
+
+    return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
 # Routes — Feeds Config API
 # ---------------------------------------------------------------------------
 
@@ -1015,6 +1125,30 @@ def generate_content():
     }
     if format_type not in FORMAT_MAP:
         return jsonify({"error": f"format must be one of: {', '.join(FORMAT_MAP.keys())}"}), 400
+
+    # --- Plan gating ---
+    user_id = _get_user_id()
+    subscription = db.get_subscription(user_id)
+    user_plan = (subscription or {}).get("plan", "free")
+
+    # Check platform access
+    if not payments.check_platform_access(user_plan, format_type):
+        return jsonify({
+            "error": f"La piattaforma '{format_type}' non è disponibile nel piano {user_plan.upper()}. Effettua l'upgrade per accedervi.",
+            "code": "PLAN_LIMIT",
+            "upgrade_required": True,
+        }), 403
+
+    # Check generation limit
+    usage = payments.check_generation_limit(user_id, user_plan)
+    if not usage["allowed"]:
+        return jsonify({
+            "error": f"Hai raggiunto il limite di {usage['limit']} generazioni/mese per il piano {user_plan.upper()}. Effettua l'upgrade per continuare.",
+            "code": "GENERATION_LIMIT",
+            "upgrade_required": True,
+            "used": usage["used"],
+            "limit": usage["limit"],
+        }), 403
 
     if feedback:
         _add_feedback(format_type, feedback)

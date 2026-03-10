@@ -1102,6 +1102,121 @@ body::after {
   flex-shrink: 0;
 }
 .sidebar-user .user-logout:hover { color: var(--red); }
+
+/* --- Pricing / Upgrade Modal --- */
+.pricing-overlay {
+  position: fixed; inset: 0; z-index: 10001;
+  background: rgba(0,0,0,0.85); backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+}
+.pricing-overlay.visible { opacity: 1; pointer-events: auto; }
+.pricing-container {
+  max-width: 900px; width: 95%; padding: 32px;
+}
+.pricing-header {
+  text-align: center; margin-bottom: 28px;
+}
+.pricing-header h2 {
+  font-family: var(--font-heading); font-size: 26px;
+  font-weight: 700; color: var(--text);
+}
+.pricing-header p {
+  color: var(--text3); font-size: 13px; margin-top: 6px;
+}
+.pricing-close {
+  position: absolute; top: 20px; right: 24px;
+  font-size: 24px; color: var(--text3); cursor: pointer;
+  background: none; border: none;
+}
+.pricing-close:hover { color: var(--text); }
+.pricing-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 700px) { .pricing-grid { grid-template-columns: 1fr; } }
+.plan-card {
+  background: var(--glass); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px;
+  display: flex; flex-direction: column; position: relative;
+  transition: border-color 0.3s, transform 0.2s;
+}
+.plan-card:hover { transform: translateY(-2px); }
+.plan-card.recommended {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(124,58,237,0.2);
+}
+.plan-card .plan-badge {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: #fff; font-size: 10px;
+  font-weight: 700; padding: 3px 12px; border-radius: 10px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.plan-card .plan-name {
+  font-family: var(--font-heading); font-size: 20px;
+  font-weight: 700; color: var(--text); margin-bottom: 4px;
+}
+.plan-card .plan-price {
+  font-size: 32px; font-weight: 800; color: var(--accent);
+  margin: 8px 0 4px;
+}
+.plan-card .plan-price span { font-size: 14px; color: var(--text3); font-weight: 400; }
+.plan-card .plan-features {
+  list-style: none; padding: 0; margin: 16px 0;
+  flex: 1;
+}
+.plan-card .plan-features li {
+  font-size: 12px; color: var(--text2); padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.plan-card .plan-features li::before {
+  content: "✓ "; color: var(--green); font-weight: 700;
+}
+.plan-btn {
+  width: 100%; padding: 10px; border: none; border-radius: 8px;
+  font-weight: 600; font-size: 13px; cursor: pointer;
+  transition: all 0.2s;
+}
+.plan-btn.primary {
+  background: var(--accent); color: #fff;
+}
+.plan-btn.primary:hover { filter: brightness(1.15); }
+.plan-btn.secondary {
+  background: var(--glass); color: var(--text2);
+  border: 1px solid var(--border);
+}
+.plan-btn.current {
+  background: rgba(255,255,255,0.05); color: var(--text3);
+  cursor: default;
+}
+
+/* --- Usage bar --- */
+.usage-bar-container {
+  margin: 8px 16px; padding: 8px 12px;
+  background: var(--glass); border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.usage-bar-label {
+  font-size: 10px; color: var(--text3);
+  display: flex; justify-content: space-between; margin-bottom: 4px;
+}
+.usage-bar {
+  height: 4px; background: rgba(255,255,255,0.06);
+  border-radius: 2px; overflow: hidden;
+}
+.usage-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.usage-bar-fill.warning { background: var(--yellow); }
+.usage-bar-fill.danger { background: var(--red); }
+.upgrade-link {
+  font-size: 10px; color: var(--accent); cursor: pointer;
+  text-align: center; margin-top: 4px;
+}
+.upgrade-link:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -1135,6 +1250,20 @@ body::after {
   </div>
 </div>
 
+<!-- PRICING MODAL -->
+<div id="pricing-overlay" class="pricing-overlay">
+  <div class="pricing-container">
+    <button class="pricing-close" onclick="closePricing()">&times;</button>
+    <div class="pricing-header">
+      <h2>Scegli il tuo piano</h2>
+      <p>Sblocca tutte le funzionalità per creare contenuti AI senza limiti</p>
+    </div>
+    <div class="pricing-grid" id="pricing-grid">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+</div>
+
 <div class="sidebar">
   <div class="logo">Content Dashboard<span>Weekly AI Pipeline</span></div>
   <!-- User profile pill (filled by JS) -->
@@ -1145,6 +1274,15 @@ body::after {
       <div class="user-plan" id="user-plan">free</div>
     </div>
     <div class="user-logout" onclick="doLogout()" title="Esci">&#10005;</div>
+  </div>
+  <!-- Usage bar (filled by JS) -->
+  <div id="usage-bar-container" class="usage-bar-container" style="display:none;">
+    <div class="usage-bar-label">
+      <span id="usage-label">Generazioni</span>
+      <span id="usage-count">0/10</span>
+    </div>
+    <div class="usage-bar"><div class="usage-bar-fill" id="usage-fill" style="width:0%"></div></div>
+    <div class="upgrade-link" id="upgrade-link" onclick="openPricing()" style="display:none;">Upgrade piano →</div>
   </div>
   <div class="nav-item active" data-screen="feed" onclick="showScreen('feed')">
     <span class="nav-icon">&#9202;</span> Feed Refresh
@@ -1654,7 +1792,11 @@ function updateSidebarUser(user) {
   document.getElementById('user-name').textContent = name;
   document.getElementById('user-avatar').textContent = (name[0] || '?').toUpperCase();
   const plan = user.plan || 'free';
-  document.getElementById('user-plan').textContent = plan;
+  const planEl = document.getElementById('user-plan');
+  planEl.textContent = plan;
+  planEl.style.color = plan === 'business' ? 'var(--accent)' : plan === 'pro' ? 'var(--green)' : 'var(--text3)';
+  // Load usage after updating user
+  loadUsageBar();
 }
 
 // On page load: check auth state
@@ -1711,6 +1853,157 @@ document.addEventListener('keydown', function(e) {
     }
   }
 });
+
+// ========================================================
+// PRICING & USAGE
+// ========================================================
+
+function openPricing() {
+  const overlay = document.getElementById('pricing-overlay');
+  overlay.classList.add('visible');
+  loadPlans();
+}
+
+function closePricing() {
+  document.getElementById('pricing-overlay').classList.remove('visible');
+}
+
+async function loadPlans() {
+  try {
+    const resp = await fetch('/api/plans');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    renderPricingGrid(data.plans, data.current_plan);
+  } catch (e) { console.error('Load plans error:', e); }
+}
+
+function renderPricingGrid(plans, currentPlan) {
+  const grid = document.getElementById('pricing-grid');
+  grid.innerHTML = '';
+  const order = ['free', 'pro', 'business'];
+  for (const key of order) {
+    const p = plans[key];
+    if (!p) continue;
+    const isCurrent = key === currentPlan;
+    const isRecommended = key === 'pro';
+    const card = document.createElement('div');
+    card.className = 'plan-card' + (isRecommended ? ' recommended' : '');
+    let badge = '';
+    if (isRecommended) badge = '<div class="plan-badge">Consigliato</div>';
+    if (isCurrent) badge = '<div class="plan-badge" style="background:var(--green)">Piano attuale</div>';
+    let features = '';
+    (p.features || []).forEach(f => { features += '<li>' + f + '</li>'; });
+    let price = p.price_monthly === 0 ? 'Gratis' : '€' + p.price_monthly + '<span>/mese</span>';
+    let btnClass = 'plan-btn';
+    let btnText = '';
+    let btnOnclick = '';
+    if (isCurrent) {
+      btnClass += ' current';
+      btnText = 'Piano attuale';
+    } else if (key === 'free') {
+      btnClass += ' secondary';
+      btnText = 'Piano base';
+    } else {
+      btnClass += ' primary';
+      btnText = 'Upgrade a ' + p.name;
+      btnOnclick = ' onclick="startCheckout(\'' + key + '\')"';
+    }
+    card.innerHTML = badge +
+      '<div class="plan-name">' + p.name + '</div>' +
+      '<div class="plan-price">' + price + '</div>' +
+      '<ul class="plan-features">' + features + '</ul>' +
+      '<button class="' + btnClass + '"' + btnOnclick + '>' + btnText + '</button>';
+    grid.appendChild(card);
+  }
+}
+
+async function startCheckout(plan) {
+  try {
+    const resp = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: plan }),
+    });
+    const data = await resp.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else if (data.error) {
+      alert(data.error);
+    }
+  } catch (e) {
+    alert('Errore nella creazione della sessione di pagamento');
+  }
+}
+
+async function openBillingPortal() {
+  try {
+    const resp = await fetch('/api/billing/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await resp.json();
+    if (data.url) {
+      window.open(data.url, '_blank');
+    } else if (data.error) {
+      alert(data.error);
+    }
+  } catch (e) {
+    alert('Errore nell\'apertura del portale di fatturazione');
+  }
+}
+
+async function loadUsageBar() {
+  try {
+    const resp = await fetch('/api/subscription');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const usage = data.usage || {};
+    const container = document.getElementById('usage-bar-container');
+    if (!container) return;
+    const limit = usage.limit;
+    const used = usage.used || 0;
+    if (limit === -1) {
+      // Unlimited — hide bar
+      container.style.display = 'none';
+      return;
+    }
+    container.style.display = 'block';
+    document.getElementById('usage-count').textContent = used + '/' + limit;
+    const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+    const fill = document.getElementById('usage-fill');
+    fill.style.width = pct + '%';
+    fill.className = 'usage-bar-fill';
+    if (pct >= 90) fill.classList.add('danger');
+    else if (pct >= 70) fill.classList.add('warning');
+    // Show upgrade link if nearing limit
+    const upgradeLink = document.getElementById('upgrade-link');
+    if (pct >= 50) upgradeLink.style.display = 'block';
+    else upgradeLink.style.display = 'none';
+  } catch (e) { /* silently fail */ }
+}
+
+// Handle payment success/cancel URL params
+function checkPaymentStatus() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('payment') === 'success') {
+    // Remove query params from URL
+    window.history.replaceState({}, '', window.location.pathname);
+    // Show success notification (reuse pipeline log style or simple alert)
+    setTimeout(() => {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;' +
+        'background:var(--green);color:#000;padding:12px 24px;border-radius:10px;font-weight:600;font-size:14px;' +
+        'box-shadow:0 4px 20px rgba(0,0,0,0.3);animation:fadeIn 0.3s;';
+      banner.textContent = '✓ Pagamento completato! Il tuo piano è stato aggiornato.';
+      document.body.appendChild(banner);
+      setTimeout(() => banner.remove(), 5000);
+      // Reload user info to get updated plan
+      loadUsageBar();
+    }, 500);
+  } else if (params.get('payment') === 'cancelled') {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
 
 // ========================================================
 // APP STATE & LOGIC
@@ -3928,8 +4221,19 @@ document.addEventListener('keydown', function(e) {
 // ---- Utils ----
 async function safeJson(resp) {
   const text = await resp.text();
-  try { return JSON.parse(text); }
-  catch(e) { throw new Error(`Server error (HTTP ${resp.status}): risposta non valida.`); }
+  try {
+    const data = JSON.parse(text);
+    // Handle plan limit errors — show upgrade prompt
+    if (data.upgrade_required || data.code === 'PLAN_LIMIT' || data.code === 'GENERATION_LIMIT') {
+      openPricing();
+      throw new Error(data.error || 'Upgrade richiesto');
+    }
+    return data;
+  }
+  catch(e) {
+    if (e.message && (e.message.includes('Upgrade') || e.message.includes('piano'))) throw e;
+    throw new Error(`Server error (HTTP ${resp.status}): risposta non valida.`);
+  }
 }
 
 function esc(s) {
@@ -3942,6 +4246,7 @@ function esc(s) {
 // Initial load
 initAuth();
 loadWeeklyBanner();
+checkPaymentStatus();
 </script>
 </body>
 </html>
