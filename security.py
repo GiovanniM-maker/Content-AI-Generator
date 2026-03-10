@@ -300,22 +300,85 @@ def send_welcome_email(email: str, name: str) -> bool:
         to=email,
         subject="Benvenuto su Content AI Generator! 🚀",
         html=f"""
-        <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#000;color:#fff;border-radius:12px;">
-            <h1 style="color:#7c3aed;">Benvenuto, {name or 'Utente'}!</h1>
-            <p>Il tuo account Content AI Generator è stato creato con successo.</p>
-            <p>Con il piano <strong>Free</strong> puoi:</p>
-            <ul>
-                <li>Generare fino a <strong>10 contenuti</strong> (totali)</li>
-                <li>Creare post per <strong>LinkedIn</strong> e <strong>Newsletter</strong></li>
-                <li>Gestire fino a 5 feed RSS</li>
+        <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#000;color:#fff;border-radius:16px;border:1px solid rgba(255,255,255,0.1);">
+            <h1 style="color:#7c3aed;font-size:24px;margin-bottom:8px;">Benvenuto, {name or 'Utente'}!</h1>
+            <p style="color:#8b8aa0;font-size:15px;margin-bottom:20px;">Il tuo account Content AI Generator è pronto.</p>
+
+            <p style="font-size:14px;line-height:1.6;">Con il piano <strong>Free</strong> hai a disposizione:</p>
+            <ul style="font-size:14px;line-height:1.8;padding-left:20px;color:#ccc;">
+                <li><strong>10 generazioni</strong> totali (lifetime)</li>
+                <li>Post <strong>LinkedIn</strong> + <strong>Newsletter</strong></li>
+                <li>Fino a <strong>5 feed RSS</strong></li>
+                <li>Storico delle ultime 10 sessioni</li>
             </ul>
-            <p style="margin-top:16px;">Vuoi di più? Con il piano <strong style="color:#7c3aed;">Pro</strong> a €29/mese ottieni
-            50 generazioni/mese su tutte le 5 piattaforme.</p>
-            <a href="{app_url}" style="display:inline-block;margin-top:12px;padding:12px 24px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">
+
+            <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:12px;padding:16px 20px;margin:20px 0;">
+                <p style="margin:0;font-size:14px;"><strong style="color:#a78bfa;">Come iniziare:</strong></p>
+                <ol style="font-size:13px;line-height:1.8;padding-left:20px;color:#ccc;margin:8px 0 0;">
+                    <li>Aggiungi i tuoi feed RSS o cerca un articolo sul web</li>
+                    <li>Seleziona il topic e le piattaforme</li>
+                    <li>Genera i contenuti con un click</li>
+                </ol>
+            </div>
+
+            <p style="font-size:13px;color:#8b8aa0;margin-bottom:16px;">
+                Vuoi di più? Con il piano <strong style="color:#a78bfa;">Pro</strong> a €29/mese ottieni
+                50 generazioni/mese su tutte le 5 piattaforme, caroselli, scheduling e molto altro.
+            </p>
+
+            <a href="{app_url}" style="display:inline-block;padding:14px 28px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:15px;">
                 Vai alla Dashboard →
             </a>
-            <p style="color:#666;font-size:12px;margin-top:24px;">
-                Content AI Generator — AI Content Pipeline
+
+            <p style="color:#44435a;font-size:11px;margin-top:28px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
+                Content AI Generator — AI Content Pipeline<br>
+                Contatto: giovanni.mavilla.grz@gmail.com
+            </p>
+        </div>
+        """,
+    )
+
+
+def send_limit_reached_email(email: str, name: str, plan: str) -> bool:
+    """Send notification when user reaches their generation limit."""
+    app_url = os.getenv("APP_URL", "https://content-ai-generator-1.onrender.com")
+
+    if plan == "free":
+        limit_msg = "hai raggiunto le <strong>10 generazioni gratuite</strong> incluse nel piano Free"
+        upgrade_msg = """
+            <p style="font-size:14px;line-height:1.6;">Con il piano <strong style="color:#a78bfa;">Pro</strong> a €29/mese ottieni:</p>
+            <ul style="font-size:13px;line-height:1.8;padding-left:20px;color:#ccc;">
+                <li><strong>50 generazioni</strong> al mese</li>
+                <li>Tutte le <strong>5 piattaforme</strong> (LinkedIn, Instagram, Twitter, Newsletter, Video)</li>
+                <li>Caroselli, scheduling, feedback AI e molto altro</li>
+            </ul>
+        """
+    else:
+        limit_msg = "hai raggiunto il <strong>limite mensile di generazioni</strong> del tuo piano"
+        upgrade_msg = """
+            <p style="font-size:14px;line-height:1.6;">Passa al piano <strong style="color:#a78bfa;">Business</strong>
+            a €79/mese per <strong>generazioni illimitate</strong> e supporto prioritario.</p>
+        """
+
+    return send_email(
+        to=email,
+        subject="Hai raggiunto il limite di generazioni 📊",
+        html=f"""
+        <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#000;color:#fff;border-radius:16px;border:1px solid rgba(255,255,255,0.1);">
+            <h1 style="color:#f59e0b;font-size:22px;margin-bottom:8px;">Limite raggiunto</h1>
+            <p style="color:#ccc;font-size:15px;margin-bottom:20px;">Ciao {name or 'Utente'}, {limit_msg}.</p>
+
+            <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:12px;padding:16px 20px;margin:20px 0;">
+                {upgrade_msg}
+            </div>
+
+            <a href="{app_url}" style="display:inline-block;padding:14px 28px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:15px;">
+                Vedi i piani →
+            </a>
+
+            <p style="color:#44435a;font-size:11px;margin-top:28px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
+                Content AI Generator — AI Content Pipeline<br>
+                Contatto: giovanni.mavilla.grz@gmail.com
             </p>
         </div>
         """,

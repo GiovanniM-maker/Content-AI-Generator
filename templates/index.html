@@ -3,7 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Content Dashboard</title>
+<title>Content AI Generator — Crea contenuti AI per 5 piattaforme in pochi secondi</title>
+<meta name="description" content="Genera post LinkedIn, Instagram, Twitter, newsletter e video script con l'AI. 10 generazioni gratuite, nessuna carta richiesta.">
+<meta name="keywords" content="AI content generator, LinkedIn post AI, Instagram AI, newsletter AI, content creation, social media AI, video script AI">
+<meta name="author" content="Content AI Generator">
+<meta property="og:title" content="Content AI Generator — Contenuti AI per 5 piattaforme">
+<meta property="og:description" content="Genera post LinkedIn, Instagram, Twitter, newsletter e video script con l'AI. Inizia gratis.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://content-ai-generator-1.onrender.com">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Content AI Generator — Contenuti AI per 5 piattaforme">
+<meta name="twitter:description" content="Genera post LinkedIn, Instagram, Twitter, newsletter e video script con l'AI. Inizia gratis.">
+<link rel="canonical" href="https://content-ai-generator-1.onrender.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -1077,8 +1088,10 @@ body::after {
   display: flex; flex-direction: column; align-items: center;
 }
 .landing-wrapper.show-auth .landing-hero,
+.landing-wrapper.show-auth .landing-how,
 .landing-wrapper.show-auth .landing-features,
 .landing-wrapper.show-auth .landing-pricing,
+.landing-wrapper.show-auth .landing-faq,
 .landing-wrapper.show-auth .landing-footer { display: none; }
 .landing-wrapper.show-auth .auth-card-float { display: flex; }
 
@@ -1109,31 +1122,118 @@ body::after {
 .landing-cta-secondary:hover { border-color: var(--accent2) !important; color: var(--accent2) !important; }
 .landing-trust { font-size: 13px; color: var(--text3); margin-top: 16px; }
 
-.landing-features {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px; max-width: 900px; width: 100%; padding: 0 24px 60px;
+/* -- Come Funziona (How It Works) -- */
+.landing-how {
+  width: 100%; max-width: 900px; padding: 0 24px 70px; text-align: center;
 }
+.landing-how h2 { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.landing-how .section-sub { color: var(--text2); font-size: 15px; margin-bottom: 40px; }
+.how-steps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 24px; text-align: center;
+}
+.how-step {
+  position: relative; padding: 0 8px;
+}
+.how-step-num {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 18px; display: flex; align-items: center;
+  justify-content: center; margin: 0 auto 14px;
+  box-shadow: 0 0 20px rgba(124,58,237,0.3);
+}
+.how-step h4 { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.how-step p { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+/* -- Features Grid (6 cards) -- */
+.landing-features {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px; max-width: 900px; width: 100%; padding: 0 24px 70px;
+}
+.landing-features-header {
+  grid-column: 1 / -1; text-align: center; margin-bottom: 12px;
+}
+.landing-features-header h2 { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.landing-features-header p { color: var(--text2); font-size: 15px; }
 .landing-feature-card {
   background: var(--glass2); border: 1px solid var(--border2);
   border-radius: 16px; padding: 28px 24px;
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  text-align: center;
+  text-align: left; transition: border-color 0.3s, transform 0.3s;
 }
-.landing-feature-icon { font-size: 32px; margin-bottom: 12px; }
+.landing-feature-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+.landing-feature-icon { font-size: 28px; margin-bottom: 12px; }
 .landing-feature-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
 .landing-feature-card p { font-size: 13px; color: var(--text2); line-height: 1.5; }
 
+/* -- Pricing Section -- */
 .landing-pricing {
-  width: 100%; max-width: 960px; padding: 40px 24px 60px; text-align: center;
+  width: 100%; max-width: 960px; padding: 40px 24px 70px; text-align: center;
 }
-.landing-pricing h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.landing-pricing h2 { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.landing-pricing .section-sub { color: var(--text2); font-size: 15px; margin-bottom: 24px; }
 .landing-pricing-grid { max-width: 900px; margin: 0 auto; }
 
+/* -- Pricing Toggle (Monthly / Annual) -- */
+.pricing-toggle {
+  display: inline-flex; align-items: center; gap: 12px;
+  margin-bottom: 32px; padding: 6px; background: var(--glass2);
+  border-radius: 100px; border: 1px solid var(--border2);
+}
+.pricing-toggle-btn {
+  padding: 8px 20px; border-radius: 100px; border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  background: transparent; color: var(--text2);
+  font-family: 'Inter', sans-serif; transition: all 0.2s;
+}
+.pricing-toggle-btn.active {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 0 12px rgba(124,58,237,0.3);
+}
+.pricing-toggle-btn:hover:not(.active) { color: var(--text); }
+.pricing-save-badge {
+  font-size: 11px; font-weight: 700; color: var(--green);
+  background: rgba(52,211,153,0.15); padding: 3px 10px;
+  border-radius: 100px; margin-left: 4px;
+}
+.plan-price-annual { display: none; }
+.plan-price-annual.visible { display: block; }
+.plan-price-monthly.hidden { display: none; }
+
+/* -- FAQ Section -- */
+.landing-faq {
+  width: 100%; max-width: 700px; padding: 0 24px 70px; text-align: center;
+}
+.landing-faq h2 { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 700; margin-bottom: 32px; }
+.faq-item {
+  text-align: left; border: 1px solid var(--border2);
+  border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+  background: var(--glass); backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px); transition: border-color 0.3s;
+}
+.faq-item:hover { border-color: rgba(124,58,237,0.3); }
+.faq-q {
+  padding: 16px 20px; cursor: pointer; font-size: 14px;
+  font-weight: 600; display: flex; justify-content: space-between;
+  align-items: center; user-select: none;
+}
+.faq-q::after { content: '+'; font-size: 18px; color: var(--text2); transition: transform 0.3s; }
+.faq-item.open .faq-q::after { content: '\2212'; color: var(--accent2); }
+.faq-a {
+  max-height: 0; overflow: hidden; transition: max-height 0.35s ease, padding 0.35s ease;
+  padding: 0 20px; font-size: 13px; color: var(--text2); line-height: 1.6;
+}
+.faq-item.open .faq-a { max-height: 300px; padding: 0 20px 16px; }
+
+/* -- Footer -- */
 .landing-footer {
-  width: 100%; padding: 24px; text-align: center;
+  width: 100%; padding: 32px 24px; text-align: center;
   border-top: 1px solid var(--border2); font-size: 12px; color: var(--text3);
 }
 .landing-footer a { color: var(--text2); text-decoration: underline; }
+.landing-footer-links { margin-bottom: 8px; }
+.landing-footer-links a { margin: 0 8px; }
+.landing-footer-contact { margin-top: 6px; }
 
 .auth-card-float {
   display: none; align-items: center; justify-content: center;
@@ -1327,51 +1427,100 @@ body::after {
     <!-- HERO -->
     <div class="landing-hero">
       <div class="landing-hero-inner">
-        <h1 class="landing-title">Content <span style="color:var(--accent2);">AI</span> Generator</h1>
-        <p class="landing-subtitle">Crea contenuti per LinkedIn, Instagram, Twitter, Newsletter e Video Script in pochi secondi grazie all'AI.</p>
+        <h1 class="landing-title">Un articolo entra. <span style="color:var(--accent2);">5 contenuti</span> escono.</h1>
+        <p class="landing-subtitle">Trasforma un singolo articolo in post LinkedIn, caroselli Instagram, tweet, newsletter e video script &mdash; in meno di 2 minuti, con l'AI.</p>
         <div class="landing-cta-row">
-          <button class="auth-btn landing-cta" onclick="showAuthForm('register'); document.getElementById('landing-wrapper').classList.add('show-auth');">Inizia gratis &rarr;</button>
+          <button class="auth-btn landing-cta" onclick="showAuthForm('register'); document.getElementById('landing-wrapper').classList.add('show-auth');">Prova gratis &rarr;</button>
           <button class="auth-btn landing-cta-secondary" onclick="document.getElementById('landing-pricing').scrollIntoView({behavior:'smooth'})">Vedi i piani</button>
         </div>
-        <p class="landing-trust">10 generazioni gratuite &bull; Nessuna carta richiesta</p>
+        <p class="landing-trust">10 generazioni gratuite &bull; Nessuna carta richiesta &bull; Setup in 30 secondi</p>
+      </div>
+    </div>
+
+    <!-- COME FUNZIONA -->
+    <div class="landing-how">
+      <h2>Come Funziona</h2>
+      <p class="section-sub">4 step. Da articolo a contenuto pubblicabile.</p>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="how-step-num">1</div>
+          <h4>Importa</h4>
+          <p>RSS feed, ricerca web o testo custom. L'AI analizza e assegna un punteggio di rilevanza.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">2</div>
+          <h4>Seleziona</h4>
+          <p>Scegli l'articolo e le piattaforme target. Aggiungi la tua opinione per personalizzare.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">3</div>
+          <h4>Genera</h4>
+          <p>L'AI crea contenuti ottimizzati per ogni piattaforma, con il tuo tono di voce.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">4</div>
+          <h4>Pubblica</h4>
+          <p>Programma, esporta o pubblica. Notifiche push quando serve.</p>
+        </div>
       </div>
     </div>
 
     <!-- FEATURES -->
     <div class="landing-features">
+      <div class="landing-features-header">
+        <h2>Tutto quello che ti serve</h2>
+        <p>Una pipeline AI completa, dal feed RSS al contenuto pubblicato.</p>
+      </div>
       <div class="landing-feature-card">
         <div class="landing-feature-icon">&#9997;&#65039;</div>
-        <h3>Multi-piattaforma</h3>
-        <p>Genera contenuti ottimizzati per LinkedIn, Instagram, Twitter, Newsletter e Video Script.</p>
+        <h3>5 Piattaforme, 1 Click</h3>
+        <p>LinkedIn, Instagram, Twitter, Newsletter e Video Script. Ogni formato ottimizzato per la piattaforma di destinazione.</p>
       </div>
       <div class="landing-feature-card">
         <div class="landing-feature-icon">&#128202;</div>
-        <h3>RSS + Web Search</h3>
-        <p>Importa articoli dai tuoi feed RSS o cerca sul web. L'AI seleziona i migliori per te.</p>
+        <h3>RSS + Web Search Intelligente</h3>
+        <p>Importa da feed RSS o cerca sul web. L'AI assegna un punteggio e seleziona i contenuti migliori per te.</p>
       </div>
       <div class="landing-feature-card">
-        <div class="landing-feature-icon">&#128640;</div>
-        <h3>Carousel & Video</h3>
-        <p>Crea caroselli per Instagram e script video pronti per la produzione.</p>
+        <div class="landing-feature-icon">&#127912;</div>
+        <h3>Caroselli & Video Script</h3>
+        <p>Genera caroselli pronti per Instagram e script video strutturati. Esporta con un click.</p>
       </div>
       <div class="landing-feature-card">
         <div class="landing-feature-icon">&#128161;</div>
-        <h3>Feedback AI</h3>
-        <p>Il sistema impara dal tuo stile e migliora i contenuti nel tempo.</p>
+        <h3>Feedback AI Adattivo</h3>
+        <p>Il sistema impara dal tuo stile ad ogni generazione. Prompt enrichment automatico per risultati sempre migliori.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">&#128197;</div>
+        <h3>Scheduling & Notifiche</h3>
+        <p>Programma i contenuti e ricevi notifiche push quando è ora di pubblicare. Mai più post dimenticati.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">&#128274;</div>
+        <h3>Le Tue API, Il Tuo Controllo</h3>
+        <p>Usa le tue API key OpenRouter, Serper e fal.ai. Crittografia AES-256. I tuoi dati restano tuoi.</p>
       </div>
     </div>
 
     <!-- PRICING -->
     <div class="landing-pricing" id="landing-pricing">
       <h2>Scegli il tuo piano</h2>
-      <p style="color:var(--text2);margin-bottom:32px;">Inizia gratis, scala quando vuoi.</p>
+      <p class="section-sub">Inizia gratis. Scala quando sei pronto.</p>
+
+      <!-- Monthly / Annual toggle -->
+      <div class="pricing-toggle">
+        <button class="pricing-toggle-btn active" id="toggle-monthly" onclick="setPricingPeriod('monthly')">Mensile</button>
+        <button class="pricing-toggle-btn" id="toggle-annual" onclick="setPricingPeriod('annual')">Annuale <span class="pricing-save-badge">-20%</span></button>
+      </div>
+
       <div class="pricing-grid landing-pricing-grid">
         <!-- FREE -->
         <div class="plan-card">
           <div class="plan-name">Free</div>
           <div class="plan-price">Gratis</div>
           <ul class="plan-features">
-            <li>10 generazioni totali</li>
+            <li>10 generazioni totali (lifetime)</li>
             <li>LinkedIn + Newsletter</li>
             <li>RSS feed (max 5)</li>
             <li>Storico sessioni (ultime 10)</li>
@@ -1382,28 +1531,31 @@ body::after {
         <div class="plan-card recommended">
           <div class="plan-badge">Consigliato</div>
           <div class="plan-name">Pro</div>
-          <div class="plan-price">&euro;29<span>/mese</span></div>
+          <div class="plan-price plan-price-monthly">&euro;29<span>/mese</span></div>
+          <div class="plan-price plan-price-annual" style="display:none;">&euro;24<span>/mese</span><br><small style="color:var(--text2);font-size:12px;">&euro;290/anno (risparmi &euro;58)</small></div>
           <ul class="plan-features">
-            <li>50 generazioni/mese</li>
+            <li>50 generazioni / mese</li>
             <li>Tutte le 5 piattaforme</li>
             <li>RSS illimitati + Web Search</li>
             <li>Feedback & prompt enrichment</li>
             <li>Carousel generator</li>
-            <li>Scheduling & notifiche</li>
+            <li>Scheduling & notifiche push</li>
             <li>Smart Brief AI</li>
+            <li>Storico sessioni illimitato</li>
           </ul>
           <button class="plan-btn primary" onclick="showAuthForm('register'); document.getElementById('landing-wrapper').classList.add('show-auth');">Inizia gratis, poi upgrade</button>
         </div>
         <!-- BUSINESS -->
         <div class="plan-card">
           <div class="plan-name">Business</div>
-          <div class="plan-price">&euro;79<span>/mese</span></div>
+          <div class="plan-price plan-price-monthly">&euro;79<span>/mese</span></div>
+          <div class="plan-price plan-price-annual" style="display:none;">&euro;66<span>/mese</span><br><small style="color:var(--text2);font-size:12px;">&euro;790/anno (risparmi &euro;158)</small></div>
           <ul class="plan-features">
             <li>Generazioni illimitate</li>
             <li>Tutte le 5 piattaforme</li>
             <li>API keys personalizzate</li>
             <li>Pipeline monitoring avanzato</li>
-            <li>Supporto prioritario</li>
+            <li>Supporto prioritario via email</li>
             <li>Tutto incluso in Pro</li>
           </ul>
           <button class="plan-btn primary" onclick="showAuthForm('register'); document.getElementById('landing-wrapper').classList.add('show-auth');">Inizia gratis, poi upgrade</button>
@@ -1411,12 +1563,43 @@ body::after {
       </div>
     </div>
 
+    <!-- FAQ -->
+    <div class="landing-faq">
+      <h2>Domande Frequenti</h2>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Che tipo di contenuti posso generare?</div>
+        <div class="faq-a">Post LinkedIn (testo + hook), caroselli Instagram (slide strutturate), tweet/thread Twitter, newsletter complete e video script con struttura professionale. Ogni formato è ottimizzato per la piattaforma.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Come funziona il piano Free?</div>
+        <div class="faq-a">Hai 10 generazioni totali (lifetime, non mensili) su LinkedIn e Newsletter. Nessuna carta di credito richiesta. Puoi fare upgrade in qualsiasi momento per sbloccare tutte le piattaforme e pi&ugrave; generazioni.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Posso usare le mie API key?</div>
+        <div class="faq-a">S&igrave;. Puoi collegare le tue chiavi OpenRouter, Serper e fal.ai. Sono crittografate con AES-256 e usate solo per le tue generazioni. Se non le hai, il sistema usa le chiavi condivise incluse nel piano.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Come funziona la fatturazione annuale?</div>
+        <div class="faq-a">Con il piano annuale risparmi il 20% rispetto al mensile. Pro: &euro;290/anno (invece di &euro;348). Business: &euro;790/anno (invece di &euro;948). Puoi cancellare in qualsiasi momento.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Come posso cancellare il mio abbonamento?</div>
+        <div class="faq-a">Puoi cancellare in qualsiasi momento dalla sezione Impostazioni della dashboard. L'accesso al piano a pagamento resta attivo fino alla fine del periodo gi&agrave; pagato.</div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">I miei dati sono al sicuro?</div>
+        <div class="faq-a">Assolutamente. Crittografia AES-256 per le API key, HTTPS ovunque, Row Level Security su Supabase, rate limiting anti-abuso. Non vendiamo n&eacute; condividiamo i tuoi dati con terzi.</div>
+      </div>
+    </div>
+
     <!-- FOOTER -->
     <div class="landing-footer">
-      <p>&copy; 2026 Content AI Generator &bull;
-        <a href="#" onclick="event.preventDefault();document.getElementById('legal-tos').style.display='block';document.getElementById('legal-overlay').classList.add('visible');">Terms</a> &bull;
-        <a href="#" onclick="event.preventDefault();document.getElementById('legal-privacy').style.display='block';document.getElementById('legal-overlay').classList.add('visible');">Privacy</a>
-      </p>
+      <div class="landing-footer-links">
+        <a href="#" onclick="event.preventDefault();document.getElementById('legal-tos').style.display='block';document.getElementById('legal-overlay').classList.add('visible');">Termini di Servizio</a>
+        <a href="#" onclick="event.preventDefault();document.getElementById('legal-privacy').style.display='block';document.getElementById('legal-overlay').classList.add('visible');">Privacy Policy</a>
+      </div>
+      <p>&copy; 2026 Content AI Generator</p>
+      <p class="landing-footer-contact">Contatto: giovanni.mavilla.grz@gmail.com</p>
     </div>
 
     <!-- AUTH CARD (shown when user clicks CTA) -->
@@ -1502,7 +1685,7 @@ body::after {
       <p>Questi Termini sono regolati dalla legge italiana. Per qualsiasi controversia sarà competente il Foro di Roma.</p>
 
       <h3>10. Contatti</h3>
-      <p>Per domande sui Termini: support@contentaigenerator.com</p>
+      <p>Per domande sui Termini: giovanni.mavilla.grz@gmail.com</p>
     </div>
 
     <div id="legal-privacy" style="display:none;">
@@ -1511,7 +1694,7 @@ body::after {
       <p>La presente Privacy Policy descrive come Content AI Generator ("noi") raccoglie, utilizza e protegge i tuoi dati personali in conformità con il Regolamento Generale sulla Protezione dei Dati (GDPR - UE 2016/679).</p>
 
       <h3>1. Titolare del Trattamento</h3>
-      <p>Content AI Generator. Per contattarci: privacy@contentaigenerator.com</p>
+      <p>Content AI Generator. Per contattarci: giovanni.mavilla.grz@gmail.com</p>
 
       <h3>2. Dati Raccolti</h3>
       <p><strong>Dati forniti direttamente:</strong> nome, email, password (criptata), informazioni di pagamento (gestite da Stripe).</p>
@@ -1534,7 +1717,7 @@ body::after {
       <p>Non vendiamo i tuoi dati a terzi.</p>
 
       <h3>5. I Tuoi Diritti (GDPR)</h3>
-      <p>Hai diritto di: accedere ai tuoi dati, rettificarli, cancellarli ("diritto all'oblio"), limitarne il trattamento, portabilità dei dati, opporti al trattamento. Per esercitare questi diritti: privacy@contentaigenerator.com</p>
+      <p>Hai diritto di: accedere ai tuoi dati, rettificarli, cancellarli ("diritto all'oblio"), limitarne il trattamento, portabilità dei dati, opporti al trattamento. Per esercitare questi diritti: giovanni.mavilla.grz@gmail.com</p>
 
       <h3>6. Conservazione dei Dati</h3>
       <p>I dati dell'account sono conservati per tutta la durata dell'account. Dopo la cancellazione, i dati vengono eliminati entro 30 giorni, salvo obblighi di legge.</p>
@@ -1549,7 +1732,7 @@ body::after {
       <p>Eventuali modifiche alla Privacy Policy saranno comunicate via email. L'uso continuato del Servizio costituisce accettazione.</p>
 
       <h3>10. Contatti DPO</h3>
-      <p>Per questioni relative alla privacy: privacy@contentaigenerator.com</p>
+      <p>Per questioni relative alla privacy: giovanni.mavilla.grz@gmail.com</p>
     </div>
   </div>
 </div>
@@ -1956,6 +2139,19 @@ function hideAuthOverlay() {
     overlay.classList.add('hidden');
     setTimeout(() => { overlay.style.display = 'none'; }, 400);
   }
+}
+
+// -- Pricing period toggle (Monthly / Annual) --
+function setPricingPeriod(period) {
+  const isAnnual = period === 'annual';
+  document.getElementById('toggle-monthly').classList.toggle('active', !isAnnual);
+  document.getElementById('toggle-annual').classList.toggle('active', isAnnual);
+  document.querySelectorAll('.plan-price-monthly').forEach(el => {
+    el.style.display = isAnnual ? 'none' : 'block';
+  });
+  document.querySelectorAll('.plan-price-annual').forEach(el => {
+    el.style.display = isAnnual ? 'block' : 'none';
+  });
 }
 
 function showAuthForm(type) {
