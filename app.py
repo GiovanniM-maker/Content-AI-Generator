@@ -18,6 +18,7 @@ from flask import Flask, jsonify, render_template, request, Response, stream_wit
 import db
 import auth
 import payments
+import security
 
 load_dotenv()
 
@@ -25,6 +26,14 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(32).hex())
 
 BASE_DIR = Path(__file__).parent
+
+# ---------------------------------------------------------------------------
+# Security initialization
+# ---------------------------------------------------------------------------
+security.init_sentry(app)
+security.init_cors(app)
+security.init_security_headers(app)
+security.init_rate_limiter(app)
 
 
 # ---------------------------------------------------------------------------
@@ -653,6 +662,100 @@ def stripe_webhook():
     _log_pipeline("info", f"Stripe webhook: {event.get('type', 'unknown')} → {result.get('action', 'ignored')}")
 
     return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
+# Routes — User API Keys (encrypted storage)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/settings/keys", methods=["GET"])
+@auth.require_auth
+def get_user_keys():
+    """Get user's API key configuration status (not the actual keys)."""
+    profile = db.get_profile(g.user_id)
+    if not profile:
+        return jsonify({"keys": {}})
+
+    return jsonify({
+        "keys": {
+            "openrouter": bool(profile.get("openrouter_api_key_enc")),
+            "serper": bool(profile.get("serper_api_key_enc")),
+            "fal": bool(profile.get("fal_key_enc")),
+            "ntfy_topic": profile.get("ntfy_topic", ""),
+            "beehiiv_pub_id": profile.get("beehiiv_pub_id", ""),
+        }
+    })
+
+
+@app.route("/api/settings/keys", methods=["POST"])
+@auth.require_auth
+def save_user_keys():
+    """Save user's API keys (encrypted)."""
+    body = request.json or {}
+    updates = {}
+
+    for field, db_field in [
+        ("openrouter_key", "openrouter_api_key_enc"),
+        ("serper_key", "serper_api_key_enc"),
+        ("fal_key", "fal_key_enc"),
+    ]:
+        val = body.get(field, "").strip()
+        if val:
+            encrypted = security.encrypt_api_key(val)
+            if encrypted:
+                updates[db_field] = encrypted
+            else:
+                updates[db_field] = val  # Store plain if encryption not configured
+        elif val == "":
+            # Explicit empty string = clear the key
+            if field in body:
+                updates[db_field] = None
+
+    # Non-encrypted fields
+    if "ntfy_topic" in body:
+        updates["ntfy_topic"] = body["ntfy_topic"].strip()
+    if "beehiiv_pub_id" in body:
+        updates["beehiiv_pub_id"] = body["beehiiv_pub_id"].strip()
+
+    if updates:
+        db.update_profile(g.user_id, updates)
+
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/settings/profile", methods=["GET"])
+@auth.require_auth
+def get_user_profile():
+    """Get user profile."""
+    profile = db.get_profile(g.user_id)
+    subscription = db.get_subscription(g.user_id)
+    return jsonify({
+        "profile": {
+            "id": g.user_id,
+            "email": g.user_email,
+            "full_name": (profile or {}).get("full_name", ""),
+            "avatar_url": (profile or {}).get("avatar_url", ""),
+            "plan": (profile or {}).get("plan", "free"),
+            "ntfy_topic": (profile or {}).get("ntfy_topic", ""),
+            "beehiiv_pub_id": (profile or {}).get("beehiiv_pub_id", ""),
+        },
+        "subscription": subscription or {"plan": "free", "status": "active"},
+    })
+
+
+@app.route("/api/settings/profile", methods=["PUT"])
+@auth.require_auth
+def update_user_profile():
+    """Update user profile fields."""
+    body = request.json or {}
+    updates = {}
+    if "full_name" in body:
+        updates["full_name"] = body["full_name"].strip()
+    if "avatar_url" in body:
+        updates["avatar_url"] = body["avatar_url"].strip()
+    if updates:
+        db.update_profile(g.user_id, updates)
+    return jsonify({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------
