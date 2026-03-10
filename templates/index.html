@@ -995,12 +995,157 @@ body::after {
 
 /* ====== LOADING STATE ====== */
 .loading { color: var(--text2); font-size: 13px; }
+
+/* ====== AUTH SCREENS ====== */
+.auth-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.4s ease;
+}
+.auth-overlay.hidden { opacity: 0; pointer-events: none; }
+.auth-card {
+  background: var(--glass2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 48px 40px;
+  width: 100%; max-width: 420px;
+  backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px);
+  position: relative;
+}
+.auth-card .logo-auth {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px; font-weight: 700;
+  color: var(--accent2);
+  text-align: center; margin-bottom: 8px;
+}
+.auth-card .logo-auth span {
+  display: block; font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 400;
+  color: var(--text2); margin-top: 4px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.auth-card h2 { text-align: center; margin: 24px 0 24px; font-size: 18px; }
+.auth-input {
+  width: 100%; padding: 12px 16px;
+  background: var(--glass); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text);
+  font-size: 14px; font-family: 'Inter', sans-serif;
+  margin-bottom: 14px; outline: none;
+  transition: border-color 0.2s;
+}
+.auth-input:focus { border-color: var(--accent); }
+.auth-input::placeholder { color: var(--text3); }
+.auth-btn {
+  width: 100%; padding: 14px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+  margin-top: 4px;
+}
+.auth-btn:hover { background: #6d28d9; transform: translateY(-1px); }
+.auth-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.auth-toggle {
+  text-align: center; margin-top: 20px;
+  font-size: 13px; color: var(--text2);
+}
+.auth-toggle a {
+  color: var(--accent2); cursor: pointer;
+  text-decoration: none; font-weight: 500;
+}
+.auth-toggle a:hover { text-decoration: underline; }
+.auth-error {
+  background: rgba(248,113,113,0.1);
+  border: 1px solid rgba(248,113,113,0.3);
+  color: var(--red); padding: 10px 14px;
+  border-radius: 8px; font-size: 12px;
+  margin-bottom: 14px; display: none;
+}
+.auth-success {
+  background: rgba(52,211,153,0.1);
+  border: 1px solid rgba(52,211,153,0.3);
+  color: var(--green); padding: 10px 14px;
+  border-radius: 8px; font-size: 12px;
+  margin-bottom: 14px; display: none;
+}
+/* User pill in sidebar */
+.sidebar-user {
+  padding: 12px 16px; margin: 0 8px 8px;
+  background: var(--glass);
+  border-radius: 10px; border: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.sidebar-user .user-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%; background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; color: #fff;
+  flex-shrink: 0;
+}
+.sidebar-user .user-info {
+  flex: 1; min-width: 0;
+}
+.sidebar-user .user-name {
+  font-size: 12px; font-weight: 600;
+  color: var(--text); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.sidebar-user .user-plan {
+  font-size: 10px; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.sidebar-user .user-logout {
+  cursor: pointer; color: var(--text3);
+  font-size: 16px; transition: color 0.2s;
+  flex-shrink: 0;
+}
+.sidebar-user .user-logout:hover { color: var(--red); }
 </style>
 </head>
 <body>
 
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay" class="auth-overlay">
+  <div class="auth-card">
+    <div class="logo-auth">Content Dashboard<span>AI Content Pipeline</span></div>
+
+    <!-- LOGIN FORM -->
+    <div id="auth-login-form">
+      <h2>Accedi</h2>
+      <div id="auth-login-error" class="auth-error"></div>
+      <input type="email" id="login-email" class="auth-input" placeholder="Email" autocomplete="email">
+      <input type="password" id="login-password" class="auth-input" placeholder="Password" autocomplete="current-password">
+      <button class="auth-btn" id="btn-login" onclick="doLogin()">Accedi</button>
+      <div class="auth-toggle">Non hai un account? <a onclick="showAuthForm('register')">Registrati</a></div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="auth-register-form" style="display:none;">
+      <h2>Crea Account</h2>
+      <div id="auth-register-error" class="auth-error"></div>
+      <div id="auth-register-success" class="auth-success"></div>
+      <input type="text" id="register-name" class="auth-input" placeholder="Nome completo" autocomplete="name">
+      <input type="email" id="register-email" class="auth-input" placeholder="Email" autocomplete="email">
+      <input type="password" id="register-password" class="auth-input" placeholder="Password (min 6 caratteri)" autocomplete="new-password">
+      <button class="auth-btn" id="btn-register" onclick="doRegister()">Registrati</button>
+      <div class="auth-toggle">Hai già un account? <a onclick="showAuthForm('login')">Accedi</a></div>
+    </div>
+  </div>
+</div>
+
 <div class="sidebar">
   <div class="logo">Content Dashboard<span>Weekly AI Pipeline</span></div>
+  <!-- User profile pill (filled by JS) -->
+  <div id="sidebar-user" class="sidebar-user" style="display:none;">
+    <div class="user-avatar" id="user-avatar">?</div>
+    <div class="user-info">
+      <div class="user-name" id="user-name">...</div>
+      <div class="user-plan" id="user-plan">free</div>
+    </div>
+    <div class="user-logout" onclick="doLogout()" title="Esci">&#10005;</div>
+  </div>
   <div class="nav-item active" data-screen="feed" onclick="showScreen('feed')">
     <span class="nav-icon">&#9202;</span> Feed Refresh
   </div>
@@ -1285,6 +1430,292 @@ body::after {
 </div>
 
 <script>
+// ========================================================
+// AUTH — Token management & API interceptor
+// ========================================================
+
+const AUTH_STORAGE_KEY = 'cd_auth';
+
+function getAuthData() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function setAuthData(data) {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+}
+
+function clearAuthData() {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+}
+
+function getAccessToken() {
+  const data = getAuthData();
+  return data ? data.access_token : null;
+}
+
+// Wrap native fetch to auto-inject Authorization header
+const _originalFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+  const token = getAccessToken();
+  if (token && typeof url === 'string' && (url.startsWith('/api/') || url.startsWith('/auth/'))) {
+    options.headers = options.headers || {};
+    if (typeof options.headers.set === 'function') {
+      // Headers object
+      if (!options.headers.has('Authorization')) {
+        options.headers.set('Authorization', 'Bearer ' + token);
+      }
+    } else {
+      // Plain object
+      if (!options.headers['Authorization']) {
+        options.headers['Authorization'] = 'Bearer ' + token;
+      }
+    }
+  }
+  return _originalFetch.call(this, url, options).then(resp => {
+    // Auto-logout on 401 (token expired / invalid)
+    if (resp.status === 401 && typeof url === 'string' && url.startsWith('/api/')) {
+      // Try to refresh token
+      tryRefreshToken().then(ok => {
+        if (!ok) {
+          clearAuthData();
+          showAuthOverlay();
+        }
+      });
+    }
+    return resp;
+  });
+};
+
+async function tryRefreshToken() {
+  const data = getAuthData();
+  if (!data || !data.refresh_token) return false;
+  try {
+    const resp = await _originalFetch('/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: data.refresh_token }),
+    });
+    if (!resp.ok) return false;
+    const result = await resp.json();
+    if (result.access_token) {
+      data.access_token = result.access_token;
+      if (result.refresh_token) data.refresh_token = result.refresh_token;
+      setAuthData(data);
+      return true;
+    }
+    return false;
+  } catch { return false; }
+}
+
+// Auth UI
+function showAuthOverlay() {
+  const overlay = document.getElementById('auth-overlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
+  }
+  // Hide sidebar user
+  const userEl = document.getElementById('sidebar-user');
+  if (userEl) userEl.style.display = 'none';
+}
+
+function hideAuthOverlay() {
+  const overlay = document.getElementById('auth-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    setTimeout(() => { overlay.style.display = 'none'; }, 400);
+  }
+}
+
+function showAuthForm(type) {
+  document.getElementById('auth-login-form').style.display = type === 'login' ? 'block' : 'none';
+  document.getElementById('auth-register-form').style.display = type === 'register' ? 'block' : 'none';
+  // Clear errors
+  document.getElementById('auth-login-error').style.display = 'none';
+  document.getElementById('auth-register-error').style.display = 'none';
+  document.getElementById('auth-register-success').style.display = 'none';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errDiv = document.getElementById('auth-login-error');
+  const btn = document.getElementById('btn-login');
+  errDiv.style.display = 'none';
+
+  if (!email || !password) {
+    errDiv.textContent = 'Inserisci email e password';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Accesso in corso...';
+  try {
+    const resp = await _originalFetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      errDiv.textContent = data.error || 'Errore di login';
+      errDiv.style.display = 'block';
+      return;
+    }
+    setAuthData({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      user: data.user,
+    });
+    onAuthSuccess(data.user);
+  } catch (e) {
+    errDiv.textContent = 'Errore di connessione. Riprova.';
+    errDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Accedi';
+  }
+}
+
+async function doRegister() {
+  const name = document.getElementById('register-name').value.trim();
+  const email = document.getElementById('register-email').value.trim();
+  const password = document.getElementById('register-password').value;
+  const errDiv = document.getElementById('auth-register-error');
+  const successDiv = document.getElementById('auth-register-success');
+  const btn = document.getElementById('btn-register');
+  errDiv.style.display = 'none';
+  successDiv.style.display = 'none';
+
+  if (!email || !password) {
+    errDiv.textContent = 'Inserisci email e password';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Registrazione...';
+  try {
+    const resp = await _originalFetch('/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, full_name: name }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      errDiv.textContent = data.error || 'Errore durante la registrazione';
+      errDiv.style.display = 'block';
+      return;
+    }
+    if (data.status === 'confirm_email') {
+      successDiv.textContent = data.message || 'Controlla la tua email per confermare la registrazione.';
+      successDiv.style.display = 'block';
+      return;
+    }
+    // Auto-login if tokens returned
+    if (data.access_token) {
+      setAuthData({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token || '',
+        user: data.user,
+      });
+      onAuthSuccess(data.user);
+    }
+  } catch (e) {
+    errDiv.textContent = 'Errore di connessione. Riprova.';
+    errDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Registrati';
+  }
+}
+
+async function doLogout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST' });
+  } catch {}
+  clearAuthData();
+  showAuthOverlay();
+}
+
+function onAuthSuccess(user) {
+  hideAuthOverlay();
+  updateSidebarUser(user);
+  // Reload data for the new user
+  loadWeeklyBanner();
+}
+
+function updateSidebarUser(user) {
+  if (!user) return;
+  const el = document.getElementById('sidebar-user');
+  if (!el) return;
+  el.style.display = 'flex';
+  const name = user.full_name || user.email || '?';
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-avatar').textContent = (name[0] || '?').toUpperCase();
+  const plan = user.plan || 'free';
+  document.getElementById('user-plan').textContent = plan;
+}
+
+// On page load: check auth state
+function initAuth() {
+  const data = getAuthData();
+  if (data && data.access_token) {
+    // Validate token by calling /auth/me
+    _originalFetch('/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + data.access_token },
+    }).then(resp => {
+      if (resp.ok) {
+        return resp.json().then(me => {
+          hideAuthOverlay();
+          updateSidebarUser(me.user);
+        });
+      } else {
+        // Try refresh
+        return tryRefreshToken().then(ok => {
+          if (ok) {
+            hideAuthOverlay();
+            // Re-fetch user info
+            return _originalFetch('/auth/me', {
+              headers: { 'Authorization': 'Bearer ' + getAccessToken() },
+            }).then(r => r.ok ? r.json() : null).then(me => {
+              if (me) updateSidebarUser(me.user);
+            });
+          } else {
+            clearAuthData();
+            showAuthOverlay();
+          }
+        });
+      }
+    }).catch(() => {
+      // Network error — show login
+      clearAuthData();
+      showAuthOverlay();
+    });
+  } else {
+    showAuthOverlay();
+  }
+}
+
+// Allow Enter key to submit auth forms
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    const overlay = document.getElementById('auth-overlay');
+    if (overlay && !overlay.classList.contains('hidden') && overlay.style.display !== 'none') {
+      const loginForm = document.getElementById('auth-login-form');
+      if (loginForm && loginForm.style.display !== 'none') {
+        doLogin();
+      } else {
+        doRegister();
+      }
+    }
+  }
+});
+
+// ========================================================
+// APP STATE & LOGIC
+// ========================================================
+
 // ---- State ----
 let selectedArticles = [];
 let currentSession = null;
@@ -3509,6 +3940,7 @@ function esc(s) {
 }
 
 // Initial load
+initAuth();
 loadWeeklyBanner();
 </script>
 </body>

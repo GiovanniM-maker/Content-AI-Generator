@@ -13,15 +13,47 @@ from pathlib import Path
 import feedparser
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context
+from flask import Flask, jsonify, render_template, request, Response, stream_with_context, g
 
 import db
+import auth
 
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(32).hex())
 
 BASE_DIR = Path(__file__).parent
+
+
+# ---------------------------------------------------------------------------
+# Auth middleware — auto-extract JWT on every /api/ request
+# ---------------------------------------------------------------------------
+
+@app.before_request
+def _before_request_auth():
+    """Auto-extract auth token for all /api/ routes.
+    Sets g.user_id, g.user_email if token is valid.
+    Does NOT block unauthenticated requests (optional auth).
+    """
+    g.user_id = None
+    g.user_email = None
+    g.access_token = None
+
+    path = request.path
+    # Skip auth extraction for non-API routes and auth endpoints
+    if not path.startswith("/api/") and not path.startswith("/auth/me"):
+        return
+
+    token = auth._extract_token()
+    if token:
+        payload = auth.verify_token(token)
+        if payload:
+            g.user_id = payload["sub"]
+            g.user_email = payload.get("email", "")
+            g.user_role = payload.get("role", "authenticated")
+            g.user_metadata = payload.get("user_metadata", {})
+            g.access_token = token
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -56,10 +88,11 @@ FETCH_WINDOW_DAYS = 5
 
 def _get_user_id() -> str:
     """Get current user ID from request context.
-    Phase 2: returns env default.
-    Phase 3: will extract from JWT token.
+    Checks g.user_id (set by auth decorators) first, then falls back to env default.
     """
-    # TODO: Phase 3 — extract user_id from JWT via request headers
+    uid = getattr(g, "user_id", None)
+    if uid:
+        return uid
     return os.getenv("DEFAULT_USER_ID", "00000000-0000-0000-0000-000000000000")
 
 
@@ -406,6 +439,110 @@ def _get_current_week_status() -> dict:
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+# ---------------------------------------------------------------------------
+# Routes — Auth API
+# ---------------------------------------------------------------------------
+
+@app.route("/auth/signup", methods=["POST"])
+def auth_signup():
+    body = request.json or {}
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password", "")
+    full_name = (body.get("full_name") or "").strip()
+
+    if not email or not password:
+        return jsonify({"error": "Email e password sono obbligatori"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "La password deve avere almeno 6 caratteri"}), 400
+
+    try:
+        result = auth.signup(email, password, full_name)
+        # If Supabase has email confirmation disabled, we get tokens immediately
+        if result.get("access_token"):
+            return jsonify({
+                "status": "ok",
+                "access_token": result["access_token"],
+                "refresh_token": result.get("refresh_token", ""),
+                "user": {
+                    "id": result.get("user", {}).get("id"),
+                    "email": result.get("user", {}).get("email"),
+                    "full_name": full_name,
+                },
+            })
+        # Email confirmation required
+        return jsonify({
+            "status": "confirm_email",
+            "message": "Controlla la tua email per confermare la registrazione.",
+        })
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Errore durante la registrazione: {e}"}), 500
+
+
+@app.route("/auth/login", methods=["POST"])
+def auth_login():
+    body = request.json or {}
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password", "")
+
+    if not email or not password:
+        return jsonify({"error": "Email e password sono obbligatori"}), 400
+
+    try:
+        result = auth.login(email, password)
+        _log_pipeline("info", f"User logged in: {email}")
+        return jsonify(result)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 401
+    except Exception as e:
+        return jsonify({"error": f"Errore di login: {e}"}), 500
+
+
+@app.route("/auth/refresh", methods=["POST"])
+def auth_refresh():
+    body = request.json or {}
+    refresh_token = body.get("refresh_token", "")
+    if not refresh_token:
+        return jsonify({"error": "refresh_token required"}), 400
+
+    try:
+        result = auth.refresh_session(refresh_token)
+        return jsonify(result)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 401
+
+
+@app.route("/auth/logout", methods=["POST"])
+def auth_logout():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if token:
+        auth.logout_server(token)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/auth/me")
+@auth.require_auth
+def auth_me():
+    """Get current authenticated user profile."""
+    user_id = g.user_id
+    profile = db.get_profile(user_id)
+    subscription = db.get_subscription(user_id)
+    return jsonify({
+        "user": {
+            "id": user_id,
+            "email": g.user_email,
+            "full_name": (profile or {}).get("full_name", ""),
+            "avatar_url": (profile or {}).get("avatar_url", ""),
+            "plan": (profile or {}).get("plan", "free"),
+        },
+        "subscription": {
+            "plan": (subscription or {}).get("plan", "free"),
+            "status": (subscription or {}).get("status", "active"),
+        },
+    })
 
 
 # ---------------------------------------------------------------------------
