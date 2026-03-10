@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Data (JSON files are user data, not code)
+data/*.json
+data/*.log
+
+# Generated output
+static/carousel_output/
+static/video_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Docker
+.docker/
+
+# Playwright browsers
+.cache/
