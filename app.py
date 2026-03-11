@@ -1128,10 +1128,14 @@ def _get_prompt(prompt_name: str) -> str:
 
 
 def _ensure_user_prompts():
-    """Ensure the current user has prompts initialized."""
+    """Ensure the current user has prompts initialized, and log initial versions."""
     try:
         user_id = _get_user_id()
-        db.init_user_prompts(user_id, BASE_PROMPTS)
+        existing = db.get_all_user_prompts(user_id)
+        if not existing:
+            db.init_user_prompts(user_id, BASE_PROMPTS)
+            # Log initial versions so they appear in the monitor "Storico Prompt"
+            _snapshot_all_prompts("init")
     except Exception:
         pass  # Don't block generation if prompt init fails
 
@@ -1781,7 +1785,22 @@ def render_carousel_images():
 @app.route("/api/monitor/prompts")
 def get_prompt_log():
     user_id = _get_user_id()
-    return jsonify(db.get_prompt_logs(user_id))
+    logs = db.get_prompt_logs(user_id)
+    if logs:
+        return jsonify(logs)
+    # Fallback: synthesize logs from current user_prompts (first-time view)
+    _ensure_user_prompts()
+    user_prompts = db.get_all_user_prompts(user_id)
+    synthetic = []
+    for name, content in user_prompts.items():
+        synthetic.append({
+            "prompt_name": name,
+            "version": 1,
+            "content": content,
+            "trigger": "init",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return jsonify(synthetic)
 
 
 @app.route("/api/monitor/pipeline")
