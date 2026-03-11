@@ -952,24 +952,45 @@ def remove_category():
 # Routes — RSS Fetch API
 # ---------------------------------------------------------------------------
 
-_fetch_state: dict[str, dict] = {}  # user_id -> {"progress": [], "running": False}
+_fetch_state: dict[str, dict] = {}  # user_id -> {"progress": [], "running": bool, "ts": float}
+_fetch_lock = threading.Lock()       # Prevents TOCTOU race on _fetch_state
+
+# Cleanup stale entries older than 10 minutes (prevents memory leak)
+_FETCH_STATE_TTL = 600
+
+
+def _cleanup_stale_fetch_states():
+    """Remove completed fetch states older than TTL."""
+    now = time.time()
+    stale_keys = [
+        uid for uid, s in _fetch_state.items()
+        if not s.get("running") and (now - s.get("ts", 0)) > _FETCH_STATE_TTL
+    ]
+    for uid in stale_keys:
+        _fetch_state.pop(uid, None)
 
 
 @app.route("/api/feeds/fetch", methods=["POST"])
 def fetch_feeds():
     user_id = _get_user_id()
-    state = _fetch_state.setdefault(user_id, {"progress": [], "running": False})
-    if state["running"]:
-        return jsonify({"error": "Fetch already in progress"}), 409
-    state["running"] = True
-    state["progress"] = []
+
+    with _fetch_lock:
+        _cleanup_stale_fetch_states()
+        state = _fetch_state.get(user_id)
+        if state and state.get("running"):
+            return jsonify({"error": "Fetch already in progress"}), 409
+        state = {"progress": [], "running": True, "ts": time.time()}
+        _fetch_state[user_id] = state
+
     feeds_config = _load_feeds_config()
 
     def run():
         try:
             _do_fetch(user_id, state, feeds_config)
         finally:
-            state["running"] = False
+            with _fetch_lock:
+                state["running"] = False
+                state["ts"] = time.time()
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"status": "started"})
@@ -992,6 +1013,11 @@ def feed_progress():
                 yield f"data: {json.dumps({'done': True})}\n\n"
                 break
             time.sleep(0.3)
+        # Cleanup: free progress memory after stream completes
+        with _fetch_lock:
+            if user_id in _fetch_state and not _fetch_state[user_id].get("running"):
+                _fetch_state.pop(user_id, None)
+
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
