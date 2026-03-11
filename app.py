@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Content Creation Dashboard — Flask backend (Supabase edition)."""
 
+import ipaddress
 import json
 import os
 import re
+import socket
 import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import feedparser
 import requests
@@ -143,6 +146,59 @@ def _sanitize_user_input(text: str, max_length: int = 5000) -> str:
     return text.strip()
 
 
+# ---------------------------------------------------------------------------
+# SSRF protection for user-supplied URLs
+# ---------------------------------------------------------------------------
+
+_BLOCKED_HOSTS = frozenset({
+    "localhost", "0.0.0.0", "127.0.0.1", "::1",
+    "metadata.google.internal",             # GCP metadata
+    "169.254.169.254",                      # AWS/Azure metadata
+    "metadata.internal",
+})
+
+def _validate_feed_url(url: str) -> tuple[bool, str]:
+    """Validate a user-supplied URL to prevent SSRF attacks.
+
+    Returns (is_valid, error_message).
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "URL non valido"
+
+    # Scheme check
+    if parsed.scheme not in ("http", "https"):
+        return False, "Solo URL http:// o https:// sono consentiti"
+
+    hostname = (parsed.hostname or "").lower().strip(".")
+    if not hostname:
+        return False, "URL non valido (hostname mancante)"
+
+    # Blocked hostnames
+    if hostname in _BLOCKED_HOSTS:
+        return False, "URL non consentito (indirizzo riservato)"
+
+    # Block private/internal IPs
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False, "URL non consentito (indirizzo di rete privato)"
+    except ValueError:
+        # It's a hostname, not an IP — resolve and check
+        try:
+            resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for family, _type, _proto, _canonname, sockaddr in resolved:
+                addr = sockaddr[0]
+                ip = ipaddress.ip_address(addr)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    return False, "URL non consentito (risolve a indirizzo privato)"
+        except socket.gaierror:
+            return False, "URL non raggiungibile (hostname non trovato)"
+
+    return True, ""
+
+
 def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3) -> str:
     """Call OpenRouter chat completion and return assistant content."""
     headers = {
@@ -216,16 +272,6 @@ def _get_all_feed_urls() -> list[str]:
 # ---------------------------------------------------------------------------
 # Feedback system
 # ---------------------------------------------------------------------------
-
-def _get_feedback_context(format_type: str) -> str:
-    user_id = _get_user_id()
-    entries = db.get_feedback_by_format(user_id, format_type)
-    if not entries:
-        return ""
-    recent = entries[-10:]
-    lines = [f"- {e['feedback']}" for e in recent]
-    return "\n\nFEEDBACK ACCUMULATO (impara da queste indicazioni per migliorare lo stile):\n" + "\n".join(lines)
-
 
 def _add_feedback(format_type: str, feedback: str):
     user_id = _get_user_id()
@@ -531,7 +577,8 @@ def auth_signup():
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        return jsonify({"error": f"Errore durante la registrazione: {e}"}), 500
+        app.logger.error(f"Signup error: {e}")
+        return jsonify({"error": "Errore durante la registrazione. Riprova tra poco."}), 500
 
 
 @app.route("/auth/login", methods=["POST"])
@@ -550,7 +597,8 @@ def auth_login():
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 401
     except Exception as e:
-        return jsonify({"error": f"Errore di login: {e}"}), 500
+        app.logger.error(f"Login error: {e}")
+        return jsonify({"error": "Errore di login. Riprova tra poco."}), 500
 
 
 @app.route("/auth/refresh", methods=["POST"])
@@ -563,8 +611,11 @@ def auth_refresh():
     try:
         result = auth.refresh_session(refresh_token)
         return jsonify(result)
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 401
+    except RuntimeError:
+        return jsonify({"error": "Sessione scaduta. Effettua nuovamente il login."}), 401
+    except Exception as e:
+        app.logger.error(f"Token refresh error: {e}")
+        return jsonify({"error": "Errore nel refresh della sessione."}), 500
 
 
 @app.route("/auth/logout", methods=["POST"])
@@ -838,6 +889,10 @@ def add_feed():
     name = body.get("name", "").strip()
     if not category or not url:
         return jsonify({"error": "category and url required"}), 400
+    # SSRF protection: validate URL before accepting
+    url_valid, url_error = _validate_feed_url(url)
+    if not url_valid:
+        return jsonify({"error": url_error}), 400
     config = _load_feeds_config()
     if category not in config["categories"]:
         config["categories"][category] = []
@@ -1730,6 +1785,8 @@ def get_feedback():
     return jsonify(db.get_all_feedback(user_id))
 
 
+VALID_FORMAT_TYPES = {"linkedin", "instagram", "newsletter", "twitter", "video_script"}
+
 @app.route("/api/feedback", methods=["POST"])
 def add_feedback_direct():
     body = request.json
@@ -1737,6 +1794,8 @@ def add_feedback_direct():
     feedback = body.get("feedback", "").strip()
     if not format_type or not feedback:
         return jsonify({"error": "format_type and feedback required"}), 400
+    if format_type not in VALID_FORMAT_TYPES:
+        return jsonify({"error": "Formato non valido"}), 400
     _add_feedback(format_type, feedback)
     return jsonify({"status": "ok"})
 
@@ -2035,12 +2094,6 @@ if __name__ == "__main__":
         print("ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env")
         print("Run: python setup_db.py   (after setting up .env)")
         exit(1)
-
-    # Snapshot prompts on startup
-    try:
-        _snapshot_all_prompts("init")
-    except Exception as e:
-        print(f"Warning: Could not snapshot prompts: {e}")
 
     # Start schedule checker background thread
     schedule_thread = threading.Thread(target=_check_schedules, daemon=True)
