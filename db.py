@@ -736,11 +736,67 @@ def get_profile(user_id: str) -> dict | None:
     return result.data[0] if result.data else None
 
 
+def increment_generation_count(user_id: str) -> dict:
+    """Increment the user's generation counters (lifetime + monthly).
+
+    Returns {"generation_count": int, "generation_count_monthly": int, "month": str}.
+    """
+    now = datetime.now(timezone.utc)
+    current_month = now.strftime("%Y-%m")
+
+    profile = get_profile(user_id)
+    if not profile:
+        return {"generation_count": 0, "generation_count_monthly": 0, "month": current_month}
+
+    lifetime = (profile.get("generation_count") or 0) + 1
+    stored_month = profile.get("generation_count_month") or ""
+    monthly = profile.get("generation_count_monthly") or 0
+
+    if stored_month == current_month:
+        monthly += 1
+    else:
+        # New month — reset monthly counter
+        monthly = 1
+
+    _sb().table("profiles").update({
+        "generation_count": lifetime,
+        "generation_count_monthly": monthly,
+        "generation_count_month": current_month,
+        "updated_at": now.isoformat(),
+    }).eq("id", user_id).execute()
+
+    return {"generation_count": lifetime, "generation_count_monthly": monthly, "month": current_month}
+
+
+def get_generation_counts(user_id: str) -> dict:
+    """Get current generation counts for a user.
+
+    Returns {"lifetime": int, "monthly": int, "month": str}.
+    """
+    now = datetime.now(timezone.utc)
+    current_month = now.strftime("%Y-%m")
+
+    profile = get_profile(user_id)
+    if not profile:
+        return {"lifetime": 0, "monthly": 0, "month": current_month}
+
+    lifetime = profile.get("generation_count") or 0
+    stored_month = profile.get("generation_count_month") or ""
+    monthly = profile.get("generation_count_monthly") or 0
+
+    # If stored month doesn't match current month, monthly count is effectively 0
+    if stored_month != current_month:
+        monthly = 0
+
+    return {"lifetime": lifetime, "monthly": monthly, "month": current_month}
+
+
 def update_profile(user_id: str, updates: dict):
     allowed = {
         "full_name", "avatar_url", "plan", "stripe_customer_id",
         "openrouter_api_key_enc", "serper_api_key_enc", "fal_key_enc",
         "ntfy_topic", "beehiiv_pub_id",
+        "generation_count", "generation_count_monthly", "generation_count_month",
     }
     filtered = {k: v for k, v in updates.items() if k in allowed}
     if not filtered:

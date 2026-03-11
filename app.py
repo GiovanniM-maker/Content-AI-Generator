@@ -120,6 +120,29 @@ def _get_user_id() -> str:
 # LLM / utility helpers
 # ---------------------------------------------------------------------------
 
+def _sanitize_user_input(text: str, max_length: int = 5000) -> str:
+    """Sanitize user-provided text before injecting into LLM prompts.
+
+    Prevents prompt injection by:
+    - Truncating to max_length
+    - Stripping control characters
+    - Escaping patterns that look like role/instruction markers
+    """
+    if not text:
+        return ""
+    # Truncate
+    text = text[:max_length]
+    # Strip null bytes and other control chars (keep newlines/tabs)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    # Neutralize patterns that look like LLM role markers or system instructions
+    # These could trick the model into switching roles
+    text = re.sub(r'(?i)(^|\n)\s*(system|assistant|user)\s*:', r'\1\2 -', text)
+    text = re.sub(r'(?i)(^|\n)\s*<\s*/?\s*(system|instruction|prompt|override|admin|ignore)', r'\1[filtered]', text)
+    # Neutralize "ignore previous instructions" type patterns
+    text = re.sub(r'(?i)ignor[ae]\s+(tutt[eio]|l[ea]|previous|all|ogni)\s+(istruzion[ei]|instruc|prompt|regol[ea])', '[filtered]', text)
+    return text.strip()
+
+
 def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3) -> str:
     """Call OpenRouter chat completion and return assistant content."""
     headers = {
@@ -1300,6 +1323,10 @@ def generate_content():
             "limit": usage["limit"],
         }), 403
 
+    # Sanitize user inputs before LLM injection
+    opinion = _sanitize_user_input(opinion, max_length=2000)
+    feedback = _sanitize_user_input(feedback, max_length=1000)
+
     if feedback:
         _add_feedback(format_type, feedback)
 
@@ -1319,7 +1346,7 @@ def generate_content():
 
     source_mode = article.get("source_mode", "rss")
     if source_mode == "custom_text":
-        custom_text = body.get("custom_text", "") or article.get("custom_text", "")
+        custom_text = _sanitize_user_input(body.get("custom_text", "") or article.get("custom_text", ""), max_length=5000)
         user_msg = f"""TESTO PERSONALIZZATO (fonte diretta dell'utente):
 {custom_text}
 {opinion_section}
@@ -1351,6 +1378,11 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
         )
         _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
         _update_weekly_status(format_type, "generated")
+        # Increment generation counter (for plan limits)
+        try:
+            db.increment_generation_count(user_id)
+        except Exception:
+            pass
         try:
             db.create_notification(user_id, "generation", f"Contenuto {format_type} generato", article.get("title", "")[:120])
         except Exception:
@@ -1365,9 +1397,32 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
 def generate_newsletter():
     body = request.json
     topics = body.get("topics", [])
-    feedback = body.get("feedback", "")
+    feedback = _sanitize_user_input(body.get("feedback", ""), max_length=1000)
     if not topics or len(topics) < 1:
         return jsonify({"error": "At least 1 topic required"}), 400
+
+    # --- Plan gating (newsletter) ---
+    user_id = _get_user_id()
+    subscription = db.get_subscription(user_id)
+    user_plan = (subscription or {}).get("plan", "free")
+
+    if not payments.check_platform_access(user_plan, "newsletter"):
+        return jsonify({
+            "error": "La newsletter non è disponibile nel tuo piano. Effettua l'upgrade.",
+            "code": "PLAN_LIMIT",
+            "upgrade_required": True,
+        }), 403
+
+    usage = payments.check_generation_limit(user_id, user_plan)
+    if not usage["allowed"]:
+        return jsonify({
+            "error": f"Hai raggiunto il limite di generazioni per il piano {user_plan.upper()}. Effettua l'upgrade per continuare.",
+            "code": "GENERATION_LIMIT",
+            "upgrade_required": True,
+            "used": usage["used"],
+            "limit": usage["limit"],
+        }), 403
+
     if feedback:
         _add_feedback("newsletter", feedback)
     _ensure_user_prompts()
@@ -1375,7 +1430,7 @@ def generate_newsletter():
     topics_text = ""
     for i, t in enumerate(topics, 1):
         art = t.get("article", {})
-        op = t.get("opinion", "")
+        op = _sanitize_user_input(t.get("opinion", ""), max_length=2000)
         topics_text += f"""
 --- TOPIC {i} ---
 Titolo: {art.get('title', '')}
@@ -1412,8 +1467,12 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
         )
         _log_pipeline("info", "Generated newsletter")
         _update_weekly_status("newsletter", "generated")
+        # Increment generation counter (for plan limits)
         try:
-            user_id = _get_user_id()
+            db.increment_generation_count(user_id)
+        except Exception:
+            pass
+        try:
             db.create_notification(user_id, "generation", "Newsletter generata", f"{len(topics)} topic inclusi")
         except Exception:
             pass

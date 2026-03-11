@@ -3086,7 +3086,13 @@ async function loadUsageBar() {
     topbarUsage.style.display = 'flex';
     const remaining = Math.max(0, limit - used);
     countEl.textContent = remaining + '/' + limit;
-    labelEl.textContent = 'gen';
+    // Show correct label based on limit type (lifetime vs monthly)
+    const limitType = usage.limit_type || 'monthly';
+    if (limitType === 'lifetime') {
+      labelEl.textContent = 'gen totali';
+    } else {
+      labelEl.textContent = 'gen/mese';
+    }
     const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
     countEl.className = 'usage-num';
     if (pct >= 90) countEl.classList.add('danger');

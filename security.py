@@ -122,8 +122,8 @@ def init_rate_limiter(app: Flask) -> Limiter:
         "auth_login": "5 per minute",
         "auth_signup": "3 per day",
         "auth_refresh": "10 per minute",
-        "generate_content": "20 per minute",
-        "generate_newsletter": "20 per minute",
+        "generate_content": "5 per minute",
+        "generate_newsletter": "5 per minute",
         "create_checkout": "3 per minute",
     }.items():
         fn = app.view_functions.get(endpoint)

@@ -98,6 +98,8 @@ def get_plan_limits(plan: str) -> dict:
 def check_generation_limit(user_id: str, plan: str) -> dict:
     """Check if user can generate content based on their plan limits.
 
+    Uses actual generation counts (tracked per API call), NOT session counts.
+
     Free plan  → lifetime cap (10 generations total, ever).
     Pro plan   → monthly cap (50 per calendar month).
     Business   → unlimited.
@@ -106,7 +108,6 @@ def check_generation_limit(user_id: str, plan: str) -> dict:
              "limit_type": "lifetime"|"monthly"|"unlimited", "plan": str}
     """
     import db
-    from datetime import datetime, timezone
 
     limits = get_plan_limits(plan)
     max_monthly = limits.get("generations_per_month", 0)
@@ -117,32 +118,22 @@ def check_generation_limit(user_id: str, plan: str) -> dict:
         return {"allowed": True, "used": 0, "limit": -1,
                 "limit_type": "unlimited", "plan": plan}
 
-    sessions = db.get_sessions(user_id)
-    total_count = len(sessions)
+    counts = db.get_generation_counts(user_id)
 
     # ── Lifetime cap (Free) ──────────────────────────────
     if max_lifetime > 0:
         return {
-            "allowed": total_count < max_lifetime,
-            "used": total_count,
+            "allowed": counts["lifetime"] < max_lifetime,
+            "used": counts["lifetime"],
             "limit": max_lifetime,
             "limit_type": "lifetime",
             "plan": plan,
         }
 
     # ── Monthly cap (Pro) ────────────────────────────────
-    now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    monthly_count = 0
-    for s in sessions:
-        created = s.get("created_at", "")
-        if created and created >= month_start.isoformat():
-            monthly_count += 1
-
     return {
-        "allowed": monthly_count < max_monthly,
-        "used": monthly_count,
+        "allowed": counts["monthly"] < max_monthly,
+        "used": counts["monthly"],
         "limit": max_monthly,
         "limit_type": "monthly",
         "plan": plan,

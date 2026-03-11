@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     fal_key_enc TEXT,
     ntfy_topic TEXT,
     beehiiv_pub_id TEXT,
+    generation_count INTEGER NOT NULL DEFAULT 0,
+    generation_count_month TEXT,
+    generation_count_monthly INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -339,3 +342,20 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- =====================================================
+-- MIGRATION: Add generation_count columns to profiles
+-- (safe to run on existing databases)
+-- =====================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'generation_count') THEN
+        ALTER TABLE public.profiles ADD COLUMN generation_count INTEGER NOT NULL DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'generation_count_month') THEN
+        ALTER TABLE public.profiles ADD COLUMN generation_count_month TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'generation_count_monthly') THEN
+        ALTER TABLE public.profiles ADD COLUMN generation_count_monthly INTEGER NOT NULL DEFAULT 0;
+    END IF;
+END $$;
