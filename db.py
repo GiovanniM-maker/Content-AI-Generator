@@ -430,8 +430,9 @@ def add_pipeline_log(user_id: str, level: str, message: str, extra: dict | None 
         row["extra"] = extra
     try:
         _sb().table("pipeline_logs").insert(row).execute()
-    except Exception:
-        pass  # Don't crash if logging fails
+    except Exception as e:
+        import sys
+        print(f"[PIPELINE LOG ERROR] {level}: {message} — DB error: {e}", file=sys.stderr)
 
 
 # =========================================================================

@@ -294,6 +294,11 @@ CREATE OR REPLACE FUNCTION public.increment_weekly_status(
     p_action TEXT
 ) RETURNS VOID AS $$
 BEGIN
+    -- Validate action parameter
+    IF p_action NOT IN ('generated', 'approved', 'scheduled', 'published') THEN
+        RAISE EXCEPTION 'Invalid action: %', p_action;
+    END IF;
+
     -- Insert row if not exists
     INSERT INTO weekly_status (user_id, week_key, platform)
     VALUES (p_user_id, p_week_key, p_platform)

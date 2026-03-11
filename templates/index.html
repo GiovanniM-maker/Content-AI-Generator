@@ -3592,7 +3592,7 @@ function renderSmartBriefContent() {
 function useSuggestion(el) {
   const title = el.dataset.title;
   // Switch to custom text mode and pre-fill
-  switchSourceMode('custom_text', document.querySelectorAll('.source-mode-tab')[1]);
+  switchSourceMode('custom_text', document.querySelectorAll('.source-mode-tab')[2]);
   const ta = document.getElementById('custom-text-input');
   if (ta) { ta.value = title; ta.dispatchEvent(new Event('input')); }
   toast('Suggerimento copiato nel campo testo!');
@@ -4619,6 +4619,7 @@ function renderScheduleList() {
 }
 
 async function deleteSchedule(id) {
+  if (!confirm('Sei sicuro di voler eliminare questa programmazione?\n\nQuesta azione è irreversibile.')) return;
   await fetch('/api/schedule/' + id, { method: 'DELETE' });
   toast('Programmazione rimossa');
   loadSchedule();

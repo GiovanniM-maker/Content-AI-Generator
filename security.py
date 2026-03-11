@@ -51,16 +51,14 @@ def init_cors(app: Flask):
     allowed_origins = [o.strip() for o in allowed_origins if o.strip()]
 
     if not allowed_origins:
-        # Default: same-origin only (no external origins)
-        CORS(app, resources={
-            r"/api/*": {"origins": "*", "supports_credentials": True},
-            r"/auth/*": {"origins": "*", "supports_credentials": True},
-        })
-    else:
-        CORS(app, resources={
-            r"/api/*": {"origins": allowed_origins, "supports_credentials": True},
-            r"/auth/*": {"origins": allowed_origins, "supports_credentials": True},
-        })
+        # Default: restrict to app's own origin
+        base_url = os.getenv("APP_BASE_URL", "http://localhost:5001")
+        allowed_origins = [base_url]
+
+    CORS(app, resources={
+        r"/api/*": {"origins": allowed_origins, "supports_credentials": True},
+        r"/auth/*": {"origins": allowed_origins, "supports_credentials": True},
+    })
 
 
 # ---------------------------------------------------------------------------

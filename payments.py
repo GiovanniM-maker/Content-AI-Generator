@@ -242,8 +242,10 @@ def verify_webhook(payload: bytes, sig_header: str) -> dict | None:
     Returns None if verification fails.
     """
     if not STRIPE_WEBHOOK_SECRET:
-        # No webhook secret configured — parse but skip verification
-        # (for development; production should always verify)
+        # No webhook secret configured
+        if os.getenv("FLASK_ENV") == "production":
+            return None  # NEVER accept unverified webhooks in production
+        # Dev-only fallback (skip verification)
         try:
             return stripe.Event.construct_from(
                 stripe.util.json.loads(payload), stripe.api_key

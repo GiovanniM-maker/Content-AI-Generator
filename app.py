@@ -23,7 +23,10 @@ import security
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(32).hex())
+_flask_secret = os.getenv("FLASK_SECRET_KEY")
+if not _flask_secret and os.getenv("FLASK_ENV") == "production":
+    raise ValueError("FLASK_SECRET_KEY must be set in production environment")
+app.secret_key = _flask_secret or os.urandom(32).hex()
 
 BASE_DIR = Path(__file__).parent
 
@@ -44,7 +47,7 @@ security.init_rate_limiter(app)
 def _before_request_auth():
     """Auto-extract auth token for all /api/ routes.
     Sets g.user_id, g.user_email if token is valid.
-    Does NOT block unauthenticated requests (optional auth).
+    BLOCKS unauthenticated requests to /api/ endpoints (security).
     """
     g.user_id = None
     g.user_email = None
@@ -65,6 +68,11 @@ def _before_request_auth():
             g.user_metadata = payload.get("user_metadata", {})
             g.access_token = token
 
+    # Enforce auth on all /api/ routes (except healthz)
+    if path.startswith("/api/") and path != "/api/healthz":
+        if not g.user_id:
+            return jsonify({"error": "Authentication required"}), 401
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -77,6 +85,7 @@ MODEL_GENERATION = "anthropic/claude-sonnet-4-5"
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 BEEHIIV_PUB_ID = os.getenv("BEEHIIV_PUB_ID", "")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://content-ai-generator-1.onrender.com")
 
 DEFAULT_RSS_FEEDS = [
     "https://huggingface.co/blog/feed.xml",
@@ -98,12 +107,13 @@ FETCH_WINDOW_DAYS = 5
 
 def _get_user_id() -> str:
     """Get current user ID from request context.
-    Checks g.user_id (set by auth decorators) first, then falls back to env default.
+    Raises 401 if not authenticated.
     """
     uid = getattr(g, "user_id", None)
-    if uid:
-        return uid
-    return os.getenv("DEFAULT_USER_ID", "00000000-0000-0000-0000-000000000000")
+    if not uid:
+        from flask import abort
+        abort(401, description="Authentication required")
+    return uid
 
 
 # ---------------------------------------------------------------------------
@@ -335,13 +345,13 @@ def _snapshot_all_prompts(trigger: str = "init"):
 # ntfy push notifications
 # ---------------------------------------------------------------------------
 
-def _send_ntfy(title: str, message: str, url: str | None = None, tags: str = "loudspeaker"):
-    if not NTFY_TOPIC:
-        _log_pipeline("warning", "ntfy notification skipped — no topic configured")
+def _send_ntfy(title: str, message: str, url: str | None = None, tags: str = "loudspeaker", topic: str = ""):
+    ntfy_topic = topic or NTFY_TOPIC
+    if not ntfy_topic:
         return False
     try:
         payload = {
-            "topic": NTFY_TOPIC,
+            "topic": ntfy_topic,
             "title": title,
             "message": message,
             "tags": [t.strip() for t in tags.split(",")],
@@ -380,16 +390,27 @@ def _check_schedules():
                     continue
 
                 if now >= sched_dt:
+                    item_user_id = item.get("user_id")
+                    if not item_user_id:
+                        continue  # skip items without user_id
                     platform = item.get("platform", "content")
                     title_text = item.get("title", "Contenuto programmato")
                     emoji_map = {"linkedin": "\U0001f4bc", "instagram": "\U0001f4f8", "newsletter": "\U0001f4e7"}
                     emoji = emoji_map.get(platform, "\U0001f4e2")
+                    # Get user-specific ntfy topic
+                    user_topic = ""
+                    try:
+                        profile = db.get_profile(item_user_id)
+                        user_topic = (profile or {}).get("ntfy_topic", "")
+                    except Exception:
+                        pass
                     _send_ntfy(
                         title=f"{emoji} Pubblica {platform.upper()}",
                         message=f"{title_text}\n\nÈ ora di pubblicare questo contenuto!",
                         tags=f"{platform},bell",
+                        url=f"{APP_BASE_URL}/app",
+                        topic=user_topic,
                     )
-                    item_user_id = item.get("user_id", _get_user_id())
                     db.update_schedule(item_user_id, item["id"], {
                         "status": "notified",
                         "notified_at": now.isoformat(),
@@ -696,7 +717,7 @@ def save_user_keys():
             if encrypted:
                 updates[db_field] = encrypted
             else:
-                updates[db_field] = val  # Store plain if encryption not configured
+                return jsonify({"error": "Encryption not configured. Cannot save API keys securely."}), 500
         elif val == "":
             # Explicit empty string = clear the key
             if field in body:
@@ -835,24 +856,24 @@ def remove_category():
 # Routes — RSS Fetch API
 # ---------------------------------------------------------------------------
 
-_fetch_progress: list[str] = []
-_fetch_running = False
+_fetch_state: dict[str, dict] = {}  # user_id -> {"progress": [], "running": False}
 
 
 @app.route("/api/feeds/fetch", methods=["POST"])
 def fetch_feeds():
-    global _fetch_running, _fetch_progress
-    if _fetch_running:
+    user_id = _get_user_id()
+    state = _fetch_state.setdefault(user_id, {"progress": [], "running": False})
+    if state["running"]:
         return jsonify({"error": "Fetch already in progress"}), 409
-    _fetch_running = True
-    _fetch_progress = []
+    state["running"] = True
+    state["progress"] = []
+    feeds_config = _load_feeds_config()
 
     def run():
-        global _fetch_running
         try:
-            _do_fetch()
+            _do_fetch(user_id, state, feeds_config)
         finally:
-            _fetch_running = False
+            state["running"] = False
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"status": "started"})
@@ -860,28 +881,32 @@ def fetch_feeds():
 
 @app.route("/api/feeds/progress")
 def feed_progress():
+    user_id = _get_user_id()
+    state = _fetch_state.get(user_id, {"progress": [], "running": False})
+
     def generate():
         sent = 0
         while True:
-            while sent < len(_fetch_progress):
-                msg = _fetch_progress[sent]
+            progress = state["progress"]
+            while sent < len(progress):
+                msg = progress[sent]
                 yield f"data: {json.dumps({'msg': msg})}\n\n"
                 sent += 1
-            if not _fetch_running and sent >= len(_fetch_progress):
+            if not state["running"] and sent >= len(progress):
                 yield f"data: {json.dumps({'done': True})}\n\n"
                 break
             time.sleep(0.3)
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
-def _do_fetch():
-    """Core fetch + score logic."""
-    user_id = _get_user_id()
+def _do_fetch(user_id: str, state: dict, feeds_config: dict):
+    """Core fetch + score logic (runs in background thread)."""
+    progress = state["progress"]
     seen_urls = db.get_article_urls(user_id)
     cutoff = datetime.now(timezone.utc) - timedelta(days=FETCH_WINDOW_DAYS)
     new_articles = []
 
-    config = _load_feeds_config()
+    config = feeds_config
     feed_items = []
     for cat, feeds in config.get("categories", {}).items():
         for feed in feeds:
@@ -893,13 +918,13 @@ def _do_fetch():
     for fi in feed_items:
         feed_url = fi["url"]
         feed_cat = fi.get("category", "")
-        _fetch_progress.append(f"Fetching {feed_url} ...")
+        progress.append(f"Fetching {feed_url} ...")
         try:
             feed = feedparser.parse(feed_url)
             status = getattr(feed, "status", None)
             if status and status >= 400:
-                _fetch_progress.append(f"  \u26a0 HTTP {status} — skipping this feed")
-                _log_pipeline("warning", f"RSS feed HTTP {status}", {"feed": feed_url})
+                progress.append(f"  \u26a0 HTTP {status} — skipping this feed")
+                _log_pipeline("warning", f"RSS feed HTTP {status}", {"feed": feed_url}, user_id=user_id)
                 continue
             source = feed.feed.get("title", feed_url)
             count = 0
@@ -923,20 +948,20 @@ def _do_fetch():
                 })
                 seen_urls.add(url)
                 count += 1
-            _fetch_progress.append(f"  \u2192 {count} new articles from {source}")
+            progress.append(f"  \u2192 {count} new articles from {source}")
             if count > 0:
-                _log_pipeline("info", f"Fetched {count} articles from {source}", {"feed": feed_url})
+                _log_pipeline("info", f"Fetched {count} articles from {source}", {"feed": feed_url}, user_id=user_id)
         except Exception as e:
-            _fetch_progress.append(f"  \u26a0 Error fetching {feed_url}: {e}")
-            _log_pipeline("error", f"RSS fetch error: {e}", {"feed": feed_url})
+            progress.append(f"  \u26a0 Error fetching {feed_url}: {e}")
+            _log_pipeline("error", f"RSS fetch error: {e}", {"feed": feed_url}, user_id=user_id)
 
-    _fetch_progress.append(f"\nTotal new articles to score: {len(new_articles)}")
+    progress.append(f"\nTotal new articles to score: {len(new_articles)}")
 
     # Score in batches of 5
     scored = []
     for i in range(0, len(new_articles), 5):
         batch = new_articles[i:i + 5]
-        _fetch_progress.append(f"Scoring articles {i + 1}-{i + len(batch)} ...")
+        progress.append(f"Scoring articles {i + 1}-{i + len(batch)} ...")
         try:
             articles_text = ""
             for idx, art in enumerate(batch):
@@ -968,8 +993,8 @@ Return ONLY a valid JSON array, no markdown, no explanation.
                     art["scored_at"] = datetime.now(timezone.utc).isoformat()
                     scored.append(art)
         except Exception as e:
-            _fetch_progress.append(f"  \u26a0 Scoring error: {e}")
-            _log_pipeline("error", f"LLM scoring error: {e}", {"batch_start": i})
+            progress.append(f"  \u26a0 Scoring error: {e}")
+            _log_pipeline("error", f"LLM scoring error: {e}", {"batch_start": i}, user_id=user_id)
             for art in batch:
                 art["category"] = art.get("feed_category", "News AI Italia")
                 art["score"] = 5
@@ -980,7 +1005,7 @@ Return ONLY a valid JSON array, no markdown, no explanation.
     # Apply preference boost
     prefs = db.get_selection_prefs(user_id)
     if prefs["total_selections"] > 0:
-        _fetch_progress.append(f"\nApplying preference boost (based on {prefs['total_selections']} past selections)...")
+        progress.append(f"\nApplying preference boost (based on {prefs['total_selections']} past selections)...")
         boosted_count = 0
         for art in scored:
             bonus = _calc_preference_bonus(art, prefs)
@@ -989,18 +1014,18 @@ Return ONLY a valid JSON array, no markdown, no explanation.
                 art["boost"] = bonus
                 art["score"] = min(10, round(art["score"] + bonus))
                 boosted_count += 1
-        _fetch_progress.append(f"  \u2192 {boosted_count} articles boosted")
+        progress.append(f"  \u2192 {boosted_count} articles boosted")
 
     # Save new articles to database
     db.insert_articles(user_id, scored)
-    _fetch_progress.append(f"\n\u2713 Done! {len(scored)} articles scored and saved.")
-    _log_pipeline("info", f"Fetch complete: {len(scored)} articles scored and saved")
+    progress.append(f"\n\u2713 Done! {len(scored)} articles scored and saved.")
+    _log_pipeline("info", f"Fetch complete: {len(scored)} articles scored and saved", user_id=user_id)
 
     if scored:
         _send_ntfy(
             title="\U0001f4f0 Feed aggiornato",
             message=f"{len(scored)} nuovi articoli analizzati e pronti per la selezione.",
-            url="http://localhost:5001",
+            url=f"{APP_BASE_URL}/app",
             tags="newspaper",
         )
 
@@ -1136,8 +1161,9 @@ def _ensure_user_prompts():
             db.init_user_prompts(user_id, BASE_PROMPTS)
             # Log initial versions so they appear in the monitor "Storico Prompt"
             _snapshot_all_prompts("init")
-    except Exception:
-        pass  # Don't block generation if prompt init fails
+    except Exception as e:
+        import sys
+        print(f"[WARN] _ensure_user_prompts failed: {e}", file=sys.stderr)
 
 
 IG_VARIANT_ANGLES = [
