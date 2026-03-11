@@ -4607,11 +4607,30 @@ function integrateOpinion(format, idx) {
   intBtn.disabled = true; intBtn.textContent = '...';
 
   const article = src ? src.article : { title: '', description: '' };
-  fetch('/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ article, opinion, format, source_mode: article.source_mode || 'rss', custom_text: article.custom_text || '' }),
-  })
+
+  // Newsletter uses a separate endpoint
+  let apiCall;
+  if (format === 'newsletter') {
+    const topics = (selectedArticles.length ? selectedArticles : _creaArticles).map(s => ({
+      article: s.article || s, opinion: s.opinion || ''
+    }));
+    // Override the opinion on the matching topic
+    if (topics[idx]) topics[idx].opinion = opinion;
+    else if (topics[0]) topics[0].opinion = opinion;
+    apiCall = fetch('/api/generate-newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topics }),
+    });
+  } else {
+    apiCall = fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article, opinion, format, source_mode: article.source_mode || 'rss', custom_text: article.custom_text || '' }),
+    });
+  }
+
+  apiCall
   .then(safeJson)
   .then(data => {
     if (data.error) throw new Error(data.error);
@@ -4686,11 +4705,26 @@ function regenerateSingle(format, idx) {
   const opinionTa = document.getElementById('opinion-' + key);
   const opinion = opinionTa ? opinionTa.value.trim() : (s.opinion || '');
 
-  fetch('/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ article: s.article, opinion, format, feedback, source_mode: (s.article || {}).source_mode || 'rss', custom_text: (s.article || {}).custom_text || '' }),
-  })
+  // Newsletter uses a separate endpoint
+  let apiCall;
+  if (format === 'newsletter') {
+    const topics = (selectedArticles.length ? selectedArticles : _creaArticles).map(ss => ({
+      article: ss.article || ss, opinion: ss.opinion || ''
+    }));
+    apiCall = fetch('/api/generate-newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topics, feedback }),
+    });
+  } else {
+    apiCall = fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article: s.article, opinion, format, feedback, source_mode: (s.article || {}).source_mode || 'rss', custom_text: (s.article || {}).custom_text || '' }),
+    });
+  }
+
+  apiCall
   .then(safeJson)
   .then(data => {
     if (data.error) throw new Error(data.error);
