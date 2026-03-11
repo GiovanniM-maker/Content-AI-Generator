@@ -251,7 +251,7 @@ def _enrich_prompt_with_feedback(prompt_name: str, feedback_ids: list[str]) -> s
     if not selected:
         return current_prompt
 
-    feedback_text = "\n".join(f"- {e['feedback']}" for e in selected)
+    feedback_text = "\n".join(f"- {_sanitize_user_input(e['feedback'], max_length=1000)}" for e in selected)
 
     enrichment_msg = f"""Sei un esperto di prompt engineering. Devi MIGLIORARE il seguente prompt incorporando i feedback ricevuti dall'utente.
 
@@ -1045,11 +1045,19 @@ Return ONLY a valid JSON array, no markdown, no explanation.
     _log_pipeline("info", f"Fetch complete: {len(scored)} articles scored and saved", user_id=user_id)
 
     if scored:
+        # Use per-user ntfy topic (not global)
+        user_ntfy_topic = ""
+        try:
+            user_profile = db.get_profile(user_id)
+            user_ntfy_topic = (user_profile or {}).get("ntfy_topic", "")
+        except Exception:
+            pass
         _send_ntfy(
             title="\U0001f4f0 Feed aggiornato",
             message=f"{len(scored)} nuovi articoli analizzati e pronti per la selezione.",
             url=f"{APP_BASE_URL}/app",
             tags="newspaper",
+            topic=user_ntfy_topic,
         )
 
 
@@ -1259,11 +1267,15 @@ def search_score():
             "source_mode": "web_search",
         }
         try:
+            # Sanitize web search results (could contain adversarial content)
+            safe_title = _sanitize_user_input(article['title'], max_length=500)
+            safe_snippet = _sanitize_user_input(article['summary'], max_length=1000)
+            safe_source = _sanitize_user_input(article['source'], max_length=200)
             prompt = f"""Sei un content strategist per un consulente AI italiano.
 Valuta questo risultato web per potenziale contenuto:
-Titolo: {article['title']}
-Snippet: {article['summary']}
-Fonte: {article['source']}
+Titolo: {safe_title}
+Snippet: {safe_snippet}
+Fonte: {safe_source}
 
 Rispondi SOLO con un JSON: {{"score": N, "reason": "motivo breve"}}
 Score da 1 a 10 (10 = perfetto per content su AI/automazione business)."""
@@ -1315,8 +1327,12 @@ def generate_content():
     # Check generation limit
     usage = payments.check_generation_limit(user_id, user_plan)
     if not usage["allowed"]:
+        if usage["limit_type"] == "lifetime":
+            limit_msg = f"Hai raggiunto il limite di {usage['limit']} generazioni totali per il piano {user_plan.upper()}. Effettua l'upgrade per continuare."
+        else:
+            limit_msg = f"Hai raggiunto il limite di {usage['limit']} generazioni/mese per il piano {user_plan.upper()}. Effettua l'upgrade per continuare."
         return jsonify({
-            "error": f"Hai raggiunto il limite di {usage['limit']} generazioni/mese per il piano {user_plan.upper()}. Effettua l'upgrade per continuare.",
+            "error": limit_msg,
             "code": "GENERATION_LIMIT",
             "upgrade_required": True,
             "used": usage["used"],
@@ -1356,11 +1372,16 @@ FORMATO RICHIESTO:
 
 Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza commenti aggiuntivi."""
     else:
+        # Sanitize article fields (user-controlled data from client)
+        art_title = _sanitize_user_input(article.get('title', ''), max_length=500)
+        art_source = _sanitize_user_input(article.get('source', ''), max_length=200)
+        art_summary = _sanitize_user_input(article.get('summary', ''), max_length=2000)
+        art_desc = _sanitize_user_input(article.get('description', ''), max_length=2000)
         user_msg = f"""ARTICOLO SELEZIONATO:
-Titolo: {article.get('title', '')}
-Fonte: {article.get('source', '')}
-Riassunto: {article.get('summary', '')}
-Descrizione: {article.get('description', '')}
+Titolo: {art_title}
+Fonte: {art_source}
+Riassunto: {art_summary}
+Descrizione: {art_desc}
 {opinion_section}
 
 FORMATO RICHIESTO:
@@ -1431,12 +1452,17 @@ def generate_newsletter():
     for i, t in enumerate(topics, 1):
         art = t.get("article", {})
         op = _sanitize_user_input(t.get("opinion", ""), max_length=2000)
+        # Sanitize article fields from client
+        art_title = _sanitize_user_input(art.get('title', ''), max_length=500)
+        art_source = _sanitize_user_input(art.get('source', ''), max_length=200)
+        art_summary = _sanitize_user_input(art.get('summary', ''), max_length=2000)
+        art_desc = _sanitize_user_input(art.get('description', ''), max_length=2000)
         topics_text += f"""
 --- TOPIC {i} ---
-Titolo: {art.get('title', '')}
-Fonte: {art.get('source', '')}
-Riassunto: {art.get('summary', '')}
-Descrizione: {art.get('description', '')}
+Titolo: {art_title}
+Fonte: {art_source}
+Riassunto: {art_summary}
+Descrizione: {art_desc}
 """
         if op:
             topics_text += f"Opinione dell'utente: {op}\n"
@@ -1964,10 +1990,15 @@ def get_health():
 
 @app.route("/api/ntfy/test", methods=["POST"])
 def test_ntfy():
+    # Use per-user ntfy topic
+    user_id = _get_user_id()
+    profile = db.get_profile(user_id)
+    user_ntfy_topic = (profile or {}).get("ntfy_topic", "")
     success = _send_ntfy(
         title="\U0001f9ea Test Content Dashboard",
         message="Le notifiche funzionano! Riceverai un avviso quando sarà ora di pubblicare.",
         tags="white_check_mark",
+        topic=user_ntfy_topic,
     )
     if success:
         return jsonify({"status": "ok", "message": "Test notification sent"})

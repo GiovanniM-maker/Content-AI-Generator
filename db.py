@@ -236,9 +236,13 @@ def delete_schedule(user_id: str, item_id: str) -> bool:
 
 def update_schedule(user_id: str, item_id: str, updates: dict) -> bool:
     """Update schedule fields (status, notified_at, published_at, etc.)."""
+    allowed = {"status", "notified_at", "published_at", "scheduled_at"}
+    filtered = {k: v for k, v in updates.items() if k in allowed}
+    if not filtered:
+        return False
     result = (
         _sb().table("schedules")
-        .update(updates)
+        .update(filtered)
         .eq("user_id", user_id)
         .eq("id", item_id)
         .execute()
@@ -737,13 +741,33 @@ def get_profile(user_id: str) -> dict | None:
 
 
 def increment_generation_count(user_id: str) -> dict:
-    """Increment the user's generation counters (lifetime + monthly).
+    """Increment the user's generation counters (lifetime + monthly) atomically.
+
+    Uses a PostgreSQL RPC function to avoid race conditions.
+    Falls back to read-modify-write if RPC is not available.
 
     Returns {"generation_count": int, "generation_count_monthly": int, "month": str}.
     """
     now = datetime.now(timezone.utc)
     current_month = now.strftime("%Y-%m")
 
+    try:
+        # Atomic increment via PostgreSQL function
+        result = _sb().rpc("increment_generation_count", {
+            "p_user_id": user_id,
+            "p_current_month": current_month,
+        }).execute()
+        if result.data:
+            row = result.data[0]
+            return {
+                "generation_count": row.get("new_lifetime", 0),
+                "generation_count_monthly": row.get("new_monthly", 0),
+                "month": current_month,
+            }
+    except Exception:
+        pass  # Fall through to non-atomic fallback
+
+    # Fallback: read-modify-write (non-atomic, kept for backwards compatibility)
     profile = get_profile(user_id)
     if not profile:
         return {"generation_count": 0, "generation_count_monthly": 0, "month": current_month}
@@ -755,7 +779,6 @@ def increment_generation_count(user_id: str) -> dict:
     if stored_month == current_month:
         monthly += 1
     else:
-        # New month — reset monthly counter
         monthly = 1
 
     _sb().table("profiles").update({

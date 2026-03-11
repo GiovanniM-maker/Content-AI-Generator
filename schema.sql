@@ -316,6 +316,45 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =====================================================
+-- HELPER FUNCTION: Atomic generation count increment
+-- =====================================================
+CREATE OR REPLACE FUNCTION public.increment_generation_count(
+    p_user_id UUID,
+    p_current_month TEXT
+) RETURNS TABLE(new_lifetime INTEGER, new_monthly INTEGER) AS $$
+DECLARE
+    v_stored_month TEXT;
+BEGIN
+    -- Get current stored month
+    SELECT generation_count_month INTO v_stored_month
+    FROM profiles WHERE id = p_user_id;
+
+    IF v_stored_month IS DISTINCT FROM p_current_month THEN
+        -- New month: reset monthly, increment lifetime
+        UPDATE profiles SET
+            generation_count = generation_count + 1,
+            generation_count_monthly = 1,
+            generation_count_month = p_current_month,
+            updated_at = NOW()
+        WHERE id = p_user_id
+        RETURNING generation_count, generation_count_monthly
+        INTO new_lifetime, new_monthly;
+    ELSE
+        -- Same month: increment both
+        UPDATE profiles SET
+            generation_count = generation_count + 1,
+            generation_count_monthly = generation_count_monthly + 1,
+            updated_at = NOW()
+        WHERE id = p_user_id
+        RETURNING generation_count, generation_count_monthly
+        INTO new_lifetime, new_monthly;
+    END IF;
+
+    RETURN NEXT;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
 -- TRIGGER: Auto-create profile + defaults on signup
 -- =====================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
