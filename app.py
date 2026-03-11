@@ -2651,7 +2651,8 @@ def template_chat(template_id):
 
     body = request.json or {}
     user_message = _sanitize_user_input(body.get("message", ""), max_length=3000)
-    if not user_message.strip():
+    image_url = body.get("image_url", "")  # Optional: URL of uploaded image
+    if not user_message.strip() and not image_url:
         return jsonify({"error": "Messaggio vuoto"}), 400
 
     template_type = tpl["template_type"]
@@ -2703,7 +2704,12 @@ REGOLE:
 4. Ogni modifica genera TUTTO il JSON aggiornato con tutti e 4 i tipi
 5. Se l'utente chiede di modificare un solo tipo (es. "cambia i bullet"), aggiorna quello ma ritorna sempre tutti e 4
 6. Il design deve essere professionale e moderno
-7. Rispondi in italiano"""
+7. Rispondi in italiano
+8. Se l'utente allega un'IMMAGINE (logo, screenshot, mockup):
+   - Analizza visivamente l'immagine
+   - Se è un logo: inseriscilo nel template usando <img src="URL_IMMAGINE"> con l'URL fornito
+   - Se è un mockup/screenshot: cerca di replicare lo stile visivo mostrato
+   - Se è un'annotazione: segui le indicazioni visive"""
     else:  # newsletter
         system_prompt = """Sei un designer HTML esperto di email marketing. Stai creando un template HTML per newsletter email.
 
@@ -2726,7 +2732,11 @@ REGOLE:
 4. Ogni modifica deve produrre l'HTML COMPLETO aggiornato
 5. Usa SOLO inline CSS per massima compatibilità email
 6. Il design deve essere professionale e adatto a Beehiiv/Mailchimp
-7. Rispondi in italiano"""
+7. Rispondi in italiano
+8. Se l'utente allega un'IMMAGINE (logo, screenshot, mockup):
+   - Analizza visivamente l'immagine
+   - Se è un logo: inseriscilo nel template usando <img src="URL_IMMAGINE"> con l'URL fornito
+   - Se è un mockup/screenshot: cerca di replicare lo stile visivo mostrato"""
 
     # Build conversation messages (keep last 10 exchanges)
     messages = [{"role": "system", "content": system_prompt}]
@@ -2743,8 +2753,19 @@ REGOLE:
     for msg in recent_history:
         messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # Add the new user message
-    messages.append({"role": "user", "content": user_message})
+    # Add the new user message (multimodal if image attached)
+    if image_url:
+        # Build multimodal content: text + image
+        user_content = []
+        if user_message.strip():
+            user_content.append({"type": "text", "text": user_message})
+        user_content.append({
+            "type": "image_url",
+            "image_url": {"url": image_url}
+        })
+        messages.append({"role": "user", "content": user_content})
+    else:
+        messages.append({"role": "user", "content": user_message})
 
     try:
         raw_response = _llm_call(messages, model=MODEL_GENERATION, temperature=0.4)
@@ -2782,8 +2803,11 @@ REGOLE:
                 reply_text = cleaned
                 new_html = current_html
 
-        # Update chat history
-        chat_history.append({"role": "user", "content": user_message})
+        # Update chat history (store text only — images referenced by URL in message)
+        history_user_content = user_message
+        if image_url:
+            history_user_content = f"{user_message}\n[Immagine allegata: {image_url}]" if user_message.strip() else f"[Immagine allegata: {image_url}]"
+        chat_history.append({"role": "user", "content": history_user_content})
         chat_history.append({"role": "assistant", "content": reply_text})
 
         # Save updated template
@@ -2882,6 +2906,55 @@ def preset_template_preview(preset_id):
     except Exception as e:
         _log_pipeline("error", f"Preset preview render error: {e}")
         return jsonify({"error": "Errore nel rendering della preview."}), 500
+
+
+@app.route("/api/templates/<template_id>/upload", methods=["POST"])
+def template_upload_asset(template_id):
+    """Upload an image/logo for use in a template. Returns the public URL."""
+    user_id = _get_user_id()
+    tpl = db.get_user_template_by_id(user_id, template_id)
+    if not tpl:
+        return jsonify({"error": "Template non trovato"}), 404
+
+    if "file" not in request.files:
+        return jsonify({"error": "Nessun file inviato"}), 400
+
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Filename mancante"}), 400
+
+    # Validate file type
+    allowed_ext = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+    import os as _os
+    ext = _os.path.splitext(f.filename)[1].lower()
+    if ext not in allowed_ext:
+        return jsonify({"error": f"Tipo file non supportato. Usa: {', '.join(allowed_ext)}"}), 400
+
+    # Max 2MB
+    file_bytes = f.read()
+    if len(file_bytes) > 2 * 1024 * 1024:
+        return jsonify({"error": "File troppo grande. Massimo 2MB."}), 400
+
+    content_types = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+    }
+
+    try:
+        import uuid as _uuid
+        safe_name = f"{_uuid.uuid4().hex[:8]}{ext}"
+        url = db.upload_template_asset(
+            user_id=user_id,
+            template_id=template_id,
+            filename=safe_name,
+            file_bytes=file_bytes,
+            content_type=content_types.get(ext, "image/png"),
+        )
+        _log_pipeline("info", f"Template asset uploaded: {safe_name} for {template_id}")
+        return jsonify({"url": url, "filename": safe_name})
+    except Exception as e:
+        _log_pipeline("error", f"Template asset upload error: {e}")
+        return jsonify({"error": "Errore nell'upload. Riprova."}), 500
 
 
 @app.route("/api/templates/clone/<preset_id>", methods=["POST"])

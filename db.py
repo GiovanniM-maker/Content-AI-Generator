@@ -57,6 +57,25 @@ def is_configured() -> bool:
 # STORAGE — Carousel images on Supabase Storage
 # =========================================================================
 
+TEMPLATE_ASSETS_BUCKET = "template-assets"
+
+
+def upload_template_asset(user_id: str, template_id: str, filename: str,
+                          file_bytes: bytes, content_type: str = "image/png") -> str:
+    """Upload an asset (logo, image) for a template.
+
+    Path: {user_id}/{template_id}/{filename}
+    Returns the full public URL.
+    """
+    path = f"{user_id}/{template_id}/{filename}"
+    _sb().storage.from_(TEMPLATE_ASSETS_BUCKET).upload(
+        path,
+        file_bytes,
+        file_options={"content-type": content_type, "upsert": "true"},
+    )
+    url = _sb().storage.from_(TEMPLATE_ASSETS_BUCKET).get_public_url(path)
+    return url.rstrip("?")
+
 def upload_carousel_image(user_id: str, session_id: str, slide_index: int, png_bytes: bytes) -> str:
     """Upload a carousel PNG to Supabase Storage.
 

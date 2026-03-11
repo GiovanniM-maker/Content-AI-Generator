@@ -1915,6 +1915,13 @@ body::after {
 .pers-chat-input-row { display: flex; gap: 8px; margin-top: 8px; }
 .pers-chat-input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; resize: none; background: var(--card-bg); color: var(--fg); font-family: inherit; }
 .pers-send-btn { align-self: flex-end; }
+.pers-upload-btn { padding: 8px 10px; font-size: 16px; min-width: 38px; flex-shrink: 0; align-self: flex-end; }
+.pers-upload-preview { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 4px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
+.pers-upload-preview img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; }
+.pers-upload-preview span { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pers-upload-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 4px; }
+.pers-upload-remove:hover { color: #e74c3c; }
+.pers-chat-bubble .bubble-img { max-width: 120px; border-radius: 6px; margin-top: 6px; display: block; }
 
 /* Preview */
 .pers-preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 700; font-size: 13px; }
@@ -2796,7 +2803,15 @@ body::after {
               Ciao! Descrivi come vuoi il tuo template e lo creeremo insieme. Ad esempio: "Sfondo scuro con accento viola, testo bianco, stile moderno"
             </div>
           </div>
+          <!-- Uploaded image preview (hidden until image selected) -->
+          <div id="pers-upload-preview" class="pers-upload-preview" style="display:none;">
+            <img id="pers-upload-thumb" src="" alt="Preview">
+            <span id="pers-upload-name"></span>
+            <button class="pers-upload-remove" onclick="removeTemplateUpload()">✕</button>
+          </div>
           <div class="pers-chat-input-row">
+            <input type="file" id="pers-file-input" accept="image/*" style="display:none" onchange="handleTemplateFileSelect(this)">
+            <button class="btn btn-secondary pers-upload-btn" onclick="document.getElementById('pers-file-input').click()" title="Allega immagine (logo, screenshot, mockup)">📎</button>
             <textarea id="pers-chat-input" class="pers-chat-input" placeholder="Descrivi il design che vuoi..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTemplateMessage();}"></textarea>
             <button id="pers-send-btn" class="btn btn-primary pers-send-btn" onclick="sendTemplateMessage()">Invia</button>
           </div>
@@ -7505,6 +7520,9 @@ async function openTemplateChat(templateId) {
     _persCurrentRatio = tpl.aspect_ratio || '1:1';
     _persCurrentHtml = tpl.html_content || '';
 
+    // Reset upload state
+    removeTemplateUpload();
+
     // Set title
     document.getElementById('pers-chat-title').textContent = tpl.name || 'Template';
 
@@ -7534,34 +7552,108 @@ async function openTemplateChat(templateId) {
   } catch(e) { toast('Errore nel caricamento'); }
 }
 
+// ---- Image upload state ----
+let _persUploadedImageUrl = null;
+let _persUploadedFile = null;
+
+function handleTemplateFileSelect(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    toast('Immagine troppo grande. Massimo 2MB.');
+    inputEl.value = '';
+    return;
+  }
+  _persUploadedFile = file;
+  // Show preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('pers-upload-thumb').src = e.target.result;
+    document.getElementById('pers-upload-name').textContent = file.name;
+    document.getElementById('pers-upload-preview').style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeTemplateUpload() {
+  _persUploadedFile = null;
+  _persUploadedImageUrl = null;
+  const preview = document.getElementById('pers-upload-preview');
+  if (preview) preview.style.display = 'none';
+  const fileInput = document.getElementById('pers-file-input');
+  if (fileInput) fileInput.value = '';
+}
+
+async function _uploadTemplateFile() {
+  // Upload the pending file to Supabase Storage, return public URL
+  if (!_persUploadedFile || !_persCurrentId) return null;
+  const formData = new FormData();
+  formData.append('file', _persUploadedFile);
+  try {
+    const res = await fetch(`/api/templates/${_persCurrentId}/upload`, {
+      method: 'POST', body: formData
+    });
+    const data = await res.json();
+    if (res.ok && data.url) return data.url;
+    toast(data.error || 'Errore upload immagine');
+    return null;
+  } catch(e) {
+    toast('Errore upload immagine');
+    return null;
+  }
+}
+
 async function sendTemplateMessage() {
   const input = document.getElementById('pers-chat-input');
   const message = input.value.trim();
-  if (!message || !_persCurrentId) return;
+  const hasImage = !!_persUploadedFile;
+  if (!message && !hasImage) return;
+  if (!_persCurrentId) return;
 
   const sendBtn = document.getElementById('pers-send-btn');
   sendBtn.disabled = true;
   input.value = '';
 
-  // Add user bubble
+  // Add user bubble (with optional image thumbnail)
   const msgContainer = document.getElementById('pers-chat-messages');
   const userBubble = document.createElement('div');
   userBubble.className = 'pers-chat-bubble user';
-  userBubble.textContent = message;
+  if (hasImage) {
+    const thumbSrc = document.getElementById('pers-upload-thumb').src;
+    userBubble.innerHTML = `${message ? esc(message) + '<br>' : ''}<img class="bubble-img" src="${thumbSrc}" alt="Immagine allegata">`;
+  } else {
+    userBubble.textContent = message;
+  }
   msgContainer.appendChild(userBubble);
 
   // Add loading bubble
   const loadBubble = document.createElement('div');
   loadBubble.className = 'pers-chat-bubble bot loading';
-  loadBubble.textContent = 'Sto lavorando al template...';
+  loadBubble.textContent = hasImage ? 'Upload immagine e analisi...' : 'Sto lavorando al template...';
   msgContainer.appendChild(loadBubble);
   msgContainer.scrollTop = msgContainer.scrollHeight;
 
+  // Upload image first if present
+  let imageUrl = null;
+  if (hasImage) {
+    imageUrl = await _uploadTemplateFile();
+    removeTemplateUpload();
+    if (!imageUrl && !message) {
+      loadBubble.remove();
+      sendBtn.disabled = false;
+      return;
+    }
+    loadBubble.textContent = 'Sto lavorando al template...';
+  }
+
   try {
+    const payload = { message };
+    if (imageUrl) payload.image_url = imageUrl;
+
     const res = await fetch(`/api/templates/${_persCurrentId}/chat`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ message })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     loadBubble.remove();
