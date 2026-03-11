@@ -7622,10 +7622,8 @@ async function checkTemplateBeforeGen(platforms, callback) {
 
       const typeTpls = userTpls.filter(t => t.template_type === type);
       if (typeTpls.length === 0) {
-        // No templates — show "create or skip" modal
-        const result = await showNoTemplateModal(type);
-        if (result === 'create') { callback(undefined); return; } // user goes to Personalizzazione
-        // result === 'skip' — continue without template
+        // No custom templates — generate with built-in style (no popup)
+        continue;
       } else if (typeTpls.length === 1) {
         // Only one template — use it automatically
         selectedTemplates[type] = typeTpls[0].id;
