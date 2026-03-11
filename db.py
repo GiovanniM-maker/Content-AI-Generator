@@ -6,9 +6,24 @@ Every query is scoped by user_id for multi-tenant isolation.
 """
 
 import os
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timezone, timedelta
 
 from supabase import create_client, Client
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+CAROUSEL_BUCKET = "carousel-images"
+
+# Retention days per plan (for automatic cleanup)
+RETENTION_DAYS = {
+    "free": 1,       # 24 hours
+    "pro": 30,
+    "business": 90,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +51,112 @@ def _sb() -> Client:
 def is_configured() -> bool:
     """Check if Supabase environment variables are set."""
     return bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SERVICE_KEY"))
+
+
+# =========================================================================
+# STORAGE — Carousel images on Supabase Storage
+# =========================================================================
+
+def upload_carousel_image(user_id: str, session_id: str, slide_index: int, png_bytes: bytes) -> str:
+    """Upload a carousel PNG to Supabase Storage.
+
+    Path: {user_id}/{session_id}/slide_{index}.png
+    Returns the full public URL.
+    """
+    path = f"{user_id}/{session_id}/slide_{slide_index}.png"
+    _sb().storage.from_(CAROUSEL_BUCKET).upload(
+        path,
+        png_bytes,
+        file_options={"content-type": "image/png", "upsert": "true"},
+    )
+    url = _sb().storage.from_(CAROUSEL_BUCKET).get_public_url(path)
+    # Strip trailing '?' that Supabase sometimes appends
+    return url.rstrip("?")
+
+
+def upload_carousel_images_batch(user_id: str, session_id: str, png_list: list[bytes]) -> list[str]:
+    """Upload multiple carousel slide PNGs. Returns list of public URLs."""
+    urls = []
+    for i, png_bytes in enumerate(png_list):
+        url = upload_carousel_image(user_id, session_id, i + 1, png_bytes)
+        urls.append(url)
+    return urls
+
+
+def delete_carousel_images(user_id: str, session_id: str, num_slides: int = 20):
+    """Delete all carousel images for a session from Storage."""
+    paths = [f"{user_id}/{session_id}/slide_{i}.png" for i in range(1, num_slides + 1)]
+    try:
+        _sb().storage.from_(CAROUSEL_BUCKET).remove(paths)
+    except Exception:
+        pass  # Best-effort cleanup
+
+
+def delete_user_carousel_folder(user_id: str):
+    """Delete all carousel images for a user (used in retention cleanup)."""
+    try:
+        files = _sb().storage.from_(CAROUSEL_BUCKET).list(user_id)
+        if files:
+            # List all sub-folders (session IDs)
+            for folder in files:
+                folder_name = folder.get("name") or folder.get("id", "")
+                if folder_name:
+                    sub_path = f"{user_id}/{folder_name}"
+                    sub_files = _sb().storage.from_(CAROUSEL_BUCKET).list(sub_path)
+                    if sub_files:
+                        paths = [f"{sub_path}/{f['name']}" for f in sub_files if f.get("name")]
+                        if paths:
+                            _sb().storage.from_(CAROUSEL_BUCKET).remove(paths)
+    except Exception:
+        pass
+
+
+# =========================================================================
+# RETENTION — Expired session cleanup
+# =========================================================================
+
+def get_expired_sessions(plan: str, user_id: str) -> list[dict]:
+    """Get sessions older than the retention period for the given plan."""
+    days = RETENTION_DAYS.get(plan, 1)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    result = (
+        _sb().table("sessions")
+        .select("id, user_id, carousel_images")
+        .eq("user_id", user_id)
+        .lt("created_at", cutoff)
+        .execute()
+    )
+    return result.data or []
+
+
+def get_all_users_with_sessions() -> list[dict]:
+    """Get distinct user_ids that have sessions (for retention cleanup)."""
+    result = (
+        _sb().table("sessions")
+        .select("user_id")
+        .execute()
+    )
+    seen = set()
+    users = []
+    for row in result.data or []:
+        uid = row["user_id"]
+        if uid not in seen:
+            seen.add(uid)
+            users.append({"user_id": uid})
+    return users
+
+
+def delete_sessions_batch(session_ids: list[str]) -> int:
+    """Delete multiple sessions by ID. Returns count deleted."""
+    if not session_ids:
+        return 0
+    result = (
+        _sb().table("sessions")
+        .delete()
+        .in_("id", session_ids)
+        .execute()
+    )
+    return len(result.data) if result.data else 0
 
 
 # =========================================================================

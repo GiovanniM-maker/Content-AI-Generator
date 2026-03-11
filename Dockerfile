@@ -22,8 +22,8 @@ RUN playwright install chromium
 # Copy application code
 COPY . .
 
-# Create data directory (for any local fallback)
-RUN mkdir -p data static/carousel_output static/video_output
+# Create data directory (for any local fallback — carousel images go to Supabase Storage)
+RUN mkdir -p data static/video_output
 
 # Expose port
 EXPOSE 10000

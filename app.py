@@ -634,6 +634,61 @@ def _check_schedules():
         time.sleep(30)
 
 
+def _retention_cleanup():
+    """Background task: delete expired sessions + their carousel images from Storage.
+
+    Runs every 6 hours. Per-plan retention:
+      free  = 24 hours
+      pro   = 30 days
+      business = 90 days
+    """
+    # Wait 60s after startup before first run
+    time.sleep(60)
+    while True:
+        total_deleted = 0
+        try:
+            users = db.get_all_users_with_sessions()
+            for user_row in users:
+                uid = user_row["user_id"]
+                try:
+                    sub = db.get_subscription(uid)
+                    plan = (sub or {}).get("plan", "free")
+                    expired = db.get_expired_sessions(plan, uid)
+                    if not expired:
+                        continue
+
+                    session_ids = []
+                    for sess in expired:
+                        sid = sess["id"]
+                        session_ids.append(sid)
+                        # Delete carousel images from Storage
+                        carousel = sess.get("carousel_images") or {}
+                        if carousel:
+                            # Count how many images to try deleting
+                            max_slides = max(len(v) if isinstance(v, list) else 0 for v in carousel.values()) if carousel else 0
+                            if max_slides:
+                                db.delete_carousel_images(uid, sid, num_slides=max_slides)
+
+                    deleted = db.delete_sessions_batch(session_ids)
+                    total_deleted += deleted
+                except Exception:
+                    pass  # Skip this user, continue with next
+
+            if total_deleted:
+                try:
+                    _log_pipeline("info", f"Retention cleanup: deleted {total_deleted} expired sessions")
+                except Exception:
+                    pass
+        except Exception as e:
+            try:
+                _log_pipeline("error", f"Retention cleanup error: {e}")
+            except Exception:
+                pass
+
+        # Run every 6 hours
+        time.sleep(6 * 3600)
+
+
 # ---------------------------------------------------------------------------
 # Weekly status tracking
 # ---------------------------------------------------------------------------
@@ -2344,13 +2399,15 @@ def render_carousel_images():
     text = body.get("text", "")
     palette_idx = body.get("palette", 0)
     template_id = body.get("template_id")
+    session_id = body.get("session_id")  # for Storage path
     if not text.strip():
         return jsonify({"error": "No carousel text provided"}), 400
+
+    user_id = _get_user_id()
 
     try:
         if template_id:
             # Use custom user template for rendering
-            user_id = _get_user_id()
             tpl = db.get_user_template_by_id(user_id, template_id)
             if not tpl:
                 return jsonify({"error": "Template non trovato"}), 404
@@ -2365,8 +2422,19 @@ def render_carousel_images():
             from carousel_renderer import render_carousel_async
             result = render_carousel_async(text, palette_idx=palette_idx)
 
-        _log_pipeline("info", f"Rendered carousel: {len(result['slides'])} slides")
-        return jsonify(result)
+        slides_bytes = result.get("slides_bytes", [])
+        caption = result.get("caption", "")
+
+        if not slides_bytes:
+            return jsonify({"slides": [], "caption": caption, "error": result.get("error", "No slides")})
+
+        # Upload PNG bytes to Supabase Storage
+        # Use session_id if provided, otherwise generate a temporary one
+        storage_session_id = session_id or f"tmp_{uuid.uuid4().hex[:12]}"
+        slide_urls = db.upload_carousel_images_batch(user_id, storage_session_id, slides_bytes)
+
+        _log_pipeline("info", f"Rendered carousel: {len(slide_urls)} slides → Supabase Storage")
+        return jsonify({"slides": slide_urls, "caption": caption})
     except Exception as e:
         _log_pipeline("error", f"Carousel render error: {e}")
         return jsonify({"error": "Errore nel rendering del carosello. Riprova tra poco."}), 500
@@ -2418,6 +2486,19 @@ def get_preferences():
         "top_sources": source_top,
         "top_categories": category_top,
         "top_keywords": keyword_top,
+    })
+
+
+@app.route("/api/retention-info")
+def retention_info():
+    """Return retention policy info for the current user's plan."""
+    plan = _get_user_plan()
+    days = db.RETENTION_DAYS.get(plan, 1)
+    labels = {"free": "24 ore", "pro": "30 giorni", "business": "90 giorni"}
+    return jsonify({
+        "plan": plan,
+        "retention_days": days,
+        "retention_label": labels.get(plan, f"{days} giorni"),
     })
 
 
@@ -2828,8 +2909,13 @@ if __name__ == "__main__":
     # Start schedule checker background thread
     schedule_thread = threading.Thread(target=_check_schedules, daemon=True)
     schedule_thread.start()
+
+    # Start retention cleanup background thread
+    retention_thread = threading.Thread(target=_retention_cleanup, daemon=True)
+    retention_thread.start()
+
     try:
-        _log_pipeline("info", "App started — schedule checker running")
+        _log_pipeline("info", "App started — schedule checker + retention cleanup running")
     except Exception:
         pass
 

@@ -1,18 +1,17 @@
 """
-Carousel image renderer — generates 1080x1080 PNG slides from text.
-Uses Playwright (headless Chromium) to render HTML/CSS → PNG.
+Carousel image renderer — generates PNG slides from text.
+Uses Playwright (headless Chromium) to render HTML/CSS → PNG bytes.
+
+Images are returned as bytes and uploaded to Supabase Storage by the caller.
+No local disk writes happen here (critical for ephemeral hosting like Render).
 """
 
-import hashlib
 import re
 from pathlib import Path
 try:
     from playwright.sync_api import sync_playwright
 except ImportError:
-    sync_playwright = None  # Playwright not installed (e.g. production Docker)
-
-OUTPUT_DIR = Path(__file__).parent / "static" / "carousel_output"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    sync_playwright = None  # Playwright not installed
 
 FONT_PATH = Path(__file__).parent / "static" / "fonts" / "InterVariable.ttf"
 FONT_URI = FONT_PATH.as_uri()  # file:///...
@@ -352,21 +351,17 @@ def parse_carousel_text(text: str) -> tuple[list[str], str]:
 
 def render_carousel(text: str, palette_idx: int = 0) -> dict:
     """
-    Render carousel text into PNG images.
-    Returns: { 'slides': ['/static/carousel_output/xxx_1.png', ...], 'caption': '...' }
+    Render carousel text into PNG byte arrays (no disk writes).
+    Returns: { 'slides_bytes': [bytes, ...], 'caption': '...' }
     """
     slides_text, caption = parse_carousel_text(text)
     if not slides_text:
-        return {"slides": [], "caption": caption, "error": "No slides found"}
+        return {"slides_bytes": [], "caption": caption, "error": "No slides found"}
 
     palette = PALETTES[palette_idx % len(PALETTES)]
     total = len(slides_text)
 
-    # Generate a unique prefix for this carousel
-    content_hash = hashlib.md5(text.encode()).hexdigest()[:10]
-    prefix = f"carousel_{content_hash}"
-
-    image_paths = []
+    slides_bytes = []
 
     if sync_playwright is None:
         raise RuntimeError("Playwright non è installato. Installa con: pip install playwright && playwright install chromium")
@@ -388,14 +383,12 @@ def render_carousel(text: str, palette_idx: int = 0) -> dict:
             # Small wait for fonts to load
             page.wait_for_timeout(500)
 
-            filename = f"{prefix}_{i+1}.png"
-            filepath = OUTPUT_DIR / filename
-            page.screenshot(path=str(filepath), type="png")
-            image_paths.append(f"/static/carousel_output/{filename}")
+            png_bytes = page.screenshot(type="png")
+            slides_bytes.append(png_bytes)
 
         browser.close()
 
-    return {"slides": image_paths, "caption": caption}
+    return {"slides_bytes": slides_bytes, "caption": caption}
 
 
 def render_carousel_async(text: str, palette_idx: int = 0) -> dict:
@@ -422,26 +415,22 @@ def render_carousel_from_template(
     brand_handle: str = "",
 ) -> dict:
     """
-    Render carousel text into PNG images using a custom user template.
+    Render carousel text into PNG byte arrays using a custom user template.
     The template contains placeholders that get substituted per slide.
 
     Placeholders: {{SLIDE_CONTENT}}, {{SLIDE_NUM}}, {{TOTAL_SLIDES}},
                   {{BRAND_NAME}}, {{BRAND_HANDLE}}
 
-    Returns: { 'slides': ['/static/carousel_output/xxx_1.png', ...], 'caption': '...' }
+    Returns: { 'slides_bytes': [bytes, ...], 'caption': '...' }
     """
     slides_text, caption = parse_carousel_text(text)
     if not slides_text:
-        return {"slides": [], "caption": caption, "error": "No slides found"}
+        return {"slides_bytes": [], "caption": caption, "error": "No slides found"}
 
     total = len(slides_text)
     width, height = ASPECT_DIMENSIONS.get(aspect_ratio, (1080, 1080))
 
-    # Generate a unique prefix for this carousel
-    content_hash = hashlib.md5((text + template_html[:200]).encode()).hexdigest()[:10]
-    prefix = f"carousel_tpl_{content_hash}"
-
-    image_paths = []
+    slides_bytes = []
 
     if sync_playwright is None:
         raise RuntimeError("Playwright non è installato. Installa con: pip install playwright && playwright install chromium")
@@ -467,14 +456,12 @@ def render_carousel_from_template(
             page.set_content(html, wait_until="networkidle")
             page.wait_for_timeout(500)
 
-            filename = f"{prefix}_{i+1}.png"
-            filepath = OUTPUT_DIR / filename
-            page.screenshot(path=str(filepath), type="png")
-            image_paths.append(f"/static/carousel_output/{filename}")
+            png_bytes = page.screenshot(type="png")
+            slides_bytes.append(png_bytes)
 
         browser.close()
 
-    return {"slides": image_paths, "caption": caption}
+    return {"slides_bytes": slides_bytes, "caption": caption}
 
 
 def render_carousel_from_template_async(
