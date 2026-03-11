@@ -45,61 +45,217 @@ body {
   background: var(--bg);
   color: var(--text);
   display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
   position: relative;
 }
 
-/* Sidebar */
-.sidebar {
-  width: 220px;
-  min-width: 220px;
+/* ======== TOPBAR ======== */
+.topbar {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  min-height: 56px;
+  padding: 0 24px;
   background: rgba(255,255,255,0.03);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
   position: relative;
-  z-index: 2;
+  z-index: 10;
+  gap: 0;
 }
-.sidebar .logo {
-  padding: 0 20px 24px;
+.topbar-logo {
   font-family: 'Syne', sans-serif;
   font-size: 15px;
   font-weight: 700;
   color: var(--accent2);
   letter-spacing: -0.02em;
+  margin-right: 32px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.sidebar .logo span { color: var(--text2); font-family: 'Inter', sans-serif; font-weight: 400; font-size: 10px; display: block; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
-.nav-item {
-  padding: 12px 20px;
+.topbar-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.topbar-tab {
+  padding: 8px 20px;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text2);
+  border-radius: 8px;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
-  gap: 10px;
-  transition: all 0.2s;
-  border-left: 3px solid transparent;
+  gap: 7px;
+  user-select: none;
+  position: relative;
 }
-.nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
-.nav-item.active {
-  background: rgba(124,58,237,0.08);
+.topbar-tab:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.topbar-tab.active {
+  background: rgba(124,58,237,0.12);
   color: var(--accent2);
-  border-left-color: var(--accent);
 }
-.nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.topbar-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.topbar-usage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--glass);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+}
+.topbar-usage:hover { border-color: var(--borderglow); background: var(--glass2); }
+.topbar-usage .usage-num { color: var(--accent); font-weight: 700; }
+.topbar-usage .usage-num.warning { color: var(--orange); }
+.topbar-usage .usage-num.danger { color: var(--red); }
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  background: var(--glass);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.topbar-user:hover { border-color: var(--borderglow); }
+.topbar-user .user-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%; background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: #fff;
+  flex-shrink: 0;
+}
+.topbar-user .user-name {
+  font-size: 12px; font-weight: 500;
+  color: var(--text); white-space: nowrap;
+  max-width: 100px; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar-user .user-logout {
+  cursor: pointer; color: var(--text3);
+  font-size: 14px; transition: color 0.2s;
+  margin-left: 4px;
+}
+.topbar-user .user-logout:hover { color: var(--red); }
 
-/* Main */
+/* ======== MAIN ======== */
 .main {
   flex: 1;
   overflow-y: auto;
-  padding: 32px 40px;
+  padding: 28px 40px;
   position: relative;
   z-index: 1;
+}
+/* Tab content containers */
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeUp 0.3s ease; }
+/* Libreria sub-nav */
+.libreria-nav {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.libreria-nav-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.libreria-nav-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.libreria-nav-btn.active { background: rgba(124,58,237,0.12); color: var(--accent2); font-weight: 600; }
+/* Crea — Zone verticali */
+.crea-zona {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.crea-zona-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.crea-zona-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.crea-zona-desc {
+  font-size: 12px;
+  color: var(--text2);
+}
+.crea-zona-badge {
+  font-size: 10px;
+  color: var(--text3);
+  background: var(--bg2);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+/* Crea — Risultati */
+.crea-results-section {
+  margin-top: 8px;
+}
+.crea-results-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px 0;
+}
+.crea-results-divider::before,
+.crea-results-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.crea-results-divider span {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent2);
+  white-space: nowrap;
 }
 .screen { display: none; }
 .screen.active { display: block; animation: fadeUp 0.3s ease; }
@@ -418,6 +574,29 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Libreria search & filters */
+.libreria-search {
+  display: flex; gap: 10px; margin-bottom: 16px;
+}
+.libreria-search input {
+  flex: 1; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); font-size: 13px;
+}
+.libreria-search input::placeholder { color: var(--text3); }
+.libreria-search input:focus { border-color: var(--accent); outline: none; }
+.libreria-filters {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.libreria-filter-chip {
+  padding: 5px 12px; font-size: 12px; font-weight: 500; color: var(--text2);
+  background: var(--glass); border: 1px solid var(--border); border-radius: 20px;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.libreria-filter-chip:hover { border-color: var(--borderglow); }
+.libreria-filter-chip.active { background: rgba(124,58,237,0.12); color: var(--accent2); border-color: rgba(124,58,237,0.3); font-weight: 600; }
+.libreria-filter-divider { width: 1px; height: 20px; background: var(--border); align-self: center; margin: 0 4px; }
+.libreria-stats { font-size: 11px; color: var(--text3); margin-bottom: 12px; }
+
 /* Sessions */
 .session-card {
   background: rgba(255,255,255,0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -426,8 +605,13 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
   display: flex; justify-content: space-between; align-items: center;
 }
 .session-card:hover { border-color: var(--borderglow); box-shadow: 0 0 20px rgba(139,92,246,0.08); }
-.session-title { font-size: 14px; font-weight: 600; }
+.session-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-meta { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.session-platforms { display: flex; gap: 4px; margin-top: 6px; }
+.session-plat-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 500;
+  background: rgba(124,58,237,0.08); color: var(--accent2); border: 1px solid rgba(124,58,237,0.15);
+}
 
 /* Toast */
 .toast {
@@ -1269,37 +1453,7 @@ body::after {
 .legal-close:hover { color: var(--text); }
 
 /* User pill in sidebar */
-.sidebar-user {
-  padding: 12px 16px; margin: 0 8px 8px;
-  background: var(--glass);
-  border-radius: 10px; border: 1px solid var(--border);
-  display: flex; align-items: center; gap: 10px;
-}
-.sidebar-user .user-avatar {
-  width: 32px; height: 32px;
-  border-radius: 50%; background: var(--accent);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 600; color: #fff;
-  flex-shrink: 0;
-}
-.sidebar-user .user-info {
-  flex: 1; min-width: 0;
-}
-.sidebar-user .user-name {
-  font-size: 12px; font-weight: 600;
-  color: var(--text); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
-}
-.sidebar-user .user-plan {
-  font-size: 10px; color: var(--text3);
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
-.sidebar-user .user-logout {
-  cursor: pointer; color: var(--text3);
-  font-size: 16px; transition: color 0.2s;
-  flex-shrink: 0;
-}
-.sidebar-user .user-logout:hover { color: var(--red); }
+/* (sidebar-user styles moved to topbar-user above) */
 
 /* --- Pricing / Upgrade Modal --- */
 .pricing-overlay {
@@ -1390,31 +1544,18 @@ body::after {
 }
 
 /* --- Usage bar --- */
-.usage-bar-container {
-  margin: 8px 16px; padding: 8px 12px;
-  background: var(--glass); border-radius: 8px;
-  border: 1px solid var(--border);
-}
-.usage-bar-label {
-  font-size: 10px; color: var(--text3);
-  display: flex; justify-content: space-between; margin-bottom: 4px;
-}
-.usage-bar {
-  height: 4px; background: rgba(255,255,255,0.06);
-  border-radius: 2px; overflow: hidden;
-}
-.usage-bar-fill {
-  height: 100%; border-radius: 2px;
-  background: var(--accent);
-  transition: width 0.3s;
-}
-.usage-bar-fill.warning { background: var(--yellow); }
-.usage-bar-fill.danger { background: var(--red); }
+/* Usage bar (now in topbar) */
+.usage-bar-container { display: none; /* legacy, replaced by topbar-usage */ }
 .upgrade-link {
-  font-size: 10px; color: var(--accent); cursor: pointer;
-  text-align: center; margin-top: 4px;
+  font-size: 11px; color: var(--accent); cursor: pointer;
+  text-align: center; margin-top: 6px;
+  font-weight: 600;
+  padding: 4px 8px;
+  background: rgba(0,168,232,0.1);
+  border-radius: 6px;
+  transition: background 0.2s;
 }
-.upgrade-link:hover { text-decoration: underline; }
+.upgrade-link:hover { background: rgba(0,168,232,0.2); text-decoration: none; }
 </style>
 </head>
 <body>
@@ -1739,47 +1880,32 @@ body::after {
   </div>
 </div>
 
-<div class="sidebar">
-  <div class="logo">Content AI Generator<span>AI Content Pipeline</span></div>
-  <!-- User profile pill (filled by JS) -->
-  <div id="sidebar-user" class="sidebar-user" style="display:none;">
-    <div class="user-avatar" id="user-avatar">?</div>
-    <div class="user-info">
+<!-- ===== TOPBAR ===== -->
+<div class="topbar">
+  <div class="topbar-logo">Content AI Generator</div>
+  <div class="topbar-tabs">
+    <div class="topbar-tab active" data-tab="crea" onclick="showTab('crea')">
+      <span>✨</span> Crea
+    </div>
+    <div class="topbar-tab" data-tab="pianifica" onclick="showTab('pianifica')">
+      <span>📅</span> Pianifica
+    </div>
+    <div class="topbar-tab" data-tab="libreria" onclick="showTab('libreria')">
+      <span>📚</span> Libreria
+    </div>
+  </div>
+  <div class="topbar-right">
+    <!-- Usage counter (filled by JS) -->
+    <div id="topbar-usage" class="topbar-usage" style="display:none;" onclick="openPricing()" title="Generazioni rimaste">
+      <span id="usage-count" class="usage-num">—</span>
+      <span id="usage-label" style="font-weight:400;">gen</span>
+    </div>
+    <!-- User pill (filled by JS) -->
+    <div id="sidebar-user" class="topbar-user" style="display:none;">
+      <div class="user-avatar" id="user-avatar">?</div>
       <div class="user-name" id="user-name">...</div>
-      <div class="user-plan" id="user-plan">free</div>
+      <div class="user-logout" onclick="doLogout()" title="Esci">&#10005;</div>
     </div>
-    <div class="user-logout" onclick="doLogout()" title="Esci">&#10005;</div>
-  </div>
-  <!-- Usage bar (filled by JS) -->
-  <div id="usage-bar-container" class="usage-bar-container" style="display:none;">
-    <div class="usage-bar-label">
-      <span id="usage-label">Generazioni</span>
-      <span id="usage-count">0/10</span>
-    </div>
-    <div class="usage-bar"><div class="usage-bar-fill" id="usage-fill" style="width:0%"></div></div>
-    <div class="upgrade-link" id="upgrade-link" onclick="openPricing()" style="display:none;">Upgrade piano →</div>
-  </div>
-  <div class="nav-item active" data-screen="feed" onclick="showScreen('feed')">
-    <span class="nav-icon">&#9202;</span> Feed Refresh
-  </div>
-  <div class="nav-item" data-screen="topics" onclick="showScreen('topics')">
-    <span class="nav-icon">&#9733;</span> Topic Selection
-  </div>
-  <div class="nav-item" data-screen="generate" onclick="showScreen('generate')">
-    <span class="nav-icon">&#9998;</span> Content Generation
-  </div>
-  <div class="nav-item" data-screen="schedule" onclick="showScreen('schedule')">
-    <span class="nav-icon">&#128197;</span> Programmazione
-  </div>
-  <div class="nav-item" data-screen="history" onclick="showScreen('history')">
-    <span class="nav-icon">&#128203;</span> History
-  </div>
-  <div style="flex:1;"></div>
-  <div class="nav-item" data-screen="settings" onclick="showScreen('settings')" style="border-top:1px solid var(--border);margin-top:8px;padding-top:16px;">
-    <span class="nav-icon">&#9881;</span> Impostazioni
-  </div>
-  <div class="nav-item" data-screen="monitor" onclick="showScreen('monitor')">
-    <span class="nav-icon">&#128200;</span> Monitor
   </div>
 </div>
 
@@ -1788,141 +1914,175 @@ body::after {
   <!-- WEEKLY STATUS BANNER -->
   <div id="weekly-banner" class="weekly-banner" style="display:none;"></div>
 
-  <!-- SCREEN 1: Feed Refresh -->
-  <div id="screen-feed" class="screen active">
-    <h1>Feed Refresh</h1>
-    <p class="subtitle">Fetch articles from RSS feeds and score them with AI</p>
-    <button class="btn btn-primary" id="btn-fetch" onclick="fetchFeeds()">
-      Fetch &amp; Analyze Articles
-    </button>
-    <div id="fetch-log" class="log-box" style="display:none;"></div>
-  </div>
+  <!-- ========== TAB: CREA ========== -->
+  <div id="tab-crea" class="tab-content active">
 
-  <!-- SCREEN 2: Topic Selection -->
-  <div id="screen-topics" class="screen">
-    <h1>Topic Selection</h1>
-    <p class="subtitle">Seleziona la fonte, scegli le piattaforme, e genera le bozze.</p>
+    <!-- Hidden legacy screens for backward compat (used by showScreen calls) -->
+    <div id="screen-feed" class="screen" style="display:none!important;"></div>
+    <div id="screen-topics" class="screen" style="display:none!important;"></div>
+    <div id="screen-generate" class="screen" style="display:none!important;"></div>
 
-    <!-- Smart Brief -->
-    <div id="smart-brief" class="smart-brief" style="display:none;">
-      <div class="sb-header" onclick="toggleSmartBrief()">
-        <span>🧠 Smart Brief <span style="font-weight:400;font-size:11px;color:var(--text2);margin-left:6px;">— Suggerimenti AI basati sulle tue selezioni</span></span>
-        <span style="display:flex;align-items:center;gap:8px;">
-          <span class="sb-confidence" id="sb-confidence"></span>
-          <span id="sb-chevron" style="font-size:10px;color:var(--text2);transition:transform 0.2s;">▶</span>
-        </span>
+    <!-- ZONA 1 — Da dove partiamo? -->
+    <div class="crea-zona">
+      <div class="crea-zona-header">
+        <h2 class="crea-zona-title">📝 Da dove partiamo?</h2>
+        <p class="crea-zona-desc">Scegli una fonte per i tuoi contenuti</p>
       </div>
-      <div id="sb-body" class="sb-body" style="display:none;">
-        <div id="sb-suggestions"></div>
+
+      <!-- Source Mode Tabs — Web Search è default -->
+      <div class="source-mode-tabs">
+        <button class="source-mode-tab active" onclick="switchSourceMode('web_search', this)">🔍 Cerca sul web</button>
+        <button class="source-mode-tab" onclick="switchSourceMode('rss', this)">📡 Dai tuoi feed</button>
+        <button class="source-mode-tab" onclick="switchSourceMode('custom_text', this)">✍️ Scrivi tu</button>
+      </div>
+
+      <!-- Smart Brief (shows for RSS mode) -->
+      <div id="smart-brief" class="smart-brief" style="display:none;">
+        <div class="sb-header" onclick="toggleSmartBrief()">
+          <span>🧠 Smart Brief <span style="font-weight:400;font-size:11px;color:var(--text2);margin-left:6px;">— Suggerimenti AI basati sulle tue selezioni</span></span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            <span class="sb-confidence" id="sb-confidence"></span>
+            <span id="sb-chevron" style="font-size:10px;color:var(--text2);transition:transform 0.2s;">▶</span>
+          </span>
+        </div>
+        <div id="sb-body" class="sb-body" style="display:none;">
+          <div id="sb-suggestions"></div>
+        </div>
+      </div>
+
+      <!-- Web Search Mode Panel (DEFAULT — active) -->
+      <div id="source-panel-web_search" class="source-mode-panel active">
+        <div class="search-bar">
+          <input type="text" id="web-search-input" placeholder="Cerca un argomento... es. 'AI automazione PMI Italia 2026'" onkeydown="if(event.key==='Enter') webSearch()">
+          <button class="btn btn-primary" onclick="webSearch()" id="btn-web-search">🔍 Cerca</button>
+        </div>
+        <div id="web-search-results"></div>
+        <div id="web-search-error" style="display:none;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:12px 16px;margin-top:12px;font-size:12px;color:#e74c3c;"></div>
+        <div id="web-search-selection-bar" class="selection-bar" style="display:none;">
+          <div class="count"><strong id="ws-sel-count">0</strong>/3 selezionati</div>
+          <button class="btn btn-green btn-small" id="btn-ws-generate" onclick="generateFromSearchResults()" disabled>Genera Contenuti &#8250;</button>
+        </div>
+      </div>
+
+      <!-- RSS Mode Panel -->
+      <div id="source-panel-rss" class="source-mode-panel">
+        <div id="rss-feed-status" style="margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <button class="btn btn-secondary btn-small" id="btn-fetch" onclick="fetchFeeds()">🔄 Aggiorna feed</button>
+            <span id="rss-last-refresh" style="font-size:11px;color:var(--text2);"></span>
+          </div>
+          <div id="fetch-log" class="log-box" style="display:none;max-height:200px;"></div>
+        </div>
+        <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+          <label style="font-size:12px;color:var(--text2);">Min score:</label>
+          <select id="score-filter" onchange="loadTopics()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+            <option value="5" selected>5+</option>
+            <option value="6">6+</option>
+            <option value="7">7+</option>
+            <option value="8">8+</option>
+          </select>
+          <span id="topics-count" style="font-size:11px;color:var(--text2);"></span>
+        </div>
+        <div id="selection-bar" class="selection-bar" style="display:none;">
+          <div class="count"><strong id="sel-count">0</strong>/3 selezionati</div>
+          <button class="btn btn-green btn-small" id="btn-next" onclick="generateAll()" disabled>Genera Contenuti &#8250;</button>
+        </div>
+        <div id="topics-list"></div>
+        <div id="rss-empty-state" style="display:none;text-align:center;padding:40px 20px;">
+          <div style="font-size:32px;margin-bottom:12px;">📡</div>
+          <p style="font-size:14px;color:var(--text2);margin-bottom:8px;">Non hai ancora articoli dai feed RSS</p>
+          <p style="font-size:12px;color:var(--text3);margin-bottom:16px;">Configura i tuoi feed nelle Impostazioni, oppure prova la ricerca web!</p>
+          <button class="btn btn-secondary btn-small" onclick="switchSourceMode('web_search', document.querySelector('.source-mode-tab'))">🔍 Prova la ricerca web</button>
+        </div>
+      </div>
+
+      <!-- Custom Text Mode Panel -->
+      <div id="source-panel-custom_text" class="source-mode-panel">
+        <textarea id="custom-text-input" class="custom-text-area" placeholder="Incolla un articolo, un appunto, o scrivi direttamente il tema che vuoi trattare...&#10;&#10;Esempio: L'intelligenza artificiale sta rivoluzionando il modo in cui le PMI gestiscono il customer service..."></textarea>
+        <div class="custom-text-actions">
+          <button class="btn btn-green" onclick="generateFromCustomText()">Genera Contenuti &#8250;</button>
+          <span style="font-size:11px;color:var(--text2);" id="custom-text-count">0 caratteri</span>
+        </div>
       </div>
     </div>
 
-    <!-- Source Mode Tabs -->
-    <div class="source-mode-tabs">
-      <button class="source-mode-tab active" onclick="switchSourceMode('rss', this)">📡 Feed RSS</button>
-      <button class="source-mode-tab" onclick="switchSourceMode('custom_text', this)">✍️ Testo Personalizzato</button>
-      <button class="source-mode-tab" onclick="switchSourceMode('web_search', this)">🔍 Ricerca Web</button>
+    <!-- ZONA 2 — La tua voce -->
+    <div class="crea-zona">
+      <div class="crea-zona-header">
+        <h2 class="crea-zona-title">💬 La tua voce</h2>
+        <span class="crea-zona-badge">facoltativo</span>
+      </div>
+      <textarea id="global-opinion" placeholder="Aggiungi la tua angolazione, es: 'Secondo me questa tecnologia cambierà il modo in cui le PMI...'" style="width:100%;min-height:60px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;resize:vertical;font-family:inherit;"></textarea>
+      <p style="font-size:11px;color:var(--text3);margin-top:6px;">Basta 1-2 frasi. L'AI farà il resto.</p>
     </div>
 
-    <!-- Platform selector -->
-    <div class="platform-selector" id="platform-selector">
-      <span style="font-size:12px;color:var(--text2);margin-right:4px;">Piattaforme:</span>
-      <label class="platform-check checked" onclick="togglePlatform(this)">
-        <input type="checkbox" value="linkedin" checked>
-        <span class="pc-dot">&#10003;</span>
-        <span class="pc-icon">💼</span> LinkedIn
-      </label>
-      <label class="platform-check checked" onclick="togglePlatform(this)">
-        <input type="checkbox" value="instagram" checked>
-        <span class="pc-dot">&#10003;</span>
-        <span class="pc-icon">📸</span> Instagram
-      </label>
-      <label class="platform-check checked" onclick="togglePlatform(this)">
-        <input type="checkbox" value="newsletter" checked>
-        <span class="pc-dot">&#10003;</span>
-        <span class="pc-icon">📧</span> Newsletter
-      </label>
-      <label class="platform-check" onclick="togglePlatform(this)">
-        <input type="checkbox" value="twitter">
-        <span class="pc-dot">&#10003;</span>
-        <span class="pc-icon">🐦</span> Twitter/X
-      </label>
-      <label class="platform-check" onclick="togglePlatform(this)">
-        <input type="checkbox" value="video_script">
-        <span class="pc-dot">&#10003;</span>
-        <span class="pc-icon">🎬</span> Video Script
-      </label>
-    </div>
-
-    <!-- RSS Mode Panel -->
-    <div id="source-panel-rss" class="source-mode-panel active">
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.5;">
-        💡 <strong style="color:var(--text1);">Come funziona:</strong> Seleziona fino a 3 articoli dal feed RSS. Ogni articolo verrà usato come base per generare contenuti sulle piattaforme selezionate.
+    <!-- ZONA 3 — Dove pubblicare -->
+    <div class="crea-zona">
+      <div class="crea-zona-header">
+        <h2 class="crea-zona-title">📢 Dove pubblicare</h2>
       </div>
-      <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
-        <label style="font-size:12px;color:var(--text2);">Min score:</label>
-        <select id="score-filter" onchange="loadTopics()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">
-          <option value="3">3+</option>
-          <option value="4">4+</option>
-          <option value="5" selected>5+</option>
-          <option value="6">6+</option>
-          <option value="7">7+</option>
-          <option value="8">8+</option>
-        </select>
-        <span id="topics-count" style="font-size:11px;color:var(--text2);"></span>
-      </div>
-      <div id="selection-bar" class="selection-bar" style="display:none;">
-        <div class="count"><strong id="sel-count">0</strong>/3 selezionati</div>
-        <button class="btn btn-green btn-small" id="btn-next" onclick="generateAll()" disabled>Genera Bozze &#8250;</button>
-      </div>
-      <div id="topics-list"></div>
-    </div>
-
-    <!-- Custom Text Mode Panel -->
-    <div id="source-panel-custom_text" class="source-mode-panel">
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.5;">
-        ✍️ <strong style="color:var(--text1);">Come funziona:</strong> Scrivi un'idea, incolla un testo, o descrivi un argomento. L'AI genererà contenuti per le piattaforme selezionate basandosi sul tuo input.
-      </div>
-      <textarea id="custom-text-input" class="custom-text-area" placeholder="Scrivi qui il tuo testo, idea, o argomento...&#10;&#10;Esempio: L'intelligenza artificiale sta rivoluzionando il modo in cui le PMI gestiscono il customer service. Con i nuovi chatbot basati su LLM, anche le piccole aziende possono offrire supporto 24/7..."></textarea>
-      <div class="custom-text-actions">
-        <button class="btn btn-green" onclick="generateFromCustomText()">Genera Contenuti &#8250;</button>
-        <span style="font-size:11px;color:var(--text2);" id="custom-text-count">0 caratteri</span>
+      <div class="platform-selector" id="platform-selector">
+        <label class="platform-check checked" onclick="togglePlatform(this)">
+          <input type="checkbox" value="linkedin" checked>
+          <span class="pc-dot">&#10003;</span>
+          <span class="pc-icon">💼</span> LinkedIn
+        </label>
+        <label class="platform-check checked" onclick="togglePlatform(this)">
+          <input type="checkbox" value="instagram" checked>
+          <span class="pc-dot">&#10003;</span>
+          <span class="pc-icon">📸</span> Instagram
+        </label>
+        <label class="platform-check checked" onclick="togglePlatform(this)">
+          <input type="checkbox" value="newsletter" checked>
+          <span class="pc-dot">&#10003;</span>
+          <span class="pc-icon">📧</span> Newsletter
+        </label>
+        <label class="platform-check" onclick="togglePlatform(this)">
+          <input type="checkbox" value="twitter">
+          <span class="pc-dot">&#10003;</span>
+          <span class="pc-icon">🐦</span> Twitter/X
+        </label>
+        <label class="platform-check" onclick="togglePlatform(this)">
+          <input type="checkbox" value="video_script">
+          <span class="pc-dot">&#10003;</span>
+          <span class="pc-icon">🎬</span> Video Script
+        </label>
       </div>
     </div>
 
-    <!-- Web Search Mode Panel -->
-    <div id="source-panel-web_search" class="source-mode-panel">
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.5;">
-        🔍 <strong style="color:var(--text1);">Come funziona:</strong> Cerca un argomento sul web, seleziona fino a 3 risultati rilevanti, e genera contenuti basati su di essi. I risultati vengono valutati con un punteggio AI (1-10).
+    <!-- RISULTATI — Generazione inline -->
+    <div id="crea-results" class="crea-results-section" style="display:none;">
+      <div class="crea-results-divider">
+        <span>✨ Contenuti generati</span>
       </div>
-      <div class="search-bar">
-        <input type="text" id="web-search-input" placeholder="Cerca un argomento... es. 'AI automazione PMI Italia 2026'" onkeydown="if(event.key==='Enter') webSearch()">
-        <button class="btn btn-primary" onclick="webSearch()" id="btn-web-search">Cerca</button>
+      <div id="gen-progress" class="gen-progress" style="display:none;">
+        <div class="status" id="gen-status">Generazione in corso...</div>
+        <div class="bar-track"><div class="bar-fill" id="gen-bar" style="width:0%"></div></div>
       </div>
-      <div id="web-search-results"></div>
-      <div id="web-search-error" style="display:none;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:12px 16px;margin-top:12px;font-size:12px;color:#e74c3c;"></div>
-      <div id="web-search-selection-bar" class="selection-bar" style="display:none;">
-        <div class="count"><strong id="ws-sel-count">0</strong>/3 selezionati</div>
-        <button class="btn btn-green btn-small" id="btn-ws-generate" onclick="generateFromSearchResults()" disabled>Genera Bozze &#8250;</button>
+      <div id="gen-results"></div>
+      <div id="crea-results-actions" style="display:none;text-align:center;padding:20px 0;display:flex;gap:12px;justify-content:center;">
+        <button class="btn btn-secondary" onclick="resetCreaFlow()">🔄 Ricomincia</button>
+        <button class="btn btn-secondary" onclick="showTab('libreria')">📚 Vai alla Libreria</button>
       </div>
     </div>
-  </div>
 
-  <!-- SCREEN 3: Content Generation -->
-  <div id="screen-generate" class="screen">
-    <h1>Content Generation</h1>
-    <p class="subtitle" id="gen-subtitle">Select topics first</p>
-    <div id="gen-progress" class="gen-progress" style="display:none;">
-      <div class="status" id="gen-status">Generating...</div>
-      <div class="bar-track"><div class="bar-fill" id="gen-bar" style="width:0%"></div></div>
-    </div>
-    <div id="gen-results" style="display:none;"></div>
-  </div>
+  </div><!-- /tab-crea -->
+
+  <!-- ========== TAB: PIANIFICA ========== -->
+  <div id="tab-pianifica" class="tab-content">
 
   <!-- SCREEN 4: Schedule -->
-  <div id="screen-schedule" class="screen">
-    <h1>Programmazione</h1>
-    <p class="subtitle">Contenuti programmati per la pubblicazione</p>
+  <div id="screen-schedule" class="screen active">
+    <h1>📅 Pianifica</h1>
+    <p class="subtitle">Organizza quando pubblicare i tuoi contenuti</p>
+
+    <!-- Info banner -->
+    <div style="background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.15);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:18px;">💡</span>
+      <p style="font-size:12px;color:var(--text2);line-height:1.5;"><strong style="color:var(--text);">Ti avvisiamo noi</strong> — riceverai una notifica quando è ora di pubblicare. La pubblicazione la fai tu, con un semplice copia e incolla.</p>
+    </div>
 
     <!-- Calendar/List toggle -->
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -1941,18 +2101,52 @@ body::after {
     <div id="schedule-list" style="display:none;"></div>
   </div>
 
+  </div><!-- /tab-pianifica -->
+
+  <!-- ========== TAB: LIBRERIA ========== -->
+  <div id="tab-libreria" class="tab-content">
+
+  <!-- Sub-navigation Libreria -->
+  <div class="libreria-nav">
+    <button class="libreria-nav-btn active" data-section="history" onclick="showLibreriaSection('history', this)">📋 Cronologia</button>
+    <button class="libreria-nav-btn" data-section="settings" onclick="showLibreriaSection('settings', this)">⚙️ Impostazioni</button>
+    <button class="libreria-nav-btn" data-section="monitor" onclick="showLibreriaSection('monitor', this)">🔧 Avanzate</button>
+  </div>
+
   <!-- SCREEN 5: History -->
-  <div id="screen-history" class="screen">
-    <h1>Cronologia</h1>
-    <p class="subtitle">Tutti i contenuti generati nelle sessioni precedenti</p>
+  <div id="screen-history" class="screen active">
+    <h1>📋 Cronologia</h1>
+    <p class="subtitle">Tutti i contenuti generati — cerca, filtra, riutilizza</p>
+
+    <!-- Ricerca -->
+    <div class="libreria-search">
+      <input type="text" id="history-search" placeholder="🔍 Cerca nei tuoi contenuti..." oninput="filterHistory()">
+    </div>
+
+    <!-- Filtri piattaforma + stato -->
+    <div class="libreria-filters" id="history-filters">
+      <span class="libreria-filter-chip active" data-filter="all" onclick="toggleHistoryFilter(this)">Tutte</span>
+      <span class="libreria-filter-chip" data-filter="linkedin" onclick="toggleHistoryFilter(this)">💼 LinkedIn</span>
+      <span class="libreria-filter-chip" data-filter="instagram" onclick="toggleHistoryFilter(this)">📸 Instagram</span>
+      <span class="libreria-filter-chip" data-filter="twitter" onclick="toggleHistoryFilter(this)">🐦 Twitter</span>
+      <span class="libreria-filter-chip" data-filter="newsletter" onclick="toggleHistoryFilter(this)">📧 Newsletter</span>
+      <span class="libreria-filter-chip" data-filter="video_script" onclick="toggleHistoryFilter(this)">🎬 Video</span>
+      <span class="libreria-filter-divider"></span>
+      <span class="libreria-filter-chip active" data-status="all" onclick="toggleHistoryStatus(this)">Tutti</span>
+      <span class="libreria-filter-chip" data-status="approved" onclick="toggleHistoryStatus(this)">✅ Approvati</span>
+      <span class="libreria-filter-chip" data-status="draft" onclick="toggleHistoryStatus(this)">📝 Bozze</span>
+      <span class="libreria-filter-chip" data-status="scheduled" onclick="toggleHistoryStatus(this)">📅 Programmati</span>
+    </div>
+
+    <div class="libreria-stats" id="history-stats"></div>
     <div id="history-list"></div>
     <div id="history-detail" style="display:none;"></div>
   </div>
 
-  <!-- SCREEN 6: Settings (RSS Management) -->
+  <!-- SCREEN 6: Settings -->
   <div id="screen-settings" class="screen">
-    <h1>Impostazioni</h1>
-    <p class="subtitle">Gestisci i feed RSS per categoria e le notifiche</p>
+    <h1>⚙️ Impostazioni</h1>
+    <p class="subtitle">Feed RSS, notifiche e preferenze del tuo account</p>
 
     <!-- ntfy test -->
     <div style="margin-bottom:24px;">
@@ -1975,17 +2169,17 @@ body::after {
 
   <!-- SCREEN 7: Monitor -->
   <div id="screen-monitor" class="screen">
-    <h1>Monitor</h1>
-    <p class="subtitle">Sistema, prompt versioning, feed health, pipeline log</p>
+    <h1>🔧 Avanzate</h1>
+    <p class="subtitle">Diagnostica, versioning prompt, salute feed, log pipeline</p>
 
     <div id="monitor-health" class="monitor-section"></div>
 
     <div class="monitor-tabs">
-      <button class="monitor-tab active" onclick="switchMonitorTab('prompts', this)">Prompt Changelog</button>
-      <button class="monitor-tab" onclick="switchMonitorTab('pipeline', this)">Pipeline Log</button>
-      <button class="monitor-tab" onclick="switchMonitorTab('feeds', this)">Feed Health</button>
-      <button class="monitor-tab" onclick="switchMonitorTab('feedback', this)">Feedback Memory</button>
-      <button class="monitor-tab" onclick="switchMonitorTab('prefs', this)">Selection Preferences</button>
+      <button class="monitor-tab active" onclick="switchMonitorTab('prompts', this)">Storico Prompt</button>
+      <button class="monitor-tab" onclick="switchMonitorTab('pipeline', this)">Log Pipeline</button>
+      <button class="monitor-tab" onclick="switchMonitorTab('feeds', this)">Salute Feed</button>
+      <button class="monitor-tab" onclick="switchMonitorTab('feedback', this)">Memoria Feedback</button>
+      <button class="monitor-tab" onclick="switchMonitorTab('prefs', this)">Preferenze Selezione</button>
     </div>
 
     <div id="monitor-tab-prompts" class="monitor-panel"></div>
@@ -1994,6 +2188,8 @@ body::after {
     <div id="monitor-tab-feedback" class="monitor-panel" style="display:none;"></div>
     <div id="monitor-tab-prefs" class="monitor-panel" style="display:none;"></div>
   </div>
+
+  </div><!-- /tab-libreria -->
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2279,12 +2475,8 @@ function updateSidebarUser(user) {
   if (!el) return;
   el.style.display = 'flex';
   const name = user.full_name || user.email || '?';
-  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-name').textContent = name.split(' ')[0] || name; // Show first name only in topbar
   document.getElementById('user-avatar').textContent = (name[0] || '?').toUpperCase();
-  const plan = user.plan || 'free';
-  const planEl = document.getElementById('user-plan');
-  planEl.textContent = plan;
-  planEl.style.color = plan === 'business' ? 'var(--accent)' : plan === 'pro' ? 'var(--green)' : 'var(--text3)';
   // Load usage after updating user
   loadUsageBar();
 }
@@ -2465,28 +2657,73 @@ async function loadUsageBar() {
     if (!resp.ok) return;
     const data = await resp.json();
     const usage = data.usage || {};
-    const container = document.getElementById('usage-bar-container');
-    if (!container) return;
+
+    // Store plan info for platform gating
+    currentUserPlan = data.subscription?.plan || usage.plan || 'free';
+    const planDetails = data.plan_details || {};
+    allowedPlatforms = planDetails.platforms || ['linkedin', 'newsletter'];
+    applyPlatformLocks();
+
+    const topbarUsage = document.getElementById('topbar-usage');
+    if (!topbarUsage) return;
+
     const limit = usage.limit;
     const used = usage.used || 0;
+    const countEl = document.getElementById('usage-count');
+    const labelEl = document.getElementById('usage-label');
+
     if (limit === -1) {
-      // Unlimited — hide bar
-      container.style.display = 'none';
+      // Business — unlimited
+      topbarUsage.style.display = 'flex';
+      countEl.textContent = '∞';
+      countEl.className = 'usage-num';
+      labelEl.textContent = 'illimitato';
       return;
     }
-    container.style.display = 'block';
-    document.getElementById('usage-count').textContent = used + '/' + limit;
+
+    topbarUsage.style.display = 'flex';
+    const remaining = Math.max(0, limit - used);
+    countEl.textContent = remaining + '/' + limit;
+    labelEl.textContent = 'gen';
     const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-    const fill = document.getElementById('usage-fill');
-    fill.style.width = pct + '%';
-    fill.className = 'usage-bar-fill';
-    if (pct >= 90) fill.classList.add('danger');
-    else if (pct >= 70) fill.classList.add('warning');
-    // Show upgrade link if nearing limit
-    const upgradeLink = document.getElementById('upgrade-link');
-    if (pct >= 50) upgradeLink.style.display = 'block';
-    else upgradeLink.style.display = 'none';
+    countEl.className = 'usage-num';
+    if (pct >= 90) countEl.classList.add('danger');
+    else if (pct >= 70) countEl.classList.add('warning');
   } catch (e) { /* silently fail */ }
+}
+
+function applyPlatformLocks() {
+  document.querySelectorAll('.platform-check').forEach(label => {
+    const cb = label.querySelector('input');
+    if (!cb) return;
+    const platform = cb.value;
+    const isAllowed = allowedPlatforms.includes(platform);
+    const existingLock = label.querySelector('.platform-lock');
+
+    if (!isAllowed) {
+      // Lock this platform
+      cb.checked = false;
+      label.classList.remove('checked');
+      label.classList.add('locked');
+      label.style.opacity = '0.5';
+      label.style.cursor = 'not-allowed';
+      if (!existingLock) {
+        const lockBadge = document.createElement('span');
+        lockBadge.className = 'platform-lock';
+        lockBadge.textContent = '🔒 Pro';
+        lockBadge.style.cssText = 'font-size:9px;background:var(--accent);color:#000;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:600;';
+        label.appendChild(lockBadge);
+      }
+      // Remove from selectedPlatforms if locked
+      selectedPlatforms = selectedPlatforms.filter(p => p !== platform);
+    } else {
+      // Unlock
+      label.classList.remove('locked');
+      label.style.opacity = '';
+      label.style.cursor = '';
+      if (existingLock) existingLock.remove();
+    }
+  });
 }
 
 // Handle payment success/cancel URL params
@@ -2521,8 +2758,10 @@ let selectedArticles = [];
 let currentSession = null;
 let currentContent = {};
 let selectedPlatforms = ['linkedin', 'instagram', 'newsletter'];
-let currentSourceMode = 'rss';  // 'rss', 'custom_text', 'web_search'
+let currentSourceMode = 'web_search';  // 'web_search' (default), 'rss', 'custom_text'
 let webSearchSelectedResults = [];  // selected web search results
+let currentUserPlan = 'free';  // Track user plan for platform gating
+let allowedPlatforms = ['linkedin', 'newsletter'];  // Updated after login
 
 // ---- Source Mode ----
 function switchSourceMode(mode, btn) {
@@ -2532,6 +2771,8 @@ function switchSourceMode(mode, btn) {
   document.querySelectorAll('.source-mode-panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById('source-panel-' + mode);
   if (panel) panel.classList.add('active');
+  // Load topics when switching to RSS mode
+  if (mode === 'rss') { loadTopics(); checkSmartBriefVisibility(); }
 }
 
 // Custom text char counter
@@ -2556,7 +2797,8 @@ async function generateFromCustomText() {
     custom_text: text,
     score: 10,
   };
-  selectedArticles = [{ article: customArticle, opinion: '' }];
+  const globalOpinion = (document.getElementById('global-opinion')?.value || '').trim();
+  selectedArticles = [{ article: customArticle, opinion: globalOpinion }];
   showScreen('generate');
   generateAll();
 }
@@ -2644,27 +2886,139 @@ function updateWebSearchBar() {
 
 function generateFromSearchResults() {
   if (!webSearchSelectedResults.length) { toast('Seleziona almeno un risultato'); return; }
+  const globalOpinion = (document.getElementById('global-opinion')?.value || '').trim();
   selectedArticles = webSearchSelectedResults.map(art => ({
     article: { ...art, source_mode: 'web_search' },
-    opinion: '',
+    opinion: globalOpinion,
   }));
   showScreen('generate');
   generateAll();
 }
 
 // ---- Navigation ----
+// ========================================================
+// NAVIGATION — Tab + Screen system
+// ========================================================
+
+// Map screens to their parent tabs
+const _screenTabMap = {
+  feed: 'crea', topics: 'crea', generate: 'crea',
+  schedule: 'pianifica',
+  history: 'libreria', settings: 'libreria', monitor: 'libreria'
+};
+
+function showTab(tabName) {
+  // Switch top-level tab
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.topbar-tab').forEach(t => t.classList.remove('active'));
+  const tabEl = document.getElementById('tab-' + tabName);
+  if (tabEl) tabEl.classList.add('active');
+  const tabBtn = document.querySelector(`.topbar-tab[data-tab="${tabName}"]`);
+  if (tabBtn) tabBtn.classList.add('active');
+
+  // Load data for the tab
+  if (tabName === 'crea') {
+    // Show the first active sub-screen (or topics if none is active)
+    const activeScreen = tabEl.querySelector('.screen.active');
+    if (activeScreen) {
+      const screenName = activeScreen.id.replace('screen-', '');
+      if (screenName === 'topics') { loadTopics(); checkSmartBriefVisibility(); }
+    }
+  }
+  if (tabName === 'pianifica') loadSchedule();
+  if (tabName === 'libreria') {
+    const activeScreen = tabEl.querySelector('.screen.active');
+    if (activeScreen) {
+      const screenName = activeScreen.id.replace('screen-', '');
+      if (screenName === 'history') loadHistory();
+      if (screenName === 'monitor') loadMonitor();
+      if (screenName === 'settings') loadSettings();
+    }
+  }
+  loadWeeklyBanner();
+}
+
 function showScreen(name) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('screen-' + name).classList.add('active');
-  const navItem = document.querySelector(`.nav-item[data-screen="${name}"]`);
-  if (navItem) navItem.classList.add('active');
-  if (name === 'topics') { loadTopics(); checkSmartBriefVisibility(); }
+  // Special case: 'generate' now shows results inline in tab Crea
+  if (name === 'generate' || name === 'feed' || name === 'topics') {
+    // Ensure tab Crea is active
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.topbar-tab').forEach(t => t.classList.remove('active'));
+    const tabEl = document.getElementById('tab-crea');
+    if (tabEl) tabEl.classList.add('active');
+    const tabBtn = document.querySelector('.topbar-tab[data-tab="crea"]');
+    if (tabBtn) tabBtn.classList.add('active');
+    if (name === 'generate') {
+      // Show the inline results section
+      const resultsSection = document.getElementById('crea-results');
+      if (resultsSection) {
+        resultsSection.style.display = 'block';
+        // Scroll to results
+        setTimeout(() => resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+      }
+    }
+    if (name === 'topics') { loadTopics(); checkSmartBriefVisibility(); }
+    loadWeeklyBanner();
+    return;
+  }
+
+  // Normal screen handling for non-Crea screens
+  const tabName = _screenTabMap[name] || 'crea';
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.topbar-tab').forEach(t => t.classList.remove('active'));
+  const tabEl = document.getElementById('tab-' + tabName);
+  if (tabEl) tabEl.classList.add('active');
+  const tabBtn = document.querySelector(`.topbar-tab[data-tab="${tabName}"]`);
+  if (tabBtn) tabBtn.classList.add('active');
+
+  // Switch screen within the tab
+  if (tabEl) {
+    tabEl.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  }
+  const screenEl = document.getElementById('screen-' + name);
+  if (screenEl) screenEl.classList.add('active');
+
+  // Update libreria sub-nav if needed
+  if (tabName === 'libreria') {
+    document.querySelectorAll('.libreria-nav-btn').forEach(b => b.classList.remove('active'));
+    const navBtn = document.querySelector(`.libreria-nav-btn[data-section="${name}"]`);
+    if (navBtn) navBtn.classList.add('active');
+  }
+
+  // Load screen-specific data
   if (name === 'history') loadHistory();
   if (name === 'monitor') loadMonitor();
   if (name === 'settings') loadSettings();
   if (name === 'schedule') loadSchedule();
   loadWeeklyBanner();
+}
+
+function showLibreriaSection(section, btn) {
+  // Switch sub-nav active state
+  document.querySelectorAll('.libreria-nav-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Switch screens within libreria tab
+  const libTab = document.getElementById('tab-libreria');
+  if (libTab) libTab.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + section).classList.add('active');
+  // Load data
+  if (section === 'history') loadHistory();
+  if (section === 'monitor') loadMonitor();
+  if (section === 'settings') loadSettings();
+}
+
+function resetCreaFlow() {
+  // Hide results section
+  const resultsSection = document.getElementById('crea-results');
+  if (resultsSection) resultsSection.style.display = 'none';
+  const genResults = document.getElementById('gen-results');
+  if (genResults) { genResults.innerHTML = ''; genResults.style.display = 'none'; }
+  const genProgress = document.getElementById('gen-progress');
+  if (genProgress) genProgress.style.display = 'none';
+  const creaActions = document.getElementById('crea-results-actions');
+  if (creaActions) creaActions.style.display = 'none';
+  // Scroll to top
+  document.querySelector('.main').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function toast(msg) {
@@ -2708,6 +3062,11 @@ async function loadWeeklyBanner() {
 
 // ---- Platform Selector ----
 function togglePlatform(label) {
+  // Prevent toggling locked platforms
+  if (label.classList.contains('locked')) {
+    toast('🔒 Piattaforma disponibile con il piano Pro. Passa a Pro per sbloccarla!');
+    return;
+  }
   const cb = label.querySelector('input');
   cb.checked = !cb.checked;
   label.classList.toggle('checked', cb.checked);
@@ -2731,15 +3090,15 @@ function fetchFeeds() {
 
   fetch('/api/feeds/fetch', { method: 'POST' })
     .then(r => {
-      if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'Failed'); });
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'Errore'); });
       const es = new EventSource('/api/feeds/progress');
       es.onmessage = (e) => {
         const data = JSON.parse(e.data);
         if (data.done) {
           es.close();
           btn.disabled = false;
-          log.innerHTML += '<span class="log-done">\n=== Completed ===</span>';
-          log.innerHTML += '\n\n<span style="color:var(--accent2);cursor:pointer;text-decoration:underline;" onclick="showScreen(\'topics\')">Go to Topic Selection &#8250;</span>';
+          log.innerHTML += '<span class="log-done">\n=== Completato ===</span>';
+          log.innerHTML += '\n\n<span style="color:var(--accent2);cursor:pointer;text-decoration:underline;" onclick="loadTopics()">Articoli caricati — seleziona quelli che ti interessano &#8595;</span>';
           log.scrollTop = log.scrollHeight;
           return;
         }
@@ -2753,7 +3112,7 @@ function fetchFeeds() {
       es.onerror = () => { es.close(); btn.disabled = false; };
     })
     .catch(err => {
-      log.innerHTML += `<span class="log-err">Error: ${esc(err.message)}</span>\n`;
+      log.innerHTML += `<span class="log-err">Errore: ${esc(err.message)}</span>\n`;
       btn.disabled = false;
     });
 }
@@ -2842,16 +3201,16 @@ let allArticles = [];
 
 function loadTopics() {
   const list = document.getElementById('topics-list');
-  list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading articles...</div>';
+  list.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento articoli...</div>';
 
   const minScore = document.getElementById('score-filter').value;
   fetch('/api/articles?min_score=' + minScore)
     .then(r => r.json())
     .then(articles => {
       allArticles = articles;
-      document.getElementById('topics-count').textContent = articles.length + ' articles';
+      document.getElementById('topics-count').textContent = articles.length + ' articoli';
       if (!articles.length) {
-        list.innerHTML = '<div class="empty-state">No articles with score ' + minScore + '+. Try lowering the filter or run Feed Refresh.</div>';
+        list.innerHTML = '<div class="empty-state">Nessun articolo con punteggio ' + minScore + '+. Prova ad abbassare il filtro o aggiorna i feed.</div>';
         document.getElementById('selection-bar').style.display = 'none';
         return;
       }
@@ -2885,7 +3244,7 @@ function renderArticleList(articles) {
           <div class="article-title">${esc(a.title)}</div>
           <div class="article-meta">
             <span>${esc(a.source)}</span>
-            <span>Score: ${a.score}/10${boostHtml}</span>
+            <span>Rilevanza: ${a.score}/10${boostHtml}</span>
           </div>
           <div class="article-summary">${esc(a.summary || '')}</div>
         </div>
@@ -2904,7 +3263,7 @@ function toggleArticle(el, encoded) {
     selectedArticles.splice(idx, 1);
   } else {
     if (selectedArticles.length >= 3) {
-      toast('Max 3 topics! Deselect one first.');
+      toast('Massimo 3 articoli! Deselezionane uno prima.');
       return;
     }
     selectedArticles.push({ article, opinion: '' });
@@ -2933,6 +3292,10 @@ async function generateAll() {
     return;
   }
 
+  // Get global opinion and inject into selectedArticles
+  const globalOpinion = (document.getElementById('global-opinion')?.value || '').trim();
+  selectedArticles.forEach(s => { s.opinion = globalOpinion; });
+
   // Track selections
   fetch('/api/track-selections', {
     method: 'POST',
@@ -2941,8 +3304,7 @@ async function generateAll() {
   });
 
   showScreen('generate');
-  const sub = document.getElementById('gen-subtitle');
-  sub.textContent = selectedArticles.map(s => s.article.title).join(' | ');
+  // gen-subtitle removed in new layout; title info is already visible in source zone
 
   const progress = document.getElementById('gen-progress');
   const results = document.getElementById('gen-results');
@@ -2977,11 +3339,11 @@ async function generateAll() {
           fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ article: s.article, opinion: '', format: 'linkedin' }),
+            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'linkedin' }),
           }).then(safeJson).then(d => {
             if (d.error) throw new Error(d.error);
             currentContent['linkedin_' + i] = d.content;
-            updateProgress(`LinkedIn #${i+1} done`);
+            updateProgress(`LinkedIn #${i+1} completato`);
           })
         );
       });
@@ -2994,11 +3356,11 @@ async function generateAll() {
           fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ article: s.article, opinion: '', format: 'instagram', variant: 0 }),
+            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'instagram', variant: 0 }),
           }).then(safeJson).then(d => {
             if (d.error) throw new Error(d.error);
             currentContent['instagram_' + i] = d.content;
-            updateProgress(`IG Carosello #${i+1} done`);
+            updateProgress(`IG Carosello #${i+1} completato`);
           })
         );
       });
@@ -3011,11 +3373,11 @@ async function generateAll() {
           fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ article: s.article, opinion: '', format: 'twitter' }),
+            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'twitter' }),
           }).then(safeJson).then(d => {
             if (d.error) throw new Error(d.error);
             currentContent['twitter_' + i] = d.content;
-            updateProgress(`Twitter #${i+1} done`);
+            updateProgress(`Twitter #${i+1} completato`);
           })
         );
       });
@@ -3028,11 +3390,11 @@ async function generateAll() {
           fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ article: s.article, opinion: '', format: 'video_script' }),
+            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'video_script' }),
           }).then(safeJson).then(d => {
             if (d.error) throw new Error(d.error);
             currentContent['video_script_' + i] = d.content;
-            updateProgress(`Video Script #${i+1} done`);
+            updateProgress(`Video Script #${i+1} completato`);
           })
         );
       });
@@ -3049,7 +3411,7 @@ async function generateAll() {
       }).then(safeJson);
       if (nlResp.error) throw new Error(nlResp.error);
       currentContent['newsletter'] = nlResp.content;
-      updateProgress('Newsletter done');
+      updateProgress('Newsletter completata');
     }
 
     // Save session
@@ -3059,7 +3421,7 @@ async function generateAll() {
       body: JSON.stringify({
         article: { title: selectedArticles.map(s => s.article.title).join(' | '), category: 'Weekly' },
         topics: selectedArticles,
-        opinion: '',
+        opinion: globalOpinion,
         content: currentContent,
         carousel_images: carouselImages,
         platforms: platforms,
@@ -3071,7 +3433,7 @@ async function generateAll() {
   } catch (err) {
     progress.style.display = 'none';
     results.style.display = 'block';
-    results.innerHTML = `<div class="empty-state">Error: ${esc(err.message)}</div>`;
+    results.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
   }
 }
 
@@ -3087,12 +3449,17 @@ function renderGeneratedContent() {
   document.getElementById('gen-progress').style.display = 'none';
   const results = document.getElementById('gen-results');
   results.style.display = 'block';
+  // Show post-generation action buttons
+  const creaActions = document.getElementById('crea-results-actions');
+  if (creaActions) creaActions.style.display = 'flex';
+  // Refresh usage counter after generation
+  loadUsageBar();
   const platforms = getSelectedPlatforms();
   let html = '';
 
   // LinkedIn section
   if (platforms.includes('linkedin')) {
-    html += '<div class="content-section"><h2>💼 LinkedIn Posts</h2><div class="content-grid">';
+    html += '<div class="content-section"><h2>💼 LinkedIn</h2><div class="content-grid">';
     selectedArticles.forEach((s, i) => {
       const text = currentContent['linkedin_' + i] || '';
       const words = text.split(/\s+/).filter(Boolean).length;
@@ -3101,7 +3468,7 @@ function renderGeneratedContent() {
       <div class="content-col ${isApproved ? 'approved' : ''}" data-format="linkedin" data-idx="${i}">
         <h3>Post ${i+1}</h3>
         <div class="col-sub">${esc(s.article.title)}</div>
-        <div class="col-meta">${words} words &middot; ${text.length} chars</div>
+        <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
         <textarea id="content-linkedin_${i}" oninput="updateCount('linkedin_${i}')">${esc(text)}</textarea>
         <div class="opinion-inline">
           <label>🎯 La tua opinione su questo tema (opzionale):</label>
@@ -3110,7 +3477,7 @@ function renderGeneratedContent() {
         </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-          <button class="btn btn-primary btn-small" onclick="copyC('linkedin_${i}')">Copy</button>
+          <button class="btn btn-primary btn-small" onclick="copyC('linkedin_${i}')">Copia</button>
           <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('linkedin_${i}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
         <div class="feedback-row" id="fb-linkedin_${i}">
@@ -3141,14 +3508,14 @@ function renderGeneratedContent() {
       <div class="content-col ${isApproved ? 'approved' : ''}" data-format="instagram" data-idx="${i}">
         <h3>Carosello ${i+1}</h3>
         <div class="col-sub">${esc(s.article.title)}</div>
-        <div class="col-meta">${slides.length} slides</div>
+        <div class="col-meta">${slides.length} slide</div>
         <div class="img-carousel" id="${imgViewerId}">
           <div class="rendering-overlay" id="render-loading-${key}">
             <div class="spinner"></div>
             <span>Rendering immagini...</span>
           </div>
         </div>
-        ${caption ? `<div class="carousel-caption-box"><strong>Caption:</strong> ${esc(caption)}</div>` : ''}
+        ${caption ? `<div class="carousel-caption-box"><strong>Didascalia:</strong> ${esc(caption)}</div>` : ''}
         <div class="carousel-actions">
           <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
           <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${i})">🎨 Rigenera img</button>
@@ -3161,7 +3528,7 @@ function renderGeneratedContent() {
         </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copy testo</button>
+          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia testo</button>
           <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
         <div class="feedback-row" id="fb-${key}">
@@ -3187,7 +3554,7 @@ function renderGeneratedContent() {
       const text = currentContent[key] || '';
       const isThread = text.includes('---TWEET---');
       const tweetCount = isThread ? text.split('---TWEET---').filter(t => t.trim()).length : 1;
-      const charCount = isThread ? '' : `${text.length}/280 chars`;
+      const charCount = isThread ? '' : `${text.length}/280 car.`;
       const meta = isThread ? `Thread: ${tweetCount} tweet` : charCount;
       const isApproved = approvedItems[key];
       html += `
@@ -3203,7 +3570,7 @@ function renderGeneratedContent() {
         </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copy</button>
+          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
           <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
         <div class="feedback-row" id="fb-${key}">
@@ -3243,7 +3610,7 @@ function renderGeneratedContent() {
         </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copy</button>
+          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
           <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
         <div class="feedback-row" id="fb-${key}">
@@ -3270,11 +3637,11 @@ function renderGeneratedContent() {
     <div class="content-grid single">
       <div class="content-col newsletter ${nlApproved ? 'approved' : ''}" data-format="newsletter" data-idx="0">
         <h3>Newsletter</h3>
-        <div class="col-meta">${nlWords} words &middot; ${nlText.length} chars</div>
+        <div class="col-meta">${nlWords} parole &middot; ${nlText.length} caratteri</div>
         <textarea id="content-newsletter" oninput="updateCount('newsletter')">${esc(nlText)}</textarea>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-          <button class="btn btn-primary btn-small" onclick="copyC('newsletter')">Copy</button>
+          <button class="btn btn-primary btn-small" onclick="copyC('newsletter')">Copia</button>
           <button class="btn btn-small" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:none;" onclick="openNlPreview()">👁 Anteprima HTML</button>
           <button class="btn btn-approve btn-small ${nlApproved ? 'approved' : ''}" onclick="approveContent('newsletter', this)">${nlApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
@@ -3455,7 +3822,7 @@ function integrateOpinion(format, idx) {
     saveSessionContent();
   })
   .catch(err => {
-    toast('Error: ' + err.message);
+    toast('Errore: ' + err.message);
     intBtn.disabled = false; intBtn.textContent = 'Integra opinione';
   });
 }
@@ -3496,7 +3863,7 @@ function updateCount(key) {
 
 function copyC(key) {
   const ta = document.getElementById('content-' + key);
-  navigator.clipboard.writeText(ta.value).then(() => toast('Copied!'));
+  navigator.clipboard.writeText(ta.value).then(() => toast('Copiato!'));
 }
 
 function regenerateSingle(format, idx) {
@@ -3536,7 +3903,7 @@ function regenerateSingle(format, idx) {
     saveSessionContent();
   })
   .catch(err => {
-    toast('Error: ' + err.message);
+    toast('Errore: ' + err.message);
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Rigenera'; }
   });
 }
@@ -3568,7 +3935,7 @@ function regenerateNewsletter() {
     saveSessionContent();
   })
   .catch(err => {
-    toast('Error: ' + err.message);
+    toast('Errore: ' + err.message);
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Rigenera'; }
   });
 }
@@ -3624,7 +3991,7 @@ function scheduleContent(platform, idx) {
     dtInput.value = '';
     loadWeeklyBanner();
   })
-  .catch(err => toast('Error: ' + err.message));
+  .catch(err => toast('Errore: ' + err.message));
 }
 
 // ---- Bulk Scheduling ----
@@ -3677,7 +4044,7 @@ async function bulkSchedule() {
     dtInput.value = '';
     loadWeeklyBanner();
   } catch(err) {
-    toast('Error: ' + err.message);
+    toast('Errore: ' + err.message);
   }
 }
 
@@ -3722,8 +4089,8 @@ async function loadSchedule() {
   } catch (err) {
     const list = document.getElementById('schedule-list');
     const cal = document.getElementById('schedule-calendar');
-    list.innerHTML = `<div class="empty-state">Error: ${esc(err.message)}</div>`;
-    cal.innerHTML = `<div class="empty-state">Error: ${esc(err.message)}</div>`;
+    list.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
+    cal.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
   }
 }
 
@@ -3888,41 +4255,125 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ---- Screen 5: History ----
+let _historySessions = []; // cache for filtering
+let _historyPlatFilter = 'all';
+let _historyStatusFilter = 'all';
+
 function loadHistory() {
   const list = document.getElementById('history-list');
   const detail = document.getElementById('history-detail');
   detail.style.display = 'none';
   list.style.display = 'block';
-  list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  list.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento...</div>';
 
   fetch('/api/sessions')
     .then(r => r.json())
     .then(sessions => {
-      if (!sessions.length) {
-        list.innerHTML = '<div class="empty-state">Nessuna sessione ancora. Genera dei contenuti per vederli qui!</div>';
-        return;
-      }
-      const platIcons = { linkedin:'💼', instagram:'📸', twitter:'🐦', video_script:'🎬', newsletter:'📧' };
-      let html = '';
-      sessions.forEach(s => {
-        const date = new Date(s.created_at).toLocaleDateString('it-IT', {
-          day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
-        const icons = (s.platforms || []).map(p => platIcons[p] || p).join(' ');
-        const contentKeys = Object.keys(s.content || {});
-        const totalPieces = contentKeys.length;
-        html += `
-        <div class="session-card" onclick='openSession("${s.id}")'>
-          <div style="flex:1;min-width:0;">
-            <div class="session-title">${esc(s.article?.title || 'Senza titolo')}</div>
-            <div class="session-meta">${date} &middot; ${icons || 'tutte'} &middot; ${totalPieces} contenuti</div>
-          </div>
-          <button class="btn btn-secondary btn-small" onclick="event.stopPropagation();deleteSession('${s.id}','${esc(s.article?.title || 'Senza titolo').replace(/'/g, "\\'")}')" style="color:var(--red);flex-shrink:0;" title="Elimina sessione">🗑</button>
-          <span style="color:var(--text2);font-size:18px;">&#8250;</span>
-        </div>`;
-      });
-      list.innerHTML = html;
+      _historySessions = sessions;
+      renderHistoryList();
     });
+}
+
+function renderHistoryList() {
+  const list = document.getElementById('history-list');
+  const statsEl = document.getElementById('history-stats');
+  const searchTerm = (document.getElementById('history-search')?.value || '').toLowerCase().trim();
+
+  let filtered = _historySessions;
+
+  // Filter by search
+  if (searchTerm) {
+    filtered = filtered.filter(s => {
+      const title = (s.article?.title || '').toLowerCase();
+      const contentText = Object.values(s.content || {}).join(' ').toLowerCase();
+      return title.includes(searchTerm) || contentText.includes(searchTerm);
+    });
+  }
+
+  // Filter by platform
+  if (_historyPlatFilter !== 'all') {
+    filtered = filtered.filter(s => (s.platforms || []).includes(_historyPlatFilter));
+  }
+
+  // Filter by status (uses approved_contents and scheduled presence)
+  if (_historyStatusFilter !== 'all') {
+    filtered = filtered.filter(s => {
+      const approved = s.approved_contents || {};
+      const hasApproved = Object.values(approved).some(v => v === true);
+      const hasScheduled = s.has_scheduled || false;
+      if (_historyStatusFilter === 'approved') return hasApproved;
+      if (_historyStatusFilter === 'scheduled') return hasScheduled;
+      if (_historyStatusFilter === 'draft') return !hasApproved && !hasScheduled;
+      return true;
+    });
+  }
+
+  if (!_historySessions.length) {
+    list.innerHTML = `<div class="empty-state" style="padding:60px 20px;">
+      <div style="font-size:32px;margin-bottom:12px;">📚</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;">Nessun contenuto ancora</div>
+      <div style="margin-bottom:16px;">Genera il tuo primo contenuto per vederlo qui!</div>
+      <button class="btn btn-primary btn-small" onclick="showTab('crea')">✨ Vai a Crea</button>
+    </div>`;
+    if (statsEl) statsEl.textContent = '';
+    return;
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state">Nessun risultato con i filtri selezionati</div>';
+    if (statsEl) statsEl.textContent = `0 di ${_historySessions.length} sessioni`;
+    return;
+  }
+
+  if (statsEl) {
+    statsEl.textContent = filtered.length === _historySessions.length
+      ? `${filtered.length} sessioni`
+      : `${filtered.length} di ${_historySessions.length} sessioni`;
+  }
+
+  const platLabels = { linkedin:'LinkedIn', instagram:'Instagram', twitter:'Twitter', video_script:'Video', newsletter:'Newsletter' };
+  let html = '';
+  filtered.forEach(s => {
+    const date = new Date(s.created_at).toLocaleDateString('it-IT', {
+      day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const contentKeys = Object.keys(s.content || {});
+    const totalPieces = contentKeys.length;
+    const platBadges = (s.platforms || []).map(p =>
+      `<span class="session-plat-badge">${platLabels[p] || p}</span>`
+    ).join('');
+    html += `
+    <div class="session-card" onclick='openSession("${s.id}")'>
+      <div style="flex:1;min-width:0;">
+        <div class="session-title">${esc(s.article?.title || 'Senza titolo')}</div>
+        <div class="session-meta">${date} · ${totalPieces} contenuti</div>
+        <div class="session-platforms">${platBadges || '<span class="session-plat-badge">tutte</span>'}</div>
+      </div>
+      <button class="btn btn-secondary btn-small" onclick="event.stopPropagation();deleteSession('${s.id}','${esc(s.article?.title || 'Senza titolo').replace(/'/g, "\\'")}')" style="color:var(--red);flex-shrink:0;" title="Elimina sessione">🗑</button>
+      <span style="color:var(--text2);font-size:18px;">&#8250;</span>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function filterHistory() { renderHistoryList(); }
+
+function toggleHistoryFilter(chip) {
+  const filter = chip.dataset.filter;
+  _historyPlatFilter = filter;
+  // Update active states for platform chips only
+  document.querySelectorAll('#history-filters .libreria-filter-chip[data-filter]').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  renderHistoryList();
+}
+
+function toggleHistoryStatus(chip) {
+  const status = chip.dataset.status;
+  _historyStatusFilter = status;
+  // Update active states for status chips only
+  document.querySelectorAll('#history-filters .libreria-filter-chip[data-status]').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  renderHistoryList();
 }
 
 function openSession(sessionId) {
@@ -3954,7 +4405,7 @@ function openSession(sessionId) {
         // LinkedIn
         const hasLinkedin = Object.keys(content).some(k => k.startsWith('linkedin_'));
         if (hasLinkedin) {
-          html += '<div class="content-section"><h2>💼 LinkedIn Posts</h2><div class="content-grid">';
+          html += '<div class="content-section"><h2>💼 LinkedIn</h2><div class="content-grid">';
           s.topics.forEach((t, i) => {
             const text = content['linkedin_' + i] || '';
             if (!text) return;
@@ -3966,7 +4417,7 @@ function openSession(sessionId) {
               <div class="col-meta">${words} words</div>
               <textarea readonly>${esc(text)}</textarea>
               <div class="col-actions">
-                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copied!'))">Copy</button>
+                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copiato!'))">Copia</button>
               </div>
             </div>`;
           });
@@ -3986,7 +4437,7 @@ function openSession(sessionId) {
               <div class="col-sub">${esc(t.article?.title || '')}</div>
               <textarea readonly style="min-height:160px;">${esc(text)}</textarea>
               <div class="col-actions">
-                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copied!'))">Copy</button>
+                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copiato!'))">Copia</button>
               </div>
             </div>`;
           });
@@ -4006,7 +4457,7 @@ function openSession(sessionId) {
               <div class="col-sub">${esc(t.article?.title || '')}</div>
               <textarea readonly style="min-height:140px;">${esc(text)}</textarea>
               <div class="col-actions">
-                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copied!'))">Copy</button>
+                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copiato!'))">Copia</button>
               </div>
             </div>`;
           });
@@ -4026,7 +4477,7 @@ function openSession(sessionId) {
               <div class="col-sub">${esc(t.article?.title || '')}</div>
               <textarea readonly style="min-height:200px;">${esc(text)}</textarea>
               <div class="col-actions">
-                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copied!'))">Copy</button>
+                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copiato!'))">Copia</button>
               </div>
             </div>`;
           });
@@ -4042,7 +4493,7 @@ function openSession(sessionId) {
               <h3>Newsletter Settimanale</h3>
               <textarea readonly>${esc(nlText)}</textarea>
               <div class="col-actions">
-                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copied!'))">Copy</button>
+                <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copiato!'))">Copia</button>
               </div>
             </div>
           </div></div>`;
@@ -4073,12 +4524,12 @@ let feedsConfig = {};
 
 async function loadSettings() {
   const container = document.getElementById('settings-feeds');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  container.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento...</div>';
   try {
     feedsConfig = await fetch('/api/feeds/config').then(r => r.json());
     renderFeedsSettings();
   } catch(err) {
-    container.innerHTML = `<div class="empty-state">Error: ${esc(err.message)}</div>`;
+    container.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
   }
 }
 
@@ -4142,7 +4593,7 @@ async function addFeed(category) {
     feedsConfig = resp.config;
     renderFeedsSettings();
     toast('Feed aggiunto!');
-  } catch(err) { toast('Error: ' + err.message); }
+  } catch(err) { toast('Errore: ' + err.message); }
 }
 
 async function removeFeed(category, url) {
@@ -4155,7 +4606,7 @@ async function removeFeed(category, url) {
     feedsConfig = resp.config;
     renderFeedsSettings();
     toast('Feed rimosso');
-  } catch(err) { toast('Error: ' + err.message); }
+  } catch(err) { toast('Errore: ' + err.message); }
 }
 
 async function addCategory() {
@@ -4173,7 +4624,7 @@ async function addCategory() {
     renderFeedsSettings();
     input.value = '';
     toast('Categoria aggiunta!');
-  } catch(err) { toast('Error: ' + err.message); }
+  } catch(err) { toast('Errore: ' + err.message); }
 }
 
 async function removeCategory(name) {
@@ -4187,7 +4638,7 @@ async function removeCategory(name) {
     feedsConfig = resp.config;
     renderFeedsSettings();
     toast('Categoria eliminata');
-  } catch(err) { toast('Error: ' + err.message); }
+  } catch(err) { toast('Errore: ' + err.message); }
 }
 
 async function testNtfy() {
@@ -4195,7 +4646,7 @@ async function testNtfy() {
     const resp = await fetch('/api/ntfy/test', { method: 'POST' }).then(safeJson);
     if (resp.error) { toast('Errore: ' + resp.error); return; }
     toast('🔔 Notifica di test inviata!');
-  } catch(err) { toast('Error: ' + err.message); }
+  } catch(err) { toast('Errore: ' + err.message); }
 }
 
 // ---- Screen 7: Monitor ----
@@ -4215,7 +4666,7 @@ function switchMonitorTab(tab, btn) {
 
 async function loadMonitor() {
   const healthEl = document.getElementById('monitor-health');
-  healthEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  healthEl.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento...</div>';
 
   try {
     const [healthRes, promptsRes, pipelineRes, feedbackRes, prefsRes] = await Promise.all([
@@ -4239,7 +4690,7 @@ async function loadMonitor() {
     renderFeedbackMemory();
     renderPreferences();
   } catch(err) {
-    healthEl.innerHTML = `<div class="empty-state">Error: ${esc(err.message)}</div>`;
+    healthEl.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
   }
 }
 
@@ -4319,7 +4770,7 @@ function renderDiffHtml(diffLines) {
 function renderPromptChangelog() {
   const panel = document.getElementById('monitor-tab-prompts');
   if (!monitorPrompts.length) {
-    panel.innerHTML = '<div class="empty-state">No prompt versions yet.</div>';
+    panel.innerHTML = '<div class="empty-state">Nessuna versione prompt ancora.</div>';
     return;
   }
 
@@ -4456,7 +4907,7 @@ function renderPipelineLog() {
   });
   html += '</div>';
   const filtered = pipelineFilter === 'all' ? monitorPipeline : monitorPipeline.filter(e => e.level === pipelineFilter);
-  if (!filtered.length) { panel.innerHTML = html + '<div class="empty-state">No events.</div>'; return; }
+  if (!filtered.length) { panel.innerHTML = html + '<div class="empty-state">Nessun evento.</div>'; return; }
   filtered.slice(0, 100).forEach(e => {
     const time = new Date(e.created_at).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     html += `<div class="pl-entry"><span class="pl-level ${e.level}">${e.level}</span><span class="pl-msg">${esc(e.message)}</span><span class="pl-time">${time}</span></div>`;
@@ -4469,7 +4920,7 @@ function filterPipeline(level) { pipelineFilter = level; renderPipelineLog(); }
 function renderFeedHealth() {
   const panel = document.getElementById('monitor-tab-feeds');
   const feeds = monitorHealth.feed_health || {};
-  if (!Object.keys(feeds).length) { panel.innerHTML = '<div class="empty-state">No feed data yet.</div>'; return; }
+  if (!Object.keys(feeds).length) { panel.innerHTML = '<div class="empty-state">Nessun dato feed ancora.</div>'; return; }
   let html = '';
   for (const [url, data] of Object.entries(feeds)) {
     const statusMap = { info: 'ok', warning: 'warning', error: 'error', unknown: 'unknown' };
@@ -4600,7 +5051,7 @@ async function enrichPromptFromFeedback(fmt) {
     });
     const data = await safeJson(resp);
     if (data.error) throw new Error(data.error);
-    toast(`Prompt "${fmt}" arricchito con ${data.feedback_used} commenti! Verifica in Prompt Changelog.`);
+    toast(`Prompt "${fmt}" arricchito con ${data.feedback_used} commenti! Verifica nello Storico Prompt.`);
     // Refresh monitor data to show new prompt version
     btn.innerHTML = '✅ Arricchito!';
     setTimeout(async () => {
