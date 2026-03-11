@@ -2033,7 +2033,7 @@ body::after {
 
     <!-- AUTH CARD (shown when user clicks CTA) -->
     <div class="auth-card-float" id="auth-card-float">
-      <button class="auth-float-back" onclick="window.location.href='/';">&larr; Torna ai piani</button>
+      <button class="auth-float-back" onclick="window.location.href='/#pricing';">&larr; Torna ai piani</button>
       <div class="auth-card">
         <div class="logo-auth">Content AI Generator<span>AI Content Pipeline</span></div>
 
@@ -2682,7 +2682,9 @@ window.fetch = function(url, options = {}) {
       tryRefreshToken().then(ok => {
         if (!ok) {
           clearAuthData();
-          showAuthOverlay();
+          // Only show overlay if not already visible (avoid overriding register form)
+          const overlay = document.getElementById('auth-overlay');
+          if (overlay && overlay.classList.contains('hidden')) showAuthOverlay();
         }
       });
     }
@@ -2712,12 +2714,17 @@ async function tryRefreshToken() {
 }
 
 // Auth UI
-function showAuthOverlay() {
+function showAuthOverlay(mode) {
   const overlay = document.getElementById('auth-overlay');
   if (overlay) {
     overlay.style.display = 'flex';
     overlay.classList.remove('hidden');
   }
+  // Always show auth form directly — skip internal landing
+  const lw = document.getElementById('landing-wrapper');
+  if (lw) lw.classList.add('show-auth');
+  // Show specified form, default to login
+  showAuthForm(mode || 'login');
   // Hide sidebar user
   const userEl = document.getElementById('sidebar-user');
   if (userEl) userEl.style.display = 'none';
@@ -3088,9 +3095,7 @@ async function doLogout() {
   isAdmin = false;
   document.body.classList.remove('is-admin');
   showAuthOverlay();
-  // Show login form directly (not the landing page)
   showAuthForm('login');
-  document.getElementById('landing-wrapper').classList.add('show-auth');
 }
 
 function onAuthSuccess(user) {
@@ -3158,9 +3163,7 @@ function initAuth() {
   if (!data || !data.access_token) {
     if (params.has('login') || params.has('register')) {
       const mode = params.has('login') ? 'login' : 'register';
-      showAuthOverlay();
-      showAuthForm(mode);
-      document.getElementById('landing-wrapper').classList.add('show-auth');
+      showAuthOverlay(mode);
       window.history.replaceState({}, '', '/app');
       return;
     }
@@ -6713,7 +6716,6 @@ function esc(s) {
 
 // Initial load
 initAuth();
-loadWeeklyBanner();
 checkPaymentStatus();
 </script>
 </body>
