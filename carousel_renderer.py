@@ -401,3 +401,88 @@ def render_carousel(text: str, palette_idx: int = 0) -> dict:
 def render_carousel_async(text: str, palette_idx: int = 0) -> dict:
     """Wrapper that can be called from Flask thread."""
     return render_carousel(text, palette_idx)
+
+
+# ---------------------------------------------------------------------------
+# Custom template rendering
+# ---------------------------------------------------------------------------
+
+ASPECT_DIMENSIONS = {
+    "1:1": (1080, 1080),
+    "4:3": (1080, 810),
+    "3:4": (1080, 1440),
+}
+
+
+def render_carousel_from_template(
+    text: str,
+    template_html: str,
+    aspect_ratio: str = "1:1",
+    brand_name: str = "",
+    brand_handle: str = "",
+) -> dict:
+    """
+    Render carousel text into PNG images using a custom user template.
+    The template contains placeholders that get substituted per slide.
+
+    Placeholders: {{SLIDE_CONTENT}}, {{SLIDE_NUM}}, {{TOTAL_SLIDES}},
+                  {{BRAND_NAME}}, {{BRAND_HANDLE}}
+
+    Returns: { 'slides': ['/static/carousel_output/xxx_1.png', ...], 'caption': '...' }
+    """
+    slides_text, caption = parse_carousel_text(text)
+    if not slides_text:
+        return {"slides": [], "caption": caption, "error": "No slides found"}
+
+    total = len(slides_text)
+    width, height = ASPECT_DIMENSIONS.get(aspect_ratio, (1080, 1080))
+
+    # Generate a unique prefix for this carousel
+    content_hash = hashlib.md5((text + template_html[:200]).encode()).hexdigest()[:10]
+    prefix = f"carousel_tpl_{content_hash}"
+
+    image_paths = []
+
+    if sync_playwright is None:
+        raise RuntimeError("Playwright non è installato. Installa con: pip install playwright && playwright install chromium")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+
+        for i, slide_text in enumerate(slides_text):
+            # Process markdown bold in slide text
+            processed_text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', slide_text)
+            # Convert newlines to <br> for HTML rendering
+            processed_text = processed_text.replace('\n', '<br>')
+
+            # Substitute placeholders in template
+            html = template_html
+            html = html.replace("{{SLIDE_CONTENT}}", processed_text)
+            html = html.replace("{{SLIDE_NUM}}", str(i + 1))
+            html = html.replace("{{TOTAL_SLIDES}}", str(total))
+            html = html.replace("{{BRAND_NAME}}", _html_esc(brand_name))
+            html = html.replace("{{BRAND_HANDLE}}", _html_esc(brand_handle))
+
+            page.set_content(html, wait_until="networkidle")
+            page.wait_for_timeout(500)
+
+            filename = f"{prefix}_{i+1}.png"
+            filepath = OUTPUT_DIR / filename
+            page.screenshot(path=str(filepath), type="png")
+            image_paths.append(f"/static/carousel_output/{filename}")
+
+        browser.close()
+
+    return {"slides": image_paths, "caption": caption}
+
+
+def render_carousel_from_template_async(
+    text: str,
+    template_html: str,
+    aspect_ratio: str = "1:1",
+    brand_name: str = "",
+    brand_handle: str = "",
+) -> dict:
+    """Wrapper that can be called from Flask thread."""
+    return render_carousel_from_template(text, template_html, aspect_ratio, brand_name, brand_handle)

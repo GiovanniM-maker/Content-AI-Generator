@@ -849,6 +849,120 @@ def upsert_subscription(user_id: str, data: dict):
 
 
 # =========================================================================
+# USER TEMPLATES
+# =========================================================================
+
+def get_user_templates(user_id: str, template_type: str = None) -> list[dict]:
+    """Get all templates for a user, optionally filtered by type."""
+    q = _sb().table("user_templates").select("*").eq("user_id", user_id)
+    if template_type:
+        q = q.eq("template_type", template_type)
+    result = q.order("created_at", desc=True).execute()
+    return result.data or []
+
+
+def get_user_template_by_id(user_id: str, template_id: str) -> dict | None:
+    """Get a single template by ID (with ownership check)."""
+    result = (
+        _sb().table("user_templates")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("id", template_id)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def count_user_templates(user_id: str) -> int:
+    """Count total templates for a user (for plan limit check)."""
+    result = (
+        _sb().table("user_templates")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return result.count or 0
+
+
+def create_user_template(
+    user_id: str,
+    template_type: str,
+    name: str,
+    html_content: str = "",
+    aspect_ratio: str = "1:1",
+    chat_history: list = None,
+) -> dict:
+    """Create a new user template."""
+    row = {
+        "user_id": user_id,
+        "template_type": template_type,
+        "name": name,
+        "html_content": html_content,
+        "aspect_ratio": aspect_ratio,
+        "chat_history": chat_history or [],
+    }
+    result = _sb().table("user_templates").insert(row).execute()
+    return result.data[0] if result.data else {}
+
+
+def update_user_template(
+    template_id: str,
+    user_id: str,
+    html_content: str = None,
+    chat_history: list = None,
+    name: str = None,
+) -> dict:
+    """Update an existing user template (with ownership check)."""
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if html_content is not None:
+        updates["html_content"] = html_content
+    if chat_history is not None:
+        updates["chat_history"] = chat_history
+    if name is not None:
+        updates["name"] = name
+    result = (
+        _sb().table("user_templates")
+        .update(updates)
+        .eq("id", template_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return result.data[0] if result.data else {}
+
+
+def delete_user_template(template_id: str, user_id: str) -> bool:
+    """Delete a user template (with ownership check)."""
+    result = (
+        _sb().table("user_templates")
+        .delete()
+        .eq("id", template_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return bool(result.data)
+
+
+def get_preset_templates(template_type: str = None) -> list[dict]:
+    """Get all preset templates, optionally filtered by type."""
+    q = _sb().table("preset_templates").select("*")
+    if template_type:
+        q = q.eq("template_type", template_type)
+    result = q.order("name").execute()
+    return result.data or []
+
+
+def get_preset_template_by_id(preset_id: str) -> dict | None:
+    """Get a single preset template by ID."""
+    result = (
+        _sb().table("preset_templates")
+        .select("*")
+        .eq("id", preset_id)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+# =========================================================================
 # AUTH HELPERS (for setup)
 # =========================================================================
 

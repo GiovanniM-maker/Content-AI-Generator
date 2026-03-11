@@ -1857,9 +1857,64 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
 def newsletter_to_html():
     body = request.json
     text = _sanitize_user_input((body.get("text") or ""), max_length=20000)
+    template_id = body.get("template_id")
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
+    # If a custom template is provided, inject text into its placeholders
+    if template_id:
+        try:
+            user_id = _get_user_id()
+            tpl = db.get_user_template_by_id(user_id, template_id)
+            if not tpl:
+                return jsonify({"error": "Template non trovato"}), 404
+            html_template = tpl["html_content"]
+
+            # Parse the newsletter text into sections for injection
+            inject_prompt = f"""Analizza il seguente testo di newsletter e restituisci un JSON con queste chiavi:
+- "title": il titolo della newsletter
+- "section_1": prima sezione in HTML (con <h2>, <p>, <strong> etc.)
+- "section_2": seconda sezione in HTML
+- "exclusive_section": sezione esclusiva/premium in HTML
+- "footer": footer text
+
+Se una sezione non è presente, usa una stringa vuota.
+Restituisci SOLO il JSON valido, nient'altro.
+
+TESTO:
+{text}"""
+
+            sections_raw = _llm_call(
+                [{"role": "user", "content": inject_prompt}],
+                model=MODEL_CHEAP, temperature=0.2,
+            )
+            cleaned = sections_raw.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[7:]
+            if cleaned.startswith("```"):
+                cleaned = cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            sections = json.loads(cleaned.strip())
+
+            # Inject sections into template placeholders
+            html_result = html_template
+            html_result = html_result.replace("{{NEWSLETTER_TITLE}}", sections.get("title", ""))
+            html_result = html_result.replace("{{SECTION_1}}", sections.get("section_1", ""))
+            html_result = html_result.replace("{{SECTION_2}}", sections.get("section_2", ""))
+            html_result = html_result.replace("{{EXCLUSIVE_SECTION}}", sections.get("exclusive_section", ""))
+            html_result = html_result.replace("{{FOOTER}}", sections.get("footer", ""))
+
+            _log_pipeline("info", f"Newsletter HTML from template {template_id}")
+            return jsonify({"html": html_result})
+        except json.JSONDecodeError:
+            _log_pipeline("error", "Failed to parse newsletter sections JSON")
+            return jsonify({"error": "Errore nel parsing delle sezioni. Riprova."}), 500
+        except Exception as e:
+            _log_pipeline("error", f"Newsletter template error: {e}")
+            return jsonify({"error": "Errore nella generazione HTML con template. Riprova."}), 500
+
+    # Default flow: LLM converts text to HTML from scratch
     conversion_prompt = """Converti il seguente testo di newsletter in HTML email-ready con inline CSS.
 
 REGOLE IMPORTANTI:
@@ -2285,14 +2340,31 @@ Solo JSON, niente altro."""
 
 @app.route("/api/render-carousel", methods=["POST"])
 def render_carousel_images():
-    from carousel_renderer import render_carousel_async
     body = request.json
     text = body.get("text", "")
     palette_idx = body.get("palette", 0)
+    template_id = body.get("template_id")
     if not text.strip():
         return jsonify({"error": "No carousel text provided"}), 400
+
     try:
-        result = render_carousel_async(text, palette_idx=palette_idx)
+        if template_id:
+            # Use custom user template for rendering
+            user_id = _get_user_id()
+            tpl = db.get_user_template_by_id(user_id, template_id)
+            if not tpl:
+                return jsonify({"error": "Template non trovato"}), 404
+            from carousel_renderer import render_carousel_from_template_async
+            result = render_carousel_from_template_async(
+                text,
+                template_html=tpl["html_content"],
+                aspect_ratio=tpl.get("aspect_ratio", "1:1"),
+            )
+        else:
+            # Default rendering (original palette-based)
+            from carousel_renderer import render_carousel_async
+            result = render_carousel_async(text, palette_idx=palette_idx)
+
         _log_pipeline("info", f"Rendered carousel: {len(result['slides'])} slides")
         return jsonify(result)
     except Exception as e:
@@ -2393,6 +2465,332 @@ def get_health():
         "feedback_counts": fb_counts,
         "prompt_versions": prompt_versions,
     })
+
+
+# ---------------------------------------------------------------------------
+# Routes — User Templates (Personalizzazione)
+# ---------------------------------------------------------------------------
+
+# Plan limits: how many templates each plan allows
+TEMPLATE_LIMITS = {"free": 1, "pro": 5, "business": 15}
+
+
+def _get_user_plan() -> str:
+    """Return the user's current plan ('free', 'pro', 'business')."""
+    user_id = _get_user_id()
+    sub = db.get_subscription(user_id)
+    return (sub or {}).get("plan", "free")
+
+
+@app.route("/api/templates", methods=["GET"])
+def list_templates():
+    """List user templates + preset templates. Includes plan limit info."""
+    user_id = _get_user_id()
+    ttype = request.args.get("type")  # 'instagram' or 'newsletter' or None
+    user_tpls = db.get_user_templates(user_id, template_type=ttype)
+    presets = db.get_preset_templates(template_type=ttype)
+    plan = _get_user_plan()
+    limit = TEMPLATE_LIMITS.get(plan, 1)
+    if _is_admin():
+        limit = 999
+    count = db.count_user_templates(user_id)
+    return jsonify({
+        "templates": user_tpls,
+        "presets": presets,
+        "plan": plan,
+        "limit": limit,
+        "count": count,
+    })
+
+
+@app.route("/api/templates/<template_id>", methods=["GET"])
+def get_template(template_id):
+    """Get a single user template with HTML and chat history."""
+    user_id = _get_user_id()
+    tpl = db.get_user_template_by_id(user_id, template_id)
+    if not tpl:
+        return jsonify({"error": "Template non trovato"}), 404
+    return jsonify(tpl)
+
+
+@app.route("/api/templates", methods=["POST"])
+def create_template():
+    """Create a new user template. Checks plan limits."""
+    user_id = _get_user_id()
+    body = request.json or {}
+    template_type = body.get("template_type", "")
+    name = body.get("name", "Senza nome")
+    aspect_ratio = body.get("aspect_ratio", "1:1")
+    html_content = body.get("html_content", "")
+
+    if template_type not in ("instagram", "newsletter"):
+        return jsonify({"error": "template_type deve essere 'instagram' o 'newsletter'"}), 400
+    if aspect_ratio not in ("1:1", "4:3", "3:4"):
+        return jsonify({"error": "aspect_ratio deve essere '1:1', '4:3' o '3:4'"}), 400
+
+    # Check plan limit
+    plan = _get_user_plan()
+    limit = TEMPLATE_LIMITS.get(plan, 1)
+    if _is_admin():
+        limit = 999
+    count = db.count_user_templates(user_id)
+    if count >= limit:
+        return jsonify({"error": f"Hai raggiunto il limite di {limit} template per il piano {plan}. Passa a un piano superiore per crearne di più."}), 403
+
+    tpl = db.create_user_template(
+        user_id=user_id,
+        template_type=template_type,
+        name=name,
+        html_content=html_content,
+        aspect_ratio=aspect_ratio,
+        chat_history=[],
+    )
+    _log_pipeline("info", f"Template created: {name} ({template_type})")
+    return jsonify(tpl), 201
+
+
+@app.route("/api/templates/<template_id>", methods=["DELETE"])
+def delete_template(template_id):
+    """Delete a user template (with ownership check)."""
+    user_id = _get_user_id()
+    ok = db.delete_user_template(template_id, user_id)
+    if not ok:
+        return jsonify({"error": "Template non trovato o non autorizzato"}), 404
+    _log_pipeline("info", f"Template deleted: {template_id}")
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/templates/<template_id>/chat", methods=["POST"])
+def template_chat(template_id):
+    """Chat with the AI to iteratively build/modify a template's HTML."""
+    user_id = _get_user_id()
+    tpl = db.get_user_template_by_id(user_id, template_id)
+    if not tpl:
+        return jsonify({"error": "Template non trovato"}), 404
+
+    body = request.json or {}
+    user_message = _sanitize_user_input(body.get("message", ""), max_length=3000)
+    if not user_message.strip():
+        return jsonify({"error": "Messaggio vuoto"}), 400
+
+    template_type = tpl["template_type"]
+    current_html = tpl.get("html_content", "")
+    chat_history = tpl.get("chat_history", []) or []
+    aspect_ratio = tpl.get("aspect_ratio", "1:1")
+
+    # Build system prompt based on template type
+    if template_type == "instagram":
+        dimensions = {"1:1": "1080x1080", "4:3": "1080x810", "3:4": "1080x1440"}.get(aspect_ratio, "1080x1080")
+        system_prompt = f"""Sei un designer HTML esperto. Stai creando un template HTML per slide di un carosello Instagram.
+
+SPECIFICHE TEMPLATE:
+- Dimensioni viewport: {dimensions}px (aspect ratio {aspect_ratio})
+- Il template definisce lo STILE VISIVO delle slide (colori, font, layout, decorazioni)
+- L'HTML deve essere completo e autonomo (inline CSS, no file esterni)
+- Usa Google Fonts via @import se servono font custom
+
+PLACEHOLDER OBBLIGATORI (il sistema li sostituirà con il contenuto reale):
+- {{{{SLIDE_CONTENT}}}} — testo principale della slide (può contenere header + body in HTML)
+- {{{{SLIDE_NUM}}}} — numero slide corrente
+- {{{{TOTAL_SLIDES}}}} — numero totale slide
+- {{{{BRAND_NAME}}}} — nome del brand dell'utente
+- {{{{BRAND_HANDLE}}}} — handle social dell'utente
+
+REGOLE:
+1. Rispondi SEMPRE in formato JSON con due campi: "reply" (il tuo messaggio all'utente) e "html" (l'HTML completo aggiornato)
+2. L'HTML deve essere completo da <!DOCTYPE html> a </html>
+3. Includi contenuto di esempio nei placeholder per la preview (es. "5 Tool AI che cambieranno il tuo lavoro")
+4. Ogni modifica deve produrre l'HTML COMPLETO aggiornato, non solo la parte modificata
+5. Il design deve essere professionale e moderno
+6. Rispondi in italiano"""
+    else:  # newsletter
+        system_prompt = """Sei un designer HTML esperto di email marketing. Stai creando un template HTML per newsletter email.
+
+SPECIFICHE TEMPLATE:
+- Max-width: 600px, centrato, responsive
+- SOLO inline CSS (niente <style> tags o classi — compatibilità email client)
+- Font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif (email-safe)
+
+PLACEHOLDER OBBLIGATORI (il sistema li sostituirà con il contenuto reale):
+- {{NEWSLETTER_TITLE}} — titolo della newsletter
+- {{SECTION_1}} — prima sezione di contenuto (HTML)
+- {{SECTION_2}} — seconda sezione di contenuto (HTML)
+- {{EXCLUSIVE_SECTION}} — sezione esclusiva/premium (HTML)
+- {{FOOTER}} — footer con info e unsubscribe
+
+REGOLE:
+1. Rispondi SEMPRE in formato JSON con due campi: "reply" (il tuo messaggio all'utente) e "html" (l'HTML completo aggiornato)
+2. L'HTML deve essere completo da <!DOCTYPE html> a </html>
+3. Includi contenuto di esempio nei placeholder per la preview
+4. Ogni modifica deve produrre l'HTML COMPLETO aggiornato
+5. Usa SOLO inline CSS per massima compatibilità email
+6. Il design deve essere professionale e adatto a Beehiiv/Mailchimp
+7. Rispondi in italiano"""
+
+    # Build conversation messages (keep last 10 exchanges)
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add current HTML context if exists
+    if current_html.strip():
+        messages.append({
+            "role": "system",
+            "content": f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
+        })
+
+    # Add recent chat history (last 10 messages)
+    recent_history = chat_history[-10:] if len(chat_history) > 10 else chat_history
+    for msg in recent_history:
+        messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Add the new user message
+    messages.append({"role": "user", "content": user_message})
+
+    try:
+        raw_response = _llm_call(messages, model=MODEL_GENERATION, temperature=0.4)
+
+        # Parse JSON response from LLM
+        reply_text = ""
+        new_html = current_html
+
+        # Try to extract JSON
+        cleaned = raw_response.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        try:
+            parsed = json.loads(cleaned)
+            reply_text = parsed.get("reply", "")
+            new_html = parsed.get("html", current_html)
+        except json.JSONDecodeError:
+            # Fallback: try to find HTML in the response
+            html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
+            if html_match:
+                new_html = html_match.group(1)
+                reply_text = cleaned[:cleaned.find("<!DOCTYPE")].strip() or "Ecco il template aggiornato."
+            else:
+                reply_text = cleaned
+                new_html = current_html
+
+        # Update chat history
+        chat_history.append({"role": "user", "content": user_message})
+        chat_history.append({"role": "assistant", "content": reply_text})
+
+        # Save updated template
+        db.update_user_template(
+            template_id=template_id,
+            user_id=user_id,
+            html_content=new_html,
+            chat_history=chat_history,
+            name=None,
+        )
+
+        _log_pipeline("info", f"Template chat: updated {template_id}")
+        return jsonify({
+            "reply": reply_text,
+            "html_content": new_html,
+        })
+
+    except Exception as e:
+        _log_pipeline("error", f"Template chat error: {e}")
+        return jsonify({"error": "Errore nella generazione. Riprova tra poco."}), 500
+
+
+@app.route("/api/templates/<template_id>/preview", methods=["POST"])
+def template_preview(template_id):
+    """Generate a preview of the template.
+    IG: renders HTML via Playwright → returns base64 PNG.
+    NL: returns HTML string for iframe display.
+    """
+    user_id = _get_user_id()
+    tpl = db.get_user_template_by_id(user_id, template_id)
+    if not tpl:
+        return jsonify({"error": "Template non trovato"}), 404
+
+    template_type = tpl["template_type"]
+    html_content = tpl.get("html_content", "")
+
+    if not html_content.strip():
+        return jsonify({"error": "Template vuoto — inizia a chattare per crearlo"}), 400
+
+    if template_type == "newsletter":
+        # For newsletter, just return the HTML for iframe rendering
+        return jsonify({"type": "html", "html": html_content})
+
+    # For Instagram, render via Playwright → base64 PNG
+    aspect_ratio = tpl.get("aspect_ratio", "1:1")
+    dimensions = {"1:1": (1080, 1080), "4:3": (1080, 810), "3:4": (1080, 1440)}
+    width, height = dimensions.get(aspect_ratio, (1080, 1080))
+
+    try:
+        from playwright.sync_api import sync_playwright
+        import base64
+        import tempfile
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": width, "height": height})
+            page.set_content(html_content, wait_until="networkidle")
+            page.wait_for_timeout(500)
+            png_bytes = page.screenshot(type="png")
+            browser.close()
+
+        b64 = base64.b64encode(png_bytes).decode("utf-8")
+        return jsonify({"type": "image", "image": f"data:image/png;base64,{b64}"})
+    except Exception as e:
+        _log_pipeline("error", f"Template preview render error: {e}")
+        return jsonify({"error": "Errore nel rendering della preview. Riprova."}), 500
+
+
+@app.route("/api/templates/clone/<preset_id>", methods=["POST"])
+def clone_preset(preset_id):
+    """Clone a preset template as a new user template."""
+    user_id = _get_user_id()
+
+    # Check plan limit
+    plan = _get_user_plan()
+    limit = TEMPLATE_LIMITS.get(plan, 1)
+    if _is_admin():
+        limit = 999
+    count = db.count_user_templates(user_id)
+    if count >= limit:
+        return jsonify({"error": f"Hai raggiunto il limite di {limit} template per il piano {plan}."}), 403
+
+    preset = db.get_preset_template_by_id(preset_id)
+    if not preset:
+        return jsonify({"error": "Preset template non trovato"}), 404
+
+    body = request.json or {}
+    custom_name = body.get("name", f"{preset['name']} (personalizzato)")
+
+    tpl = db.create_user_template(
+        user_id=user_id,
+        template_type=preset["template_type"],
+        name=custom_name,
+        html_content=preset["html_content"],
+        aspect_ratio=preset.get("aspect_ratio", "1:1"),
+        chat_history=[],
+    )
+    _log_pipeline("info", f"Cloned preset '{preset['name']}' as '{custom_name}'")
+    return jsonify(tpl), 201
+
+
+@app.route("/api/templates/<template_id>/rename", methods=["POST"])
+def rename_template(template_id):
+    """Rename a user template."""
+    user_id = _get_user_id()
+    body = request.json or {}
+    new_name = body.get("name", "").strip()
+    if not new_name:
+        return jsonify({"error": "Nome non valido"}), 400
+    tpl = db.update_user_template(template_id, user_id, name=new_name)
+    if not tpl:
+        return jsonify({"error": "Template non trovato"}), 404
+    return jsonify(tpl)
 
 
 # ---------------------------------------------------------------------------

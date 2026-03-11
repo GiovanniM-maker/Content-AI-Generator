@@ -209,6 +209,34 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- =====================================================
+-- 14. USER TEMPLATES (custom IG/newsletter HTML templates)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.user_templates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    template_type TEXT NOT NULL CHECK (template_type IN ('instagram', 'newsletter')),
+    name TEXT NOT NULL DEFAULT 'Senza nome',
+    html_content TEXT NOT NULL DEFAULT '',
+    aspect_ratio TEXT DEFAULT '1:1' CHECK (aspect_ratio IN ('1:1', '4:3', '3:4')),
+    chat_history JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =====================================================
+-- 15. PRESET TEMPLATES (provided by platform)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.preset_templates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    template_type TEXT NOT NULL CHECK (template_type IN ('instagram', 'newsletter')),
+    name TEXT NOT NULL,
+    html_content TEXT NOT NULL,
+    aspect_ratio TEXT DEFAULT '1:1' CHECK (aspect_ratio IN ('1:1', '4:3', '3:4')),
+    thumbnail_url TEXT DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =====================================================
 -- INDEXES
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_articles_user ON articles(user_id);
@@ -226,6 +254,8 @@ CREATE INDEX IF NOT EXISTS idx_user_prompts_user ON user_prompts(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_prompts_user_name ON user_prompts(user_id, prompt_name);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_templates_user ON user_templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_templates_user_type ON user_templates(user_id, template_type);
 
 -- =====================================================
 -- ROW LEVEL SECURITY (RLS)
@@ -286,6 +316,14 @@ CREATE POLICY "user_prompts_all" ON user_prompts FOR ALL USING (auth.uid() = use
 
 -- Notifications
 CREATE POLICY "notifications_all" ON notifications FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- User Templates
+ALTER TABLE user_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "user_templates_all" ON user_templates FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Preset Templates (readable by everyone, no user_id column)
+ALTER TABLE preset_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "preset_templates_select" ON preset_templates FOR SELECT USING (true);
 
 -- =====================================================
 -- HELPER FUNCTION: Increment weekly status counter
