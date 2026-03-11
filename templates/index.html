@@ -1787,6 +1787,9 @@ body::after {
   .topbar-user { padding: 3px 8px 3px 3px; }
   .user-avatar { width: 24px; height: 24px; font-size: 11px; }
 
+  /* Main area */
+  .main { padding: 16px; }
+
   /* Main content */
   .main-content { padding: 12px; }
 
@@ -1809,9 +1812,12 @@ body::after {
   .libreria-nav { gap: 3px; }
   .libreria-nav-btn { padding: 6px 12px; font-size: 12px; }
 
-  /* Calendar */
+  /* Calendar / Pianifica toolbar */
   .sched-calendar { overflow-x: auto; }
   .cal-body, .cal-header { min-width: 600px; }
+  .sched-toolbar { flex-wrap: wrap !important; justify-content: center; }
+  .sched-toolbar .btn { font-size: 11px; padding: 6px 10px; }
+  .sched-week-label { min-width: 100px !important; font-size: 11px !important; }
 
   /* Tour */
   .tour-tooltip { position: fixed !important; bottom: 20px; left: 50%; transform: translateX(-50%); top: auto !important; max-width: 92vw; }
@@ -1832,6 +1838,10 @@ body::after {
   .btn { padding: 8px 16px; font-size: 12px; }
   h1 { font-size: 20px; }
   .subtitle { font-size: 12px; }
+
+  /* Feed article cards */
+  .da-card { padding: 14px; }
+  .dash-search-bar input { font-size: 14px; }
 }
 
 @media (max-width: 480px) {
@@ -2437,12 +2447,12 @@ body::after {
     </div>
 
     <!-- Calendar/List toggle -->
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <div class="sched-toolbar" style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
       <button class="btn btn-small btn-primary" id="sched-view-cal" onclick="switchSchedView('calendar')">📅 Calendario</button>
       <button class="btn btn-small btn-secondary" id="sched-view-list" onclick="switchSchedView('list')">📋 Lista</button>
       <div style="flex:1;"></div>
       <button class="btn btn-small btn-secondary" onclick="schedWeekNav(-1)">◀ Settimana prec.</button>
-      <span id="sched-week-label" style="font-size:12px;color:var(--text2);align-self:center;min-width:140px;text-align:center;"></span>
+      <span id="sched-week-label" class="sched-week-label" style="font-size:12px;color:var(--text2);align-self:center;min-width:140px;text-align:center;"></span>
       <button class="btn btn-small btn-secondary" onclick="schedWeekNav(1)">Settimana succ. ▶</button>
     </div>
 
