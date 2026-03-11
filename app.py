@@ -101,6 +101,128 @@ DEFAULT_RSS_FEEDS = [
     "https://venturebeat.com/ai/feed/",
 ]
 
+# ---------------------------------------------------------------------------
+# Feed Catalog — curated RSS feeds users can browse and import
+# ---------------------------------------------------------------------------
+
+FEED_CATALOG = {
+    "AI Research": [
+        {"url": "https://openai.com/blog/rss.xml", "name": "OpenAI Blog"},
+        {"url": "https://www.anthropic.com/rss.xml", "name": "Anthropic Blog"},
+        {"url": "https://blog.google/technology/ai/rss/", "name": "Google AI Blog"},
+        {"url": "https://deepmind.google/blog/rss.xml", "name": "Google DeepMind"},
+        {"url": "https://ai.meta.com/blog/rss/", "name": "Meta AI Blog"},
+        {"url": "https://huggingface.co/blog/feed.xml", "name": "Hugging Face Blog"},
+        {"url": "https://news.mit.edu/topic/artificial-intelligence2/feed", "name": "MIT AI News"},
+        {"url": "https://hai.stanford.edu/news/rss.xml", "name": "Stanford HAI"},
+        {"url": "https://arxiv.org/rss/cs.AI", "name": "arXiv CS.AI"},
+        {"url": "https://arxiv.org/rss/cs.CL", "name": "arXiv NLP (cs.CL)"},
+        {"url": "https://machinelearningmastery.com/feed/", "name": "Machine Learning Mastery"},
+        {"url": "https://distill.pub/rss.xml", "name": "Distill.pub"},
+        {"url": "https://bair.berkeley.edu/blog/feed.xml", "name": "Berkeley AI Research"},
+        {"url": "https://www.microsoft.com/en-us/research/feed/", "name": "Microsoft Research"},
+        {"url": "https://research.nvidia.com/rss.xml", "name": "NVIDIA Research"},
+    ],
+    "AI News & Media": [
+        {"url": "https://techcrunch.com/category/artificial-intelligence/feed/", "name": "TechCrunch AI"},
+        {"url": "https://venturebeat.com/ai/feed/", "name": "VentureBeat AI"},
+        {"url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "name": "The Verge AI"},
+        {"url": "https://www.wired.com/feed/tag/ai/latest/rss", "name": "WIRED AI"},
+        {"url": "https://www.therundown.ai/rss", "name": "The Rundown AI"},
+        {"url": "https://tldr.tech/ai/rss", "name": "TLDR AI"},
+        {"url": "https://jack-clark.net/feed/", "name": "Import AI (Jack Clark)"},
+        {"url": "https://www.deeplearning.ai/the-batch/feed/", "name": "The Batch (Andrew Ng)"},
+        {"url": "https://arstechnica.com/tag/artificial-intelligence/feed/", "name": "Ars Technica AI"},
+        {"url": "https://www.technologyreview.com/feed/", "name": "MIT Technology Review"},
+        {"url": "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss", "name": "IEEE Spectrum AI"},
+        {"url": "https://www.marktechpost.com/feed/", "name": "MarkTechPost"},
+        {"url": "https://syncedreview.com/feed/", "name": "Synced Review"},
+    ],
+    "AI Tools & Automazioni": [
+        {"url": "https://blog.langchain.dev/rss/", "name": "LangChain Blog"},
+        {"url": "https://zapier.com/blog/feed/", "name": "Zapier Blog"},
+        {"url": "https://www.make.com/en/blog/rss.xml", "name": "Make (Integromat) Blog"},
+        {"url": "https://n8n.io/blog/rss.xml", "name": "n8n Blog"},
+        {"url": "https://www.notion.so/blog/rss.xml", "name": "Notion Blog"},
+        {"url": "https://www.pinecone.io/blog/rss.xml", "name": "Pinecone Blog"},
+        {"url": "https://unwindai.substack.com/feed", "name": "Unwind AI"},
+        {"url": "https://bensbites.beehiiv.com/feed", "name": "Ben's Bites"},
+        {"url": "https://www.superhuman.ai/feed", "name": "Superhuman AI"},
+        {"url": "https://lmsys.org/blog/feed.xml", "name": "LMSYS (Chatbot Arena)"},
+    ],
+    "Marketing Digitale": [
+        {"url": "https://blog.hubspot.com/marketing/rss.xml", "name": "HubSpot Marketing"},
+        {"url": "https://contentmarketinginstitute.com/feed/", "name": "Content Marketing Institute"},
+        {"url": "https://www.searchenginejournal.com/feed/", "name": "Search Engine Journal"},
+        {"url": "https://moz.com/blog/feed", "name": "Moz Blog"},
+        {"url": "https://neilpatel.com/blog/feed/", "name": "Neil Patel"},
+        {"url": "https://www.socialmediaexaminer.com/feed/", "name": "Social Media Examiner"},
+        {"url": "https://copyblogger.com/feed/", "name": "Copyblogger"},
+        {"url": "https://www.convinceandconvert.com/feed/", "name": "Convince & Convert"},
+        {"url": "https://sproutsocial.com/insights/feed/", "name": "Sprout Social Insights"},
+        {"url": "https://buffer.com/resources/feed/", "name": "Buffer Blog"},
+        {"url": "https://blog.hootsuite.com/feed/", "name": "Hootsuite Blog"},
+    ],
+    "Business & Startup": [
+        {"url": "https://hbr.org/feed", "name": "Harvard Business Review"},
+        {"url": "https://www.inc.com/rss", "name": "Inc. Magazine"},
+        {"url": "https://www.entrepreneur.com/latest.rss", "name": "Entrepreneur"},
+        {"url": "https://review.firstround.com/feed.xml", "name": "First Round Review"},
+        {"url": "https://a16z.com/feed/", "name": "Andreessen Horowitz (a16z)"},
+        {"url": "https://news.ycombinator.com/rss", "name": "Hacker News"},
+        {"url": "https://www.fastcompany.com/technology/rss", "name": "Fast Company Tech"},
+        {"url": "https://seths.blog/feed/", "name": "Seth Godin Blog"},
+        {"url": "https://www.groovehq.com/blog/feed", "name": "Groove Blog"},
+        {"url": "https://bothsidesofthetable.com/feed", "name": "Both Sides of the Table"},
+    ],
+    "E-commerce": [
+        {"url": "https://www.shopify.com/blog/feed", "name": "Shopify Blog"},
+        {"url": "https://www.practicalecommerce.com/feed", "name": "Practical Ecommerce"},
+        {"url": "https://www.bigcommerce.com/blog/feed/", "name": "BigCommerce Blog"},
+        {"url": "https://www.oberlo.com/blog/feed", "name": "Oberlo Blog"},
+        {"url": "https://ecommercenews.eu/feed/", "name": "Ecommerce News EU"},
+        {"url": "https://www.digitalcommerce360.com/feed/", "name": "Digital Commerce 360"},
+    ],
+    "Finanza & Fintech": [
+        {"url": "https://www.finextra.com/rss/headlines.aspx", "name": "Finextra"},
+        {"url": "https://thefintechtimes.com/feed/", "name": "The Fintech Times"},
+        {"url": "https://www.coindesk.com/arc/outboundfeeds/rss/", "name": "CoinDesk"},
+        {"url": "https://cointelegraph.com/rss", "name": "CoinTelegraph"},
+        {"url": "https://www.pymnts.com/feed/", "name": "PYMNTS"},
+        {"url": "https://techcrunch.com/category/fintech/feed/", "name": "TechCrunch Fintech"},
+    ],
+    "SaaS & Prodotto": [
+        {"url": "https://www.saastr.com/feed/", "name": "SaaStr"},
+        {"url": "https://www.producthunt.com/feed", "name": "Product Hunt"},
+        {"url": "https://www.lennysnewsletter.com/feed", "name": "Lenny's Newsletter"},
+        {"url": "https://www.intercom.com/blog/feed/", "name": "Intercom Blog"},
+        {"url": "https://openviewpartners.com/blog/feed/", "name": "OpenView Blog"},
+        {"url": "https://www.heavybit.com/library/feed", "name": "Heavybit Blog"},
+        {"url": "https://tomtunguz.com/feed/", "name": "Tom Tunguz Blog"},
+        {"url": "https://www.custify.com/blog/feed/", "name": "Custify Blog"},
+    ],
+    "Tech Italia": [
+        {"url": "https://www.wired.it/feed/rss", "name": "Wired Italia"},
+        {"url": "https://startupitalia.eu/feed", "name": "StartupItalia"},
+        {"url": "https://www.italian.tech/rss", "name": "Italian Tech (Repubblica)"},
+        {"url": "https://www.agendadigitale.eu/feed/", "name": "Agenda Digitale"},
+        {"url": "https://www.ai4business.it/feed/", "name": "AI4Business"},
+        {"url": "https://www.hwupgrade.it/rss/news.xml", "name": "HWUpgrade"},
+        {"url": "https://www.punto-informatico.it/feed/", "name": "Punto Informatico"},
+        {"url": "https://www.tomshw.it/feed", "name": "Tom's Hardware Italia"},
+    ],
+    "Tech Generale": [
+        {"url": "https://techcrunch.com/feed/", "name": "TechCrunch"},
+        {"url": "https://arstechnica.com/feed/", "name": "Ars Technica"},
+        {"url": "https://thenextweb.com/feed/", "name": "The Next Web"},
+        {"url": "https://www.theverge.com/rss/index.xml", "name": "The Verge"},
+        {"url": "https://www.wired.com/feed/rss", "name": "WIRED"},
+        {"url": "https://feeds.feedburner.com/TechCrunch/", "name": "TechCrunch (Feedburner)"},
+        {"url": "https://www.zdnet.com/news/rss.xml", "name": "ZDNet"},
+        {"url": "https://www.cnet.com/rss/news/", "name": "CNET News"},
+    ],
+}
+
 FETCH_WINDOW_DAYS = 5
 
 
@@ -946,6 +1068,62 @@ def remove_category():
     _save_feeds_config(config)
     _log_pipeline("info", f"Category removed: {category}")
     return jsonify({"status": "ok", "config": config})
+
+
+# ---------------------------------------------------------------------------
+# Routes — Feed Catalog (curated browsable feed lists)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/feeds/catalog")
+def get_feed_catalog():
+    """Return the curated feed catalog for users to browse."""
+    # Also include info about which feeds user already has
+    user_config = _load_feeds_config()
+    existing_urls = set()
+    for feeds in user_config.get("categories", {}).values():
+        for f in feeds:
+            existing_urls.add(f.get("url", ""))
+
+    catalog_with_status = {}
+    for cat, feeds in FEED_CATALOG.items():
+        catalog_with_status[cat] = [
+            {**f, "active": f["url"] in existing_urls}
+            for f in feeds
+        ]
+    return jsonify({"catalog": catalog_with_status})
+
+
+@app.route("/api/feeds/catalog/import", methods=["POST"])
+def import_catalog_feeds():
+    """Import selected catalog categories into user's feed config."""
+    body = request.json or {}
+    categories_to_import = body.get("categories", [])
+    if not categories_to_import:
+        return jsonify({"error": "Seleziona almeno una categoria"}), 400
+
+    config = _load_feeds_config()
+    existing_urls = set()
+    for feeds in config.get("categories", {}).values():
+        for f in feeds:
+            existing_urls.add(f.get("url", ""))
+
+    added_count = 0
+    for cat_name in categories_to_import:
+        if cat_name not in FEED_CATALOG:
+            continue
+        # Ensure category exists in user config
+        if cat_name not in config["categories"]:
+            config["categories"][cat_name] = []
+        # Add feeds that aren't already present (by URL)
+        for feed in FEED_CATALOG[cat_name]:
+            if feed["url"] not in existing_urls:
+                config["categories"][cat_name].append({"url": feed["url"], "name": feed["name"]})
+                existing_urls.add(feed["url"])
+                added_count += 1
+
+    _save_feeds_config(config)
+    _log_pipeline("info", f"Catalog import: {added_count} feed aggiunti da {len(categories_to_import)} categorie")
+    return jsonify({"status": "ok", "config": config, "added": added_count})
 
 
 # ---------------------------------------------------------------------------

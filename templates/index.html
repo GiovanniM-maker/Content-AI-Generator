@@ -868,6 +868,28 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 .add-feed-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .add-feed-row input { flex: 1; min-width: 150px; }
 
+/* Feed Catalog */
+.catalog-toggle-btn { width: 100%; padding: 12px 16px; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; margin-bottom: 16px; transition: opacity .2s; }
+.catalog-toggle-btn:hover { opacity: 0.85; }
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.catalog-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; transition: all .2s; }
+.catalog-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.catalog-card.expanded { grid-column: 1 / -1; }
+.catalog-card-header { display: flex; justify-content: space-between; align-items: center; }
+.catalog-card-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.catalog-card-count { font-size: 11px; color: var(--text2); background: var(--bg); padding: 2px 8px; border-radius: 6px; }
+.catalog-feeds-list { margin-top: 12px; max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+.catalog-card.expanded .catalog-feeds-list { max-height: 600px; overflow-y: auto; }
+.catalog-feed-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; border-bottom: 1px solid var(--border); }
+.catalog-feed-item:last-child { border-bottom: none; }
+.catalog-feed-item input[type=checkbox] { accent-color: var(--accent); }
+.catalog-feed-item .cfi-name { font-weight: 600; color: var(--text); }
+.catalog-feed-item .cfi-url { color: var(--text2); font-size: 10px; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.catalog-feed-item.already-active { opacity: 0.5; }
+.catalog-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end; }
+.catalog-import-all { width: 100%; margin-top: 12px; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .2s; }
+.catalog-import-all:hover { opacity: 0.85; }
+
 /* Preference bars */
 .pref-bar-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
 .pref-bar-label { min-width: 140px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2312,6 +2334,19 @@ body::after {
       <h2 style="font-size:16px;margin-bottom:12px;">Notifiche Push (ntfy)</h2>
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">Ricevi una notifica push quando è ora di pubblicare un contenuto programmato.</p>
       <button class="btn btn-secondary btn-small" onclick="testNtfy()">🔔 Testa notifica</button>
+    </div>
+
+    <!-- Feed Catalog -->
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:16px;margin-bottom:12px;">📚 Catalogo Feed RSS</h2>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">Sfoglia il catalogo e importa feed pre-configurati per categoria.</p>
+      <button class="catalog-toggle-btn" onclick="toggleCatalog()">📚 Sfoglia Catalogo Feed</button>
+      <div id="catalog-container" style="display:none;">
+        <div id="catalog-grid" class="catalog-grid"></div>
+        <button class="catalog-import-all" id="catalog-import-btn" onclick="importSelectedCatalog()" style="display:none;">
+          📥 Importa feed selezionati
+        </button>
+      </div>
     </div>
 
     <!-- RSS Feeds Management -->
@@ -5148,6 +5183,99 @@ async function removeCategory(name) {
     renderFeedsSettings();
     toast('Categoria eliminata');
   } catch(err) { toast('Errore: ' + err.message); }
+}
+
+// ---- Feed Catalog ----
+let catalogData = null;
+let catalogOpen = false;
+let expandedCat = null;
+
+async function toggleCatalog() {
+  const container = document.getElementById('catalog-container');
+  catalogOpen = !catalogOpen;
+  if (catalogOpen) {
+    container.style.display = 'block';
+    if (!catalogData) await loadFeedsCatalog();
+  } else {
+    container.style.display = 'none';
+  }
+}
+
+async function loadFeedsCatalog() {
+  const grid = document.getElementById('catalog-grid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento catalogo...</div>';
+  try {
+    const resp = await fetch('/api/feeds/catalog').then(safeJson);
+    catalogData = resp.catalog || {};
+    renderCatalog();
+  } catch(err) {
+    grid.innerHTML = '<div class="empty-state">Errore caricamento catalogo</div>';
+  }
+}
+
+function renderCatalog() {
+  const grid = document.getElementById('catalog-grid');
+  if (!catalogData || !Object.keys(catalogData).length) {
+    grid.innerHTML = '<div class="empty-state">Nessun feed nel catalogo</div>';
+    return;
+  }
+  let html = '';
+  for (const [cat, feeds] of Object.entries(catalogData)) {
+    const activeCount = feeds.filter(f => f.active).length;
+    const isExpanded = expandedCat === cat;
+    html += `<div class="catalog-card${isExpanded ? ' expanded' : ''}" onclick="toggleCatalogCard('${esc(cat)}', event)">
+      <div class="catalog-card-header">
+        <span class="catalog-card-title">${esc(cat)}</span>
+        <span class="catalog-card-count">${activeCount}/${feeds.length} attivi</span>
+      </div>
+      <div class="catalog-feeds-list" id="cat-list-${cat.replace(/[^a-zA-Z0-9]/g, '_')}">`;
+    feeds.forEach((f, i) => {
+      const isActive = f.active;
+      html += `<div class="catalog-feed-item${isActive ? ' already-active' : ''}">
+        <input type="checkbox" class="cat-feed-cb" data-cat="${esc(cat)}" data-url="${esc(f.url)}"
+          ${isActive ? 'checked disabled' : ''} onclick="event.stopPropagation(); updateCatalogBtn();">
+        <span class="cfi-name">${esc(f.name)}</span>
+        <span class="cfi-url">${esc(f.url)}</span>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+  grid.innerHTML = html;
+  updateCatalogBtn();
+}
+
+function toggleCatalogCard(cat, e) {
+  if (e.target.tagName === 'INPUT') return;
+  expandedCat = expandedCat === cat ? null : cat;
+  renderCatalog();
+}
+
+function updateCatalogBtn() {
+  const btn = document.getElementById('catalog-import-btn');
+  const cbs = document.querySelectorAll('.cat-feed-cb:checked:not(:disabled)');
+  btn.style.display = cbs.length > 0 ? 'block' : 'none';
+  btn.textContent = `📥 Importa ${cbs.length} feed selezionati`;
+}
+
+async function importSelectedCatalog() {
+  const cbs = document.querySelectorAll('.cat-feed-cb:checked:not(:disabled)');
+  if (!cbs.length) { toast('Seleziona almeno un feed!'); return; }
+  // Group by category
+  const catSet = new Set();
+  cbs.forEach(cb => catSet.add(cb.dataset.cat));
+  try {
+    const resp = await fetch('/api/feeds/catalog/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: Array.from(catSet) }),
+    }).then(safeJson);
+    if (resp.error) { toast(resp.error); return; }
+    feedsConfig = resp.config || feedsConfig;
+    renderFeedsSettings();
+    catalogData = null;
+    await loadFeedsCatalog();
+    toast(`✅ ${resp.added} feed importati!`);
+  } catch(err) { toast('Errore importazione: ' + err.message); }
 }
 
 async function testNtfy() {
