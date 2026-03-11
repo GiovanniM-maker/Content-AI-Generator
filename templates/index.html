@@ -3160,6 +3160,8 @@ function onAuthSuccess(user) {
   startNotifPolling();
   // Show onboarding for first-time users
   checkOnboarding();
+  // Resume any in-progress generation after reload
+  _resumeGeneration();
 }
 
 function applyAdminGating() {
@@ -3235,6 +3237,7 @@ function initAuth() {
           loadDashboard();
           startNotifPolling();
           checkOnboarding();
+          _resumeGeneration();
         });
       } else {
         // Try refresh
@@ -3252,6 +3255,7 @@ function initAuth() {
                 loadDashboard();
                 startNotifPolling();
                 checkOnboarding();
+                _resumeGeneration();
               }
             });
           } else {
@@ -3503,6 +3507,7 @@ let currentContent = {};
 let selectedPlatforms = ['linkedin', 'instagram', 'newsletter'];
 let currentSourceMode = 'web_search';  // 'web_search' (default), 'rss', 'custom_text'
 let webSearchSelectedResults = [];  // selected web search results
+let _creaArticles = [];  // sources for Crea flow (used by regenerateSingle/integrateOpinion)
 let currentUserPlan = 'free';  // Track user plan for platform gating
 let allowedPlatforms = ['linkedin', 'newsletter'];  // Updated after login
 
@@ -3510,6 +3515,25 @@ let allowedPlatforms = ['linkedin', 'newsletter'];  // Updated after login
 window.addEventListener('beforeunload', e => {
   if (window._isGenerating) { e.preventDefault(); }
 });
+
+// Notification sound on generation complete
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Play two-tone "ding-ding"
+    [0, 0.15].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = i === 0 ? 800 : 1000;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.4);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.4);
+    });
+  } catch(e) {}
+}
 
 // Admin system
 const ADMIN_EMAIL = 'giovanni.mavilla.grz@gmail.com';
@@ -4574,17 +4598,19 @@ function integrateOpinion(format, idx) {
   const opinionTa = document.getElementById('opinion-' + key);
   const opinion = opinionTa ? opinionTa.value.trim() : '';
   if (!opinion) { toast('Scrivi la tua opinione prima!'); return; }
-  if (selectedArticles[idx]) selectedArticles[idx].opinion = opinion;
+  const src = selectedArticles[idx] || _creaArticles[idx];
+  if (src) src.opinion = opinion;
 
   const ta = document.getElementById('content-' + key);
   const col = ta.closest('.content-col');
   const intBtn = col.querySelector('.opinion-inline .btn');
   intBtn.disabled = true; intBtn.textContent = '...';
 
+  const article = src ? src.article : { title: '', description: '' };
   fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ article: selectedArticles[idx].article, opinion, format }),
+    body: JSON.stringify({ article, opinion, format }),
   })
   .then(safeJson)
   .then(data => {
@@ -4656,7 +4682,7 @@ function regenerateSingle(format, idx) {
   const sendBtn = fbRow ? fbRow.querySelector('.btn-green') : null;
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '...'; }
 
-  const s = selectedArticles[idx];
+  const s = selectedArticles[idx] || _creaArticles[idx] || { article: { title: '', description: '' }, opinion: '' };
   const opinionTa = document.getElementById('opinion-' + key);
   const opinion = opinionTa ? opinionTa.value.trim() : (s.opinion || '');
 
@@ -5781,116 +5807,51 @@ function removeCreaArticle(idx) {
   if (dashLoaded) renderNewspaper();
 }
 
-async function generateFromCrea() {
-  const total = Object.values(platformQty).reduce((a, b) => a + b, 0);
-  if (total === 0) { toast('Seleziona almeno una piattaforma!'); return; }
+// ---------- Shared queue processor (used by generateFromCrea and resume) ----------
+async function _processQueue(queue, sessionId, sources, chatText, startIdx) {
+  const startTime = Date.now();
+  let completed = startIdx || 0;
+  const totalCalls = queue.length + completed;
+  const results = {};
 
-  const chatText = (document.getElementById('crea-chat-input').value || '').trim();
-  const webSearchOn = document.getElementById('crea-web-search-toggle').checked;
-
-  // Determine sources
-  let sources = [];
-  if (selectedArticles.length > 0) {
-    sources = selectedArticles.map(s => ({ ...s.article, source_mode: 'rss' }));
-  }
-  if (chatText && !selectedArticles.length) {
-    // Use chat text as custom content
-    sources = [{ title: 'Contenuto personalizzato', description: chatText, summary: chatText, source: 'Tu', url: '', source_mode: 'custom_text', custom_text: chatText }];
-  }
-  if (chatText && selectedArticles.length > 0) {
-    // Chat text becomes the global opinion
-    // (opinion already handled separately)
-  }
-  if (!sources.length && !chatText) { toast('Scrivi qualcosa o seleziona articoli!'); return; }
-  if (!sources.length && chatText) {
-    sources = [{ title: 'Contenuto personalizzato', description: chatText, summary: chatText, source: 'Tu', url: '', source_mode: 'custom_text', custom_text: chatText }];
-  }
-
-  // If web search is on and we have chat text, search first
-  if (webSearchOn && chatText && !selectedArticles.length) {
-    toast('🔍 Ricerca in corso...');
-    try {
-      const searchResp = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: chatText }),
-      }).then(safeJson);
-      if (searchResp.results && searchResp.results.length > 0) {
-        // Score them
-        const scored = await fetch('/api/search/score', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ results: searchResp.results }),
-        }).then(safeJson);
-        sources = (scored.scored || searchResp.results).slice(0, 3).map(r => ({
-          title: r.title || '', description: r.snippet || r.description || '', summary: r.snippet || r.summary || '',
-          source: r.source || r.domain || '', url: r.url || '', source_mode: 'web_search',
-        }));
-        toast(`✅ Trovati ${sources.length} risultati web`);
-      }
-    } catch(e) { toast('Errore ricerca web, genero dal testo...'); }
-  }
-
-  // Build generation queue
-  const queue = [];
-  const effectiveOpinion = (chatText && selectedArticles.length > 0) ? chatText : '';
-
-  for (const [platform, qty] of Object.entries(platformQty)) {
-    if (qty <= 0) continue;
-    if (platform === 'newsletter' && qty > 0) {
-      // Newsletter: 1 call with all sources combined
-      queue.push({ type: 'newsletter', sources, opinion: effectiveOpinion });
-      continue;
-    }
-    for (let i = 0; i < qty; i++) {
-      const src = sources[i % sources.length];
-      queue.push({ type: platform, source: src, opinion: effectiveOpinion, variant: i });
+  // Reconstruct results from already-completed content (for resume)
+  if (completed > 0) {
+    for (const [k, v] of Object.entries(currentContent)) {
+      const plat = k.replace(/_\d+$/, '');
+      const idx = parseInt(k.split('_').pop());
+      if (!results[plat]) results[plat] = [];
+      results[plat][idx] = { content: v, source: (_creaArticles[idx] || {}).article?.title || '' };
     }
   }
 
-  // Show progress
-  const resultsSection = document.getElementById('crea-results');
-  resultsSection.style.display = 'block';
-  const progressEl = document.getElementById('gen-progress');
-  progressEl.style.display = 'block';
-  const statusEl = document.getElementById('gen-status');
   const barEl = document.getElementById('gen-bar');
   const percentEl = document.getElementById('gen-percent');
   const etaEl = document.getElementById('gen-eta');
-  const resultsEl = document.getElementById('gen-results');
-  resultsEl.innerHTML = '';
-  document.getElementById('btn-crea-generate').disabled = true;
-  window._isGenerating = true;
-  const genOverlay = document.getElementById('gen-overlay');
-  genOverlay.classList.add('active');
-
-  const startTime = Date.now();
-  let completed = 0;
-  const totalCalls = queue.length;
-  const results = {};
+  const statusEl = document.getElementById('gen-status');
 
   for (const job of queue) {
     const pct = Math.round((completed / totalCalls) * 100);
-    barEl.style.width = pct + '%';
-    percentEl.textContent = pct + '%';
+    if (barEl) barEl.style.width = pct + '%';
+    if (percentEl) percentEl.textContent = pct + '%';
     const elapsed = (Date.now() - startTime) / 1000;
-    const perCall = completed > 0 ? elapsed / completed : 8;
+    const perCall = (completed - (startIdx || 0)) > 0 ? elapsed / (completed - (startIdx || 0)) : 8;
     const remaining = Math.round(perCall * (totalCalls - completed));
-    etaEl.textContent = `⏱ ~${remaining}s rimanenti`;
-    statusEl.textContent = `Generazione ${completed + 1}/${totalCalls}: ${job.type}...`;
-    // Update overlay progress
-    document.getElementById('gen-overlay-bar').style.width = pct + '%';
-    document.getElementById('gen-overlay-pct').textContent = pct + '%';
-    document.getElementById('gen-overlay-status').textContent = `${completed + 1}/${totalCalls}: ${job.type}...`;
-    document.getElementById('gen-overlay-sub').textContent = `⏱ ~${remaining}s rimanenti`;
+    if (etaEl) etaEl.textContent = `⏱ ~${remaining}s rimanenti`;
+    if (statusEl) statusEl.textContent = `Generazione ${completed + 1}/${totalCalls}: ${job.type}...`;
+    // Update overlay
+    const oBar = document.getElementById('gen-overlay-bar');
+    const oPct = document.getElementById('gen-overlay-pct');
+    const oStat = document.getElementById('gen-overlay-status');
+    const oSub = document.getElementById('gen-overlay-sub');
+    if (oBar) oBar.style.width = pct + '%';
+    if (oPct) oPct.textContent = pct + '%';
+    if (oStat) oStat.textContent = `${completed + 1}/${totalCalls}: ${job.type}...`;
+    if (oSub) oSub.textContent = `⏱ ~${remaining}s rimanenti`;
 
     try {
       let resp;
       if (job.type === 'newsletter') {
-        const topics = job.sources.map(s => ({
-          article: s,
-          opinion: job.opinion,
-        }));
+        const topics = job.sources.map(s => ({ article: s, opinion: job.opinion }));
         resp = await fetch('/api/generate-newsletter', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -5898,6 +5859,7 @@ async function generateFromCrea() {
         }).then(safeJson);
         if (!results.newsletter) results.newsletter = [];
         results.newsletter.push({ content: resp.content || resp.error || 'Errore', source: 'Newsletter' });
+        currentContent['newsletter_' + (results.newsletter.length - 1)] = resp.content || '';
       } else {
         const body = {
           article: job.source,
@@ -5914,28 +5876,201 @@ async function generateFromCrea() {
         }).then(safeJson);
         if (!results[job.type]) results[job.type] = [];
         results[job.type].push({ content: resp.content || resp.error || 'Errore', source: job.source.title || 'Contenuto' });
+        currentContent[job.type + '_' + (results[job.type].length - 1)] = resp.content || '';
       }
     } catch(err) {
       if (!results[job.type]) results[job.type] = [];
       results[job.type].push({ content: 'Errore generazione: ' + err.message, source: '' });
     }
     completed++;
+
+    // Persist progress to localStorage + DB incrementally
+    try {
+      const jobState = JSON.parse(localStorage.getItem('cd_gen_job') || '{}');
+      if (jobState.queue) {
+        jobState.queue.shift(); // remove completed job
+        jobState.completedContent = currentContent;
+        localStorage.setItem('cd_gen_job', JSON.stringify(jobState));
+      }
+      if (sessionId) {
+        fetch(`/api/sessions/${sessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: currentContent }),
+        });
+      }
+    } catch(e) {}
   }
 
-  // Done
-  barEl.style.width = '100%';
-  percentEl.textContent = '100%';
-  statusEl.textContent = '✅ Generazione completata!';
-  etaEl.textContent = '';
-  document.getElementById('btn-crea-generate').disabled = false;
+  return results;
+}
+
+// ---------- Finalize generation (shared by fresh run and resume) ----------
+async function _finalizeGeneration(results, sessionId, sources, chatText, wantEmail) {
+  const barEl = document.getElementById('gen-bar');
+  const percentEl = document.getElementById('gen-percent');
+  const statusEl = document.getElementById('gen-status');
+  const etaEl = document.getElementById('gen-eta');
+  if (barEl) barEl.style.width = '100%';
+  if (percentEl) percentEl.textContent = '100%';
+  if (statusEl) statusEl.textContent = '✅ Generazione completata!';
+  if (etaEl) etaEl.textContent = '';
+  const genBtn = document.getElementById('btn-crea-generate');
+  if (genBtn) genBtn.disabled = false;
   window._isGenerating = false;
-  genOverlay.classList.remove('active');
+  document.getElementById('gen-overlay').classList.remove('active');
+
+  // Clear localStorage job
+  localStorage.removeItem('cd_gen_job');
 
   // Render results
   renderCreaResults(results);
-  document.getElementById('crea-results-actions').style.display = 'flex';
+  const actionsEl = document.getElementById('crea-results-actions');
+  if (actionsEl) actionsEl.style.display = 'flex';
 
-  // Save session to DB
+  // Save/update session
+  if (!sessionId) {
+    try {
+      const sessResp = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          article: { title: (sources || []).map(s => s.title).join(' | '), category: 'Content' },
+          topics: (sources || []).map(s => ({ article: s })),
+          opinion: chatText || '',
+          content: currentContent,
+          carousel_images: carouselImages || {},
+          platforms: Object.keys(platformQty).filter(p => platformQty[p] > 0),
+        }),
+      }).then(safeJson);
+      currentSession = sessResp;
+    } catch(e) { console.error('Session save failed:', e); }
+  } else {
+    currentSession = { id: sessionId };
+  }
+
+  // Sound notification
+  playNotificationSound();
+  toast('✅ Generazione completata!');
+
+  // Email notification if requested
+  if (wantEmail && sessionId) {
+    try {
+      await fetch('/api/notify-completion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, platforms: Object.keys(currentContent) }),
+      });
+      toast('📧 Email di conferma inviata!');
+    } catch(e) { /* Email not critical */ }
+  }
+
+  // Auto-scroll to results
+  setTimeout(() => {
+    document.getElementById('crea-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150);
+}
+
+// ---------- Resume generation on page reload ----------
+async function _resumeGeneration() {
+  let jobState;
+  try { jobState = JSON.parse(localStorage.getItem('cd_gen_job')); } catch(e) { return; }
+  if (!jobState || !jobState.queue || jobState.queue.length === 0) {
+    localStorage.removeItem('cd_gen_job');
+    return;
+  }
+
+  // Restore state
+  _creaArticles = (jobState.sources || []).map(s => ({ article: s, opinion: jobState.opinion || '' }));
+  if (jobState.completedContent) Object.assign(currentContent, jobState.completedContent);
+
+  // Switch to Crea tab and show progress UI
+  switchTab('crea');
+  const resultsSection = document.getElementById('crea-results');
+  if (resultsSection) resultsSection.style.display = 'block';
+  const progressEl = document.getElementById('gen-progress');
+  if (progressEl) progressEl.style.display = 'block';
+
+  window._isGenerating = true;
+  document.getElementById('gen-overlay').classList.add('active');
+  document.getElementById('gen-overlay-text').textContent = 'Ripresa generazione...';
+
+  // Restore email checkbox state
+  const emailCheck = document.getElementById('gen-overlay-email-check');
+  if (emailCheck && jobState.wantEmail) emailCheck.checked = true;
+
+  const completedCount = jobState.totalCalls - jobState.queue.length;
+  const results = await _processQueue(jobState.queue, jobState.sessionId, jobState.sources, jobState.chatText, completedCount);
+
+  await _finalizeGeneration(results, jobState.sessionId, jobState.sources, jobState.chatText, jobState.wantEmail);
+}
+
+async function generateFromCrea() {
+  const total = Object.values(platformQty).reduce((a, b) => a + b, 0);
+  if (total === 0) { toast('Seleziona almeno una piattaforma!'); return; }
+
+  const chatText = (document.getElementById('crea-chat-input').value || '').trim();
+  const webSearchOn = document.getElementById('crea-web-search-toggle').checked;
+
+  // Determine sources
+  let sources = [];
+  if (selectedArticles.length > 0) {
+    sources = selectedArticles.map(s => ({ ...s.article, source_mode: 'rss' }));
+  }
+  if (chatText && !selectedArticles.length) {
+    sources = [{ title: 'Contenuto personalizzato', description: chatText, summary: chatText, source: 'Tu', url: '', source_mode: 'custom_text', custom_text: chatText }];
+  }
+  if (chatText && selectedArticles.length > 0) {
+    // Chat text becomes the global opinion
+  }
+  if (!sources.length && !chatText) { toast('Scrivi qualcosa o seleziona articoli!'); return; }
+  if (!sources.length && chatText) {
+    sources = [{ title: 'Contenuto personalizzato', description: chatText, summary: chatText, source: 'Tu', url: '', source_mode: 'custom_text', custom_text: chatText }];
+  }
+
+  // Web search
+  if (webSearchOn && chatText && !selectedArticles.length) {
+    toast('🔍 Ricerca in corso...');
+    try {
+      const searchResp = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: chatText }),
+      }).then(safeJson);
+      if (searchResp.results && searchResp.results.length > 0) {
+        const scored = await fetch('/api/search/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ results: searchResp.results }),
+        }).then(safeJson);
+        sources = (scored.scored || searchResp.results).slice(0, 3).map(r => ({
+          title: r.title || '', description: r.snippet || r.description || '', summary: r.snippet || r.summary || '',
+          source: r.source || r.domain || '', url: r.url || '', source_mode: 'web_search',
+        }));
+        toast(`✅ Trovati ${sources.length} risultati web`);
+      }
+    } catch(e) { toast('Errore ricerca web, genero dal testo...'); }
+  }
+
+  // Build queue
+  const queue = [];
+  const effectiveOpinion = (chatText && selectedArticles.length > 0) ? chatText : '';
+  _creaArticles = sources.map(s => ({ article: s, opinion: effectiveOpinion }));
+
+  for (const [platform, qty] of Object.entries(platformQty)) {
+    if (qty <= 0) continue;
+    if (platform === 'newsletter' && qty > 0) {
+      queue.push({ type: 'newsletter', sources, opinion: effectiveOpinion });
+      continue;
+    }
+    for (let i = 0; i < qty; i++) {
+      const src = sources[i % sources.length];
+      queue.push({ type: platform, source: src, opinion: effectiveOpinion, variant: i });
+    }
+  }
+
+  // Create session FIRST (so we can save incrementally)
+  let sessionId = null;
   try {
     const sessResp = await fetch('/api/sessions', {
       method: 'POST',
@@ -5944,18 +6079,46 @@ async function generateFromCrea() {
         article: { title: sources.map(s => s.title).join(' | '), category: 'Content' },
         topics: sources.map(s => ({ article: s })),
         opinion: chatText || '',
-        content: currentContent,
-        carousel_images: carouselImages || {},
+        content: {},
+        carousel_images: {},
         platforms: Object.keys(platformQty).filter(p => platformQty[p] > 0),
       }),
     }).then(safeJson);
     currentSession = sessResp;
-  } catch(e) { console.error('Session save failed:', e); }
+    sessionId = sessResp.id;
+  } catch(e) { console.error('Session create failed:', e); }
 
-  // Auto-scroll to results
-  setTimeout(() => {
-    document.getElementById('crea-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 150);
+  // Show progress UI
+  const resultsSection = document.getElementById('crea-results');
+  resultsSection.style.display = 'block';
+  document.getElementById('gen-progress').style.display = 'block';
+  document.getElementById('gen-results').innerHTML = '';
+  document.getElementById('btn-crea-generate').disabled = true;
+  window._isGenerating = true;
+  const genOverlay = document.getElementById('gen-overlay');
+  genOverlay.classList.add('active');
+
+  // Check email preference
+  const wantEmail = document.getElementById('gen-overlay-email-check').checked;
+
+  // Save job state to localStorage for reload resume
+  localStorage.setItem('cd_gen_job', JSON.stringify({
+    sessionId,
+    queue: [...queue],
+    totalCalls: queue.length,
+    sources,
+    chatText,
+    opinion: effectiveOpinion,
+    wantEmail,
+    startedAt: Date.now(),
+    completedContent: {},
+  }));
+
+  // Process queue
+  const results = await _processQueue(queue, sessionId, sources, chatText, 0);
+
+  // Finalize
+  await _finalizeGeneration(results, sessionId, sources, chatText, wantEmail);
 }
 
 function renderCreaResults(results) {
@@ -5964,19 +6127,37 @@ function renderCreaResults(results) {
   let html = '';
 
   for (const [platform, items] of Object.entries(results)) {
-    html += `<div class="content-section"><h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">${platformNames[platform] || platform}</h3><div class="content-grid">`;
+    html += `<div class="content-section"><h2>${platformNames[platform] || platform}</h2><div class="content-grid">`;
     items.forEach((item, idx) => {
       const key = platform + '_' + idx;
       currentContent[key] = item.content;
-      html += `<div class="content-col" id="col-${key}">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-size:12px;font-weight:600;color:var(--text);">#${idx + 1} ${esc(item.source)}</div>
-          <div style="font-size:10px;color:var(--text3);">${item.content.split(/\s+/).length} parole</div>
+      const text = item.content;
+      const words = text.split(/\s+/).filter(Boolean).length;
+      const isApproved = approvedItems[key];
+      html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="${platform}" data-idx="${idx}" id="col-${key}">
+        <h3>${platform === 'newsletter' ? 'Newsletter' : (platform === 'video_script' ? 'Script' : 'Post')} ${idx + 1}</h3>
+        <div class="col-sub">${esc(item.source)}</div>
+        <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
+        <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
+        <div class="opinion-inline">
+          <label>🎯 La tua opinione su questo tema (opzionale):</label>
+          <textarea id="opinion-${key}" placeholder="Cosa ne pensi? La tua prospettiva verrà integrata nel post..."></textarea>
+          <button class="btn btn-secondary btn-small" onclick="integrateOpinion('${platform}', ${idx})">Integra opinione</button>
         </div>
-        <textarea style="width:100%;min-height:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;line-height:1.5;resize:vertical;font-family:inherit;" onchange="currentContent['${key}']=this.value">${esc(item.content)}</textarea>
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-small" onclick="navigator.clipboard.writeText(currentContent['${key}']).then(()=>toast('Copiato!'))">📋 Copia</button>
-          <button class="btn btn-secondary btn-small" onclick="approveCreaItem('${key}', this)">✅ Approva</button>
+        <div class="col-actions">
+          <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
+          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
+          <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
+        </div>
+        <div class="feedback-row" id="fb-${key}">
+          <label class="fb-label">📝 Feedback:</label>
+          <textarea placeholder="Come vuoi che lo riscriva?" id="fb-text-${key}"></textarea>
+          <button class="btn btn-green btn-small" onclick="regenerateSingle('${platform}', ${idx})">Rigenera</button>
+        </div>
+        <div class="schedule-row">
+          <label>📅 Programma:</label>
+          <input type="datetime-local" id="sched-${key}">
+          <button class="btn btn-orange btn-small" onclick="scheduleContent('${platform}', ${idx})">Programma</button>
         </div>
       </div>`;
     });
@@ -6832,6 +7013,10 @@ checkPaymentStatus();
       <span id="gen-overlay-pct" style="font-size:11px;color:var(--text2);">0%</span>
     </div>
   </div>
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px;">
+    <input type="checkbox" id="gen-overlay-email-check" style="width:16px;height:16px;accent-color:var(--text);">
+    <span style="font-size:12px;color:var(--text2);">Ti mando una mail quando ho finito?</span>
+  </label>
 </div>
 
 </body>

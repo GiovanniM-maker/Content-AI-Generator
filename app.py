@@ -2049,6 +2049,67 @@ def delete_session(session_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/notify-completion", methods=["POST"])
+def notify_completion():
+    """Send email notification when generation is complete."""
+    user_id = _get_user_id()
+    user_email = getattr(g, "user_email", "")
+    if not user_email:
+        return jsonify({"error": "No email found"}), 400
+
+    resend_key = os.getenv("RESEND_API_KEY", "")
+    if not resend_key:
+        # Fallback: just create in-app notification
+        db.create_notification(
+            user_id, "generation_complete",
+            "Generazione completata!",
+            "I tuoi contenuti sono pronti. Vai alla sezione Crea per vederli."
+        )
+        return jsonify({"ok": True, "method": "in_app"})
+
+    body = request.json or {}
+    platforms = body.get("platforms", [])
+    platform_names = {
+        "linkedin": "LinkedIn", "instagram": "Instagram",
+        "twitter": "Twitter/X", "newsletter": "Newsletter",
+        "video_script": "Video Script"
+    }
+    platform_list = ", ".join(
+        platform_names.get(p.replace(/_\d+$/, ""), p)
+        for p in set(p.replace(/_\d+$/, "") for p in platforms)
+    )
+
+    try:
+        import resend
+        resend.api_key = resend_key
+        resend.Emails.send({
+            "from": os.getenv("RESEND_FROM", "Content AI <noreply@resend.dev>"),
+            "to": [user_email],
+            "subject": "✅ I tuoi contenuti AI sono pronti!",
+            "html": f"""
+            <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px;">
+              <h2 style="color:#111;">Generazione completata!</h2>
+              <p>I contenuti per <strong>{platform_list or 'le piattaforme selezionate'}</strong> sono stati generati con successo.</p>
+              <p><a href="{os.getenv('APP_URL', 'https://content-ai-generator.onrender.com')}/app"
+                     style="display:inline-block;background:#111;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">
+                Vai ai tuoi contenuti →
+              </a></p>
+              <p style="color:#888;font-size:12px;margin-top:24px;">Content AI Generator</p>
+            </div>
+            """,
+        })
+        return jsonify({"ok": True, "method": "email"})
+    except Exception as e:
+        _log_pipeline("error", f"Email send failed: {e}")
+        # Fallback: in-app notification
+        db.create_notification(
+            user_id, "generation_complete",
+            "Generazione completata!",
+            "I tuoi contenuti sono pronti."
+        )
+        return jsonify({"ok": True, "method": "in_app", "email_error": str(e)})
+
+
 @app.route("/api/feedback")
 def get_feedback():
     user_id = _get_user_id()
