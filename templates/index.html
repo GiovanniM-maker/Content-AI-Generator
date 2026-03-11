@@ -938,6 +938,23 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 .dash-cat-chips .dcc-edit { font-size: 11px; color: var(--text3); cursor: pointer; margin-left: 4px; text-decoration: underline; }
 .dash-cat-chips .dcc-edit:hover { color: var(--accent); }
 
+/* Score filter chips */
+.dash-filter-section { margin-bottom: 12px; }
+.dash-filter-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); font-weight: 700; margin-bottom: 6px; }
+.dash-score-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dash-score-chip { padding: 5px 12px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); border-radius: 20px; background: var(--bg2); color: var(--text2); cursor: pointer; transition: all .2s; white-space: nowrap; }
+.dash-score-chip:hover { border-color: var(--accent); color: var(--accent); }
+.dash-score-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Read article link */
+.da-read-link { display: inline-block; margin-top: 10px; font-size: 12px; color: var(--accent); font-weight: 600; text-decoration: none; transition: opacity .2s; }
+.da-read-link:hover { opacity: 0.7; text-decoration: underline; }
+
+/* Platform qty lock (free plan) */
+.pq-row.pq-locked { opacity: 0.5; }
+.pq-row.pq-locked .pq-btn { cursor: not-allowed; }
+.pq-lock-badge { font-size: 9px; background: var(--accent); color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: auto; }
+
 /* Collapsible Platform Panel (Crea) */
 .crea-platforms-toggle { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: all .2s; margin-bottom: 4px; user-select: none; }
 .crea-platforms-toggle:hover { border-color: var(--accent); }
@@ -2226,16 +2243,20 @@ body::after {
       </div>
       <div id="dash-fetch-log" class="log-box" style="display:none;max-height:150px;margin-bottom:12px;"></div>
 
-      <!-- Category chips + filters -->
-      <div id="dash-cat-chips" class="dash-cat-chips"></div>
+      <!-- Category filter -->
+      <div class="dash-filter-section">
+        <div class="dash-filter-label">Categorie</div>
+        <div id="dash-cat-chips" class="dash-cat-chips"></div>
+      </div>
+
+      <!-- Score filter -->
+      <div class="dash-filter-section">
+        <div class="dash-filter-label">Punteggio</div>
+        <div id="dash-score-chips" class="dash-score-chips"></div>
+      </div>
+
+      <!-- Search + count -->
       <div class="dash-filters">
-        <select id="dash-score-filter" onchange="renderNewspaper()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;">
-          <option value="0">Tutti i punteggi</option>
-          <option value="5" selected>5+</option>
-          <option value="6">6+</option>
-          <option value="7">7+</option>
-          <option value="8">8+</option>
-        </select>
         <input type="text" id="dash-search" placeholder="🔍 Cerca articoli..." onkeyup="renderNewspaper()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;flex:1;min-width:150px;">
         <span id="dash-article-count" class="dash-meta"></span>
       </div>
@@ -3250,6 +3271,7 @@ async function loadUsageBar() {
     const planDetails = data.plan_details || {};
     allowedPlatforms = planDetails.platforms || ['linkedin', 'newsletter'];
     applyPlatformLocks();
+    applyPlatformQtyLocks();
 
     const topbarUsage = document.getElementById('topbar-usage');
     if (!topbarUsage) return;
@@ -5207,6 +5229,7 @@ async function deleteSession(sessionId, title) {
 let dashArticles = [];
 let dashLoaded = false;
 let dashActiveChip = ''; // '' = tutte
+let dashScoreFilter = 5; // default 5+
 
 const CAT_EMOJI = {
   'AI Research': '🤖', 'AI News & Media': '📡', 'AI Tools & Automazioni': '⚙️',
@@ -5292,6 +5315,7 @@ async function loadNewspaperView() {
     document.getElementById('dash-onboarding').style.display = 'flex';
   }
   renderCatChips();
+  renderScoreChips();
   if (!dashLoaded) {
     try {
       const status = await fetch('/api/articles/status').then(safeJson);
@@ -5338,6 +5362,21 @@ function toggleCatChip(cat) {
   renderNewspaper();
 }
 
+function renderScoreChips() {
+  const container = document.getElementById('dash-score-chips');
+  if (!container) return;
+  const options = [{label:'Tutti', val:0}, {label:'5+', val:5}, {label:'6+', val:6}, {label:'7+', val:7}, {label:'8+', val:8}, {label:'9+', val:9}];
+  container.innerHTML = options.map(o =>
+    `<span class="dash-score-chip${dashScoreFilter === o.val ? ' active' : ''}" onclick="toggleScoreChip(${o.val})">${o.label}</span>`
+  ).join('');
+}
+
+function toggleScoreChip(val) {
+  dashScoreFilter = val;
+  renderScoreChips();
+  renderNewspaper();
+}
+
 function timeAgo(isoStr) {
   try {
     const d = new Date(isoStr);
@@ -5353,7 +5392,7 @@ function renderNewspaper() {
   const container = document.getElementById('dash-articles');
   const savedCats = JSON.parse(localStorage.getItem('dash_selected_cats') || '[]');
   const chipFilter = dashActiveChip;
-  const scoreFilter = parseInt(document.getElementById('dash-score-filter').value) || 0;
+  const scoreFilter = dashScoreFilter;
   const searchTerm = (document.getElementById('dash-search').value || '').toLowerCase().trim();
 
   let filtered = dashArticles.filter(a => {
@@ -5392,6 +5431,7 @@ function renderNewspaper() {
         <span>${esc(source)}${dateStr ? ' · ' + dateStr : ''}</span>
         <span class="da-score">${score}/10</span>
       </div>
+      ${a.url ? `<a class="da-read-link" href="${esc(a.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Leggi articolo →</a>` : ''}
     </div>`;
   });
   container.innerHTML = html;
@@ -5491,9 +5531,42 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function adjustQty(platform, delta) {
+  // Block locked platforms for free users
+  if (delta > 0 && !allowedPlatforms.includes(platform)) {
+    toast('🔒 Piattaforma disponibile con il piano Pro');
+    return;
+  }
   const max = platformLimits[platform] || 3;
   platformQty[platform] = Math.max(0, Math.min(max, platformQty[platform] + delta));
   document.getElementById('qty-' + platform).textContent = platformQty[platform];
+  updateGenSummary();
+}
+
+function applyPlatformQtyLocks() {
+  document.querySelectorAll('.pq-row').forEach(row => {
+    const btn = row.querySelector('.pq-btn');
+    if (!btn) return;
+    const match = btn.getAttribute('onclick')?.match(/'(\w+)'/);
+    if (!match) return;
+    const platform = match[1];
+    const isAllowed = allowedPlatforms.includes(platform);
+    row.classList.toggle('pq-locked', !isAllowed);
+    if (!isAllowed) {
+      if (!row.querySelector('.pq-lock-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'pq-lock-badge';
+        badge.textContent = '🔒 Pro';
+        row.appendChild(badge);
+      }
+      platformQty[platform] = 0;
+      const valEl = document.getElementById('qty-' + platform);
+      if (valEl) valEl.textContent = '0';
+    } else {
+      row.classList.remove('pq-locked');
+      const badge = row.querySelector('.pq-lock-badge');
+      if (badge) badge.remove();
+    }
+  });
   updateGenSummary();
 }
 
