@@ -7282,7 +7282,7 @@ let _templateSelectCallback = null;
 
 async function loadPersonalizzazione() {
   try {
-    const res = await authFetch('/api/templates');
+    const res = await fetch('/api/templates');
     if (!res.ok) return;
     const data = await res.json();
     _persTemplates = data.templates || [];
@@ -7409,22 +7409,22 @@ function selectAspectRatio(ratio) {
 async function createNewTemplateFromWizard() {
   const name = document.getElementById('pers-template-name').value.trim() || 'Senza nome';
   try {
-    const res = await authFetch('/api/templates', {
+    const res = await fetch('/api/templates', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ template_type: _persCurrentType, name, aspect_ratio: _persCurrentRatio })
     });
     const data = await res.json();
-    if (!res.ok) { showToast(data.error || 'Errore'); return; }
-    showToast('Template creato!');
+    if (!res.ok) { toast(data.error || 'Errore'); return; }
+    toast('Template creato!');
     openTemplateChat(data.id);
-  } catch(e) { showToast('Errore nella creazione'); }
+  } catch(e) { toast('Errore nella creazione'); }
 }
 
 async function openTemplateChat(templateId) {
   try {
-    const res = await authFetch(`/api/templates/${templateId}`);
-    if (!res.ok) { showToast('Template non trovato'); return; }
+    const res = await fetch(`/api/templates/${templateId}`);
+    if (!res.ok) { toast('Template non trovato'); return; }
     const tpl = await res.json();
     _persCurrentId = tpl.id;
     _persCurrentType = tpl.template_type;
@@ -7457,7 +7457,7 @@ async function openTemplateChat(templateId) {
     updateTemplatePreview();
 
     showPersScreen('pers-chat');
-  } catch(e) { showToast('Errore nel caricamento'); }
+  } catch(e) { toast('Errore nel caricamento'); }
 }
 
 async function sendTemplateMessage() {
@@ -7484,7 +7484,7 @@ async function sendTemplateMessage() {
   msgContainer.scrollTop = msgContainer.scrollHeight;
 
   try {
-    const res = await authFetch(`/api/templates/${_persCurrentId}/chat`, {
+    const res = await fetch(`/api/templates/${_persCurrentId}/chat`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ message })
@@ -7546,7 +7546,7 @@ async function updateTemplatePreview() {
   // For IG: render via API → base64 PNG
   container.innerHTML = '<div class="pers-preview-empty">Rendering preview...</div>';
   try {
-    const res = await authFetch(`/api/templates/${_persCurrentId}/preview`, { method: 'POST' });
+    const res = await fetch(`/api/templates/${_persCurrentId}/preview`, { method: 'POST' });
     const data = await res.json();
     if (data.type === 'image' && data.image) {
       container.innerHTML = `<img src="${data.image}" alt="Template preview">`;
@@ -7571,10 +7571,10 @@ function persPreviewMode(mode, btn) {
 async function deleteTemplate(id, name) {
   if (!confirm(`Eliminare il template "${name}"?`)) return;
   try {
-    const res = await authFetch(`/api/templates/${id}`, { method: 'DELETE' });
-    if (res.ok) { showToast('Template eliminato'); loadPersonalizzazione(); }
-    else showToast('Errore nell\'eliminazione');
-  } catch(e) { showToast('Errore'); }
+    const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+    if (res.ok) { toast('Template eliminato'); loadPersonalizzazione(); }
+    else toast('Errore nell\'eliminazione');
+  } catch(e) { toast('Errore'); }
 }
 
 function deleteCurrentTemplate() {
@@ -7586,16 +7586,16 @@ function deleteCurrentTemplate() {
 
 async function clonePreset(presetId, name) {
   try {
-    const res = await authFetch(`/api/templates/clone/${presetId}`, {
+    const res = await fetch(`/api/templates/clone/${presetId}`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ name: `${name} (personalizzato)` })
     });
     const data = await res.json();
-    if (!res.ok) { showToast(data.error || 'Errore'); return; }
-    showToast('Template clonato!');
+    if (!res.ok) { toast(data.error || 'Errore'); return; }
+    toast('Template clonato!');
     openTemplateChat(data.id);
-  } catch(e) { showToast('Errore nella clonazione'); }
+  } catch(e) { toast('Errore nella clonazione'); }
 }
 
 // ---- Template selection for Crea flow ----
@@ -7608,7 +7608,7 @@ async function checkTemplateBeforeGen(platforms, callback) {
 
   // Fetch user templates
   try {
-    const res = await authFetch('/api/templates');
+    const res = await fetch('/api/templates');
     if (!res.ok) { callback({}); return; }
     const data = await res.json();
     const userTpls = data.templates || [];
