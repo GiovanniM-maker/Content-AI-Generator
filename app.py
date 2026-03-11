@@ -208,16 +208,8 @@ def _delete_feedback(format_type: str, feedback_id: str) -> bool:
     return ok
 
 
-def _enrich_prompt_with_feedback(format_type: str, feedback_ids: list[str]) -> str:
-    FORMAT_MAP = {
-        "linkedin": FORMAT_LINKEDIN,
-        "instagram": FORMAT_INSTAGRAM,
-        "newsletter": FORMAT_NEWSLETTER,
-        "twitter": FORMAT_TWITTER,
-        "video_script": FORMAT_VIDEO_SCRIPT,
-        "system_prompt": SYSTEM_PROMPT,
-    }
-    current_prompt = FORMAT_MAP.get(format_type, "")
+def _enrich_prompt_with_feedback(prompt_name: str, feedback_ids: list[str]) -> str:
+    current_prompt = _get_prompt(prompt_name)
     if not current_prompt:
         return ""
 
@@ -335,15 +327,7 @@ def _log_pipeline(level: str, message: str, extra: dict | None = None, user_id: 
 
 
 def _snapshot_all_prompts(trigger: str = "init"):
-    prompts = {
-        "system_prompt": SYSTEM_PROMPT,
-        "format_linkedin": FORMAT_LINKEDIN,
-        "format_instagram": FORMAT_INSTAGRAM,
-        "format_newsletter": FORMAT_NEWSLETTER,
-        "format_twitter": FORMAT_TWITTER,
-        "format_video_script": FORMAT_VIDEO_SCRIPT,
-    }
-    for name, content in prompts.items():
+    for name, content in BASE_PROMPTS.items():
         _log_prompt_version(name, content, trigger)
 
 
@@ -1033,8 +1017,8 @@ def get_articles():
 # Content Generation Prompts
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """Sei il ghostwriter di Juan, un consulente italiano di AI automation specializzato in retail ed eCommerce.
-Il tuo compito è scrivere contenuti che posizionano Juan come un esperto pratico e onesto di AI applicata al business reale.
+BASE_SYSTEM_PROMPT = """Sei il ghostwriter personale dell'utente, un professionista che vuole posizionarsi come esperto nel suo settore.
+Il tuo compito è scrivere contenuti che posizionano l'utente come un esperto pratico e onesto nel suo ambito professionale.
 
 TONO DI VOCE:
 - Diretto e pratico, mai accademico
@@ -1043,13 +1027,13 @@ TONO DI VOCE:
 - Non prolisso: ogni parola deve guadagnarsi il suo posto
 - Coinvolgente: poni domande al lettore, poi dai le risposte più avanti nel testo
 - Mai hype, mai buzzword vuote
-- Scrivi come se stessi spiegando a un imprenditore italiano intelligente ma non tecnico
+- Scrivi come se stessi spiegando a un professionista intelligente ma non specializzato
 
 FONTE PRIMARIA: l'articolo selezionato
-FONTE SECONDARIA: il punto di vista personale di Juan (integra sempre la sua opinione nel testo, in prima persona, come se fosse sua)
+FONTE SECONDARIA: il punto di vista personale dell'utente (integra sempre la sua opinione nel testo, in prima persona, come se fosse sua)
 LINGUA: Italiano, con termini tecnici in inglese dove necessario (AI, workflow, ecc.)"""
 
-FORMAT_LINKEDIN = """Formato LinkedIn — FOCUS: VALORE DI BUSINESS
+BASE_FORMAT_LINKEDIN = """Formato LinkedIn — FOCUS: VALORE DI BUSINESS
 - Lunghezza: 200-300 parole
 - ANGOLO: Non tecnico. Parla di produttività, risparmio, economics, vantaggio competitivo.
   Traduci ogni novità tech in "cosa cambia per il mio business"
@@ -1059,13 +1043,13 @@ FORMAT_LINKEDIN = """Formato LinkedIn — FOCUS: VALORE DI BUSINESS
   * Hook (1 riga)
   * Contesto: qual è il problema/opportunità di business (2-3 righe)
   * Insight pratico: cosa significa per chi gestisce un'azienda (3-4 righe)
-  * Opinione personale di Juan, in prima persona (2-3 righe)
+  * Opinione personale dell'utente, in prima persona (2-3 righe)
   * Domanda aperta che invita commenti da imprenditori/manager
 - CTA finale: "Se vuoi approfondire, sono nella newsletter (link in bio)"
 - Max 2-3 emoji, niente bullet points lunghi
 - NON usare gergo tecnico senza spiegarlo in termini di business impact"""
 
-FORMAT_INSTAGRAM = """Formato Instagram — CAROSELLO (slide separate)
+BASE_FORMAT_INSTAGRAM = """Formato Instagram — CAROSELLO (slide separate)
 - Struttura: restituisci il testo diviso in SLIDE, ognuna separata da ---SLIDE---
 - SLIDE 1 (copertina): titolo forte da 5-8 parole, massimo impatto visivo, SOLO il titolo
 - SLIDE 2-5 (contenuto): ogni slide ha UN singolo concetto chiave in 2-3 righe brevi.
@@ -1074,25 +1058,25 @@ FORMAT_INSTAGRAM = """Formato Instagram — CAROSELLO (slide separate)
 - SLIDE FINALE: CTA + domanda che invita interazione ("Salva questo post se..." o "Qual è la tua esperienza con...")
 - CAPTION (dopo l'ultima slide, separata da ---CAPTION---):
   * 1 frase riassuntiva + domanda al lettore
-  * 5-8 hashtag rilevanti (#AIItalia #automazione #intelligenzaartificiale #ecommerce #retail + contestuali)
+  * 5-8 hashtag rilevanti e contestuali
 - Tono: diretto, visivo, zero filler. Ogni parola deve guadagnarsi il suo spazio nel carosello.
 - Lunghezza totale: 4-6 slide + caption"""
 
-FORMAT_NEWSLETTER = """Formato Newsletter settimanale (Beehiiv):
+BASE_FORMAT_NEWSLETTER = """Formato Newsletter settimanale (Beehiiv):
 - Lunghezza: 600-900 parole
 - Struttura:
   * Titolo oggetto email (max 50 caratteri, deve invogliare ad aprire)
   * Apertura: scenario concreto o domanda che aggancia (2-3 righe)
   * SEZIONE 1, 2, 3: un paragrafo per ogni topic della settimana (4-6 righe ciascuno),
-    con l'opinione di Juan integrata naturalmente in prima persona
+    con l'opinione dell'utente integrata naturalmente in prima persona
   * SEZIONE ESCLUSIVA: un insight, consiglio pratico o previsione che NON si trova
-    nei topic trattati — qualcosa che solo Juan può dare ai suoi lettori
+    nei topic trattati — qualcosa che solo l'autore può dare ai suoi lettori
     (es. un workflow che ha testato, un tool nascosto, una riflessione controcorrente)
   * Chiusura: takeaway pratico in 1-2 righe + invito a rispondere alla mail
 - Stile conversazionale, come una lettera a un amico imprenditore
 - Niente formattazione pesante, max un grassetto per concetto chiave"""
 
-FORMAT_TWITTER = """Formato Twitter/X — POST O THREAD
+BASE_FORMAT_TWITTER = """Formato Twitter/X — POST O THREAD
 - Se il contenuto si presta: singolo tweet (max 280 caratteri), potente e shareable
 - Se il tema è più complesso: thread da 3-5 tweet, ogni tweet è autonomo ma collegato
 - Per thread: separa ogni tweet con ---TWEET---
@@ -1104,7 +1088,7 @@ FORMAT_TWITTER = """Formato Twitter/X — POST O THREAD
 - Niente emoji eccessive, max 1 per tweet
 - Scrivi come un founder che condivide una lezione appena imparata"""
 
-FORMAT_VIDEO_SCRIPT = """Formato Short Video Script (Reels/TikTok/Shorts — 60-90 secondi):
+BASE_FORMAT_VIDEO_SCRIPT = """Formato Short Video Script (Reels/TikTok/Shorts — 60-90 secondi):
 - Struttura OBBLIGATORIA con sezioni separate da ---SECTION---:
   * HOOK (primi 3 secondi): frase d'apertura che ferma lo scroll. Inizia con una domanda
     provocatoria, un'affermazione scioccante, o "La maggior parte delle persone non sa che..."
@@ -1119,6 +1103,37 @@ FORMAT_VIDEO_SCRIPT = """Formato Short Video Script (Reels/TikTok/Shorts — 60-
 - Tra parentesi [B-ROLL] suggerisci riprese di supporto
 - Lunghezza totale: 150-200 parole parlate
 - Lingua: italiano parlato, informale ma competente"""
+
+# Base prompts dict for initialization
+BASE_PROMPTS = {
+    "system_prompt": BASE_SYSTEM_PROMPT,
+    "format_linkedin": BASE_FORMAT_LINKEDIN,
+    "format_instagram": BASE_FORMAT_INSTAGRAM,
+    "format_newsletter": BASE_FORMAT_NEWSLETTER,
+    "format_twitter": BASE_FORMAT_TWITTER,
+    "format_video_script": BASE_FORMAT_VIDEO_SCRIPT,
+}
+
+
+def _get_prompt(prompt_name: str) -> str:
+    """Get user-specific prompt, falling back to base if not found."""
+    try:
+        user_id = _get_user_id()
+        row = db.get_user_prompt(user_id, prompt_name)
+        if row:
+            return row["content"]
+    except Exception:
+        pass
+    return BASE_PROMPTS.get(prompt_name, "")
+
+
+def _ensure_user_prompts():
+    """Ensure the current user has prompts initialized."""
+    try:
+        user_id = _get_user_id()
+        db.init_user_prompts(user_id, BASE_PROMPTS)
+    except Exception:
+        pass  # Don't block generation if prompt init fails
 
 
 IG_VARIANT_ANGLES = [
@@ -1227,14 +1242,9 @@ def generate_content():
     feedback = body.get("feedback", "")
     variant = body.get("variant", 0)
 
-    FORMAT_MAP = {
-        "linkedin": FORMAT_LINKEDIN,
-        "instagram": FORMAT_INSTAGRAM,
-        "twitter": FORMAT_TWITTER,
-        "video_script": FORMAT_VIDEO_SCRIPT,
-    }
-    if format_type not in FORMAT_MAP:
-        return jsonify({"error": f"format must be one of: {', '.join(FORMAT_MAP.keys())}"}), 400
+    VALID_FORMATS = {"linkedin", "instagram", "twitter", "video_script"}
+    if format_type not in VALID_FORMATS:
+        return jsonify({"error": f"format must be one of: {', '.join(VALID_FORMATS)}"}), 400
 
     # --- Plan gating ---
     user_id = _get_user_id()
@@ -1263,7 +1273,8 @@ def generate_content():
     if feedback:
         _add_feedback(format_type, feedback)
 
-    fmt = FORMAT_MAP[format_type]
+    _ensure_user_prompts()
+    fmt = _get_prompt(f"format_{format_type}")
     if format_type == "instagram" and 0 < variant < len(IG_VARIANT_ANGLES):
         fmt += IG_VARIANT_ANGLES[variant]
 
@@ -1272,9 +1283,9 @@ def generate_content():
         regen_instruction = f"\n\nISTRUZIONE DI RISCRITTURA (priorità alta, segui questa indicazione):\n{feedback}"
 
     if opinion:
-        opinion_section = f"\nOPINIONE DI JUAN:\n{opinion}"
+        opinion_section = f"\nOPINIONE DELL'UTENTE:\n{opinion}"
     else:
-        opinion_section = "\nNOTA: Questa è una prima bozza. Juan non ha ancora aggiunto la sua prospettiva personale. Genera il contenuto basandoti sull'articolo, mantenendo il tono di Juan. L'opinione verrà integrata nella prossima iterazione."
+        opinion_section = "\nNOTA: Questa è una prima bozza. L'utente non ha ancora aggiunto la sua prospettiva personale. Genera il contenuto basandoti sull'articolo, mantenendo il tono dell'utente. L'opinione verrà integrata nella prossima iterazione."
 
     source_mode = article.get("source_mode", "rss")
     if source_mode == "custom_text":
@@ -1303,13 +1314,17 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
     try:
         result = _llm_call(
             [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": _get_prompt("system_prompt")},
                 {"role": "user", "content": user_msg},
             ],
             model=MODEL_GENERATION, temperature=0.7,
         )
         _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
         _update_weekly_status(format_type, "generated")
+        try:
+            db.create_notification(user_id, "generation", f"Contenuto {format_type} generato", article.get("title", "")[:120])
+        except Exception:
+            pass
         return jsonify({"content": result, "format": format_type})
     except Exception as e:
         _log_pipeline("error", f"LLM generation error ({format_type}): {e}")
@@ -1325,6 +1340,7 @@ def generate_newsletter():
         return jsonify({"error": "At least 1 topic required"}), 400
     if feedback:
         _add_feedback("newsletter", feedback)
+    _ensure_user_prompts()
     has_opinions = any(t.get("opinion", "").strip() for t in topics)
     topics_text = ""
     for i, t in enumerate(topics, 1):
@@ -1338,18 +1354,19 @@ Riassunto: {art.get('summary', '')}
 Descrizione: {art.get('description', '')}
 """
         if op:
-            topics_text += f"Opinione di Juan: {op}\n"
+            topics_text += f"Opinione dell'utente: {op}\n"
     if not has_opinions:
-        topics_text += "\nNOTA: Questa è una prima bozza. Juan non ha ancora aggiunto le sue prospettive personali.\n"
+        topics_text += "\nNOTA: Questa è una prima bozza. L'utente non ha ancora aggiunto le sue prospettive personali.\n"
     regen_instruction = ""
     if feedback:
         regen_instruction = f"\n\nISTRUZIONE DI RISCRITTURA (priorità alta, segui questa indicazione):\n{feedback}"
 
-    user_msg = f"""Questa settimana Juan ha selezionato questi topic per la sua newsletter:
+    nl_format = _get_prompt("format_newsletter")
+    user_msg = f"""Questa settimana l'utente ha selezionato questi topic per la sua newsletter:
 {topics_text}
 
 FORMATO RICHIESTO:
-{FORMAT_NEWSLETTER}{regen_instruction}
+{nl_format}{regen_instruction}
 
 IMPORTANTE: La sezione esclusiva deve essere un valore aggiunto reale.
 
@@ -1358,13 +1375,18 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
     try:
         result = _llm_call(
             [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": _get_prompt("system_prompt")},
                 {"role": "user", "content": user_msg},
             ],
             model=MODEL_GENERATION, temperature=0.7,
         )
         _log_pipeline("info", "Generated newsletter")
         _update_weekly_status("newsletter", "generated")
+        try:
+            user_id = _get_user_id()
+            db.create_notification(user_id, "generation", "Newsletter generata", f"{len(topics)} topic inclusi")
+        except Exception:
+            pass
         return jsonify({"content": result, "format": "newsletter"})
     except Exception as e:
         _log_pipeline("error", f"LLM newsletter error: {e}")
@@ -1388,7 +1410,7 @@ REGOLE IMPORTANTI:
 5. Il titolo/oggetto email → <h1> grande e accattivante
 6. Sezioni con heading <h2>, separatori sottili tra sezioni
 7. Evidenzia i grassetti (**testo**) con <strong style="color:#6c5ce7;">
-8. Aggiungi un header con il brand "Juan — AI Automation" e un footer con unsubscribe placeholder
+8. Aggiungi un header con il brand dell'utente e un footer con unsubscribe placeholder
 9. Rendi la sezione esclusiva visivamente distinta (bordo laterale colorato o sfondo diverso)
 10. Responsive: usa percentage widths dove possibile
 11. Restituisci SOLO il codice HTML completo (da <!DOCTYPE html> a </html>), nient'altro.
@@ -1594,8 +1616,6 @@ def delete_feedback(format_type, feedback_id):
 
 @app.route("/api/prompts/enrich", methods=["POST"])
 def enrich_prompt():
-    global FORMAT_LINKEDIN, FORMAT_INSTAGRAM, FORMAT_NEWSLETTER, FORMAT_TWITTER, FORMAT_VIDEO_SCRIPT
-
     body = request.json
     format_type = body.get("format_type", "")
     feedback_ids = body.get("feedback_ids", [])
@@ -1606,40 +1626,30 @@ def enrich_prompt():
     if not feedback_ids:
         return jsonify({"error": "No feedback selected"}), 400
 
-    PROMPT_MAP = {
-        "linkedin": FORMAT_LINKEDIN,
-        "instagram": FORMAT_INSTAGRAM,
-        "newsletter": FORMAT_NEWSLETTER,
-        "twitter": FORMAT_TWITTER,
-        "video_script": FORMAT_VIDEO_SCRIPT,
-    }
-    old_prompt = PROMPT_MAP[format_type]
-    new_prompt = _enrich_prompt_with_feedback(format_type, feedback_ids)
+    prompt_name = f"format_{format_type}"
+    _ensure_user_prompts()
+    old_prompt = _get_prompt(prompt_name)
+    new_prompt = _enrich_prompt_with_feedback(prompt_name, feedback_ids)
 
     if new_prompt == old_prompt:
         return jsonify({"error": "Enrichment produced no changes"}), 400
 
-    if format_type == "linkedin":
-        FORMAT_LINKEDIN = new_prompt
-    elif format_type == "instagram":
-        FORMAT_INSTAGRAM = new_prompt
-    elif format_type == "newsletter":
-        FORMAT_NEWSLETTER = new_prompt
-    elif format_type == "twitter":
-        FORMAT_TWITTER = new_prompt
-    elif format_type == "video_script":
-        FORMAT_VIDEO_SCRIPT = new_prompt
-
-    prompt_name = f"format_{format_type}"
+    # Save enriched prompt to user's DB record
+    user_id = _get_user_id()
+    db.upsert_user_prompt(user_id, prompt_name, new_prompt, is_base=False)
     _log_prompt_version(prompt_name, new_prompt, trigger="enrichment")
 
-    user_id = _get_user_id()
     db.mark_feedback_enriched(user_id, feedback_ids)
 
     selected = db.get_feedback_by_ids(user_id, feedback_ids)
     selected_texts = [e["feedback"] for e in selected]
     _log_pipeline("info", f"Prompt enriched: {format_type} (used {len(feedback_ids)} feedback comments)",
                   {"feedback_used": selected_texts})
+    try:
+        db.create_notification(user_id, "enrichment", f"Prompt {format_type} migliorato",
+                               f"Integrati {len(feedback_ids)} feedback")
+    except Exception:
+        pass
 
     return jsonify({
         "status": "ok",
@@ -1648,6 +1658,35 @@ def enrich_prompt():
         "new_prompt": new_prompt,
         "feedback_used": len(feedback_ids),
     })
+
+
+# ---------------------------------------------------------------------------
+# Routes — Notifications
+# ---------------------------------------------------------------------------
+
+@app.route("/api/notifications")
+def get_notifications():
+    user_id = _get_user_id()
+    notifs = db.get_notifications(user_id)
+    unread = db.get_unread_count(user_id)
+    return jsonify({"notifications": notifs, "unread_count": unread})
+
+
+@app.route("/api/notifications/read", methods=["POST"])
+def mark_notification_read():
+    user_id = _get_user_id()
+    nid = request.json.get("notification_id", "")
+    if not nid:
+        return jsonify({"error": "notification_id required"}), 400
+    db.mark_notification_read(user_id, nid)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/notifications/read-all", methods=["POST"])
+def mark_all_notifications_read():
+    user_id = _get_user_id()
+    count = db.mark_all_notifications_read(user_id)
+    return jsonify({"status": "ok", "marked": count})
 
 
 @app.route("/api/track-selections", methods=["POST"])

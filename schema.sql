@@ -179,6 +179,33 @@ CREATE TABLE IF NOT EXISTS public.weekly_status (
 );
 
 -- =====================================================
+-- 12. USER PROMPTS (per-user active prompts)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.user_prompts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    prompt_name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    is_base BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, prompt_name)
+);
+
+-- =====================================================
+-- 13. NOTIFICATIONS (in-app notification center)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =====================================================
 -- INDEXES
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_articles_user ON articles(user_id);
@@ -192,6 +219,10 @@ CREATE INDEX IF NOT EXISTS idx_feedback_user_format ON feedback(user_id, format_
 CREATE INDEX IF NOT EXISTS idx_pipeline_logs_user_created ON pipeline_logs(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_prompt_logs_user_name ON prompt_logs(user_id, prompt_name);
 CREATE INDEX IF NOT EXISTS idx_weekly_status_user_week ON weekly_status(user_id, week_key);
+CREATE INDEX IF NOT EXISTS idx_user_prompts_user ON user_prompts(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_prompts_user_name ON user_prompts(user_id, prompt_name);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
 
 -- =====================================================
 -- ROW LEVEL SECURITY (RLS)
@@ -207,6 +238,8 @@ ALTER TABLE pipeline_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prompt_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE selection_prefs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE weekly_status ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_prompts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (auth.uid() = id);
@@ -244,6 +277,12 @@ CREATE POLICY "selection_prefs_all" ON selection_prefs FOR ALL USING (auth.uid()
 
 -- Weekly Status
 CREATE POLICY "weekly_status_all" ON weekly_status FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- User Prompts
+CREATE POLICY "user_prompts_all" ON user_prompts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Notifications
+CREATE POLICY "notifications_all" ON notifications FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- =====================================================
 -- HELPER FUNCTION: Increment weekly status counter

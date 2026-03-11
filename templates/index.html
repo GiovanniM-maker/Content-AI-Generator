@@ -951,27 +951,79 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 
 .empty-state { color: var(--text2); font-size: 13px; padding: 40px 0; text-align: center; }
 
-/* Onboarding overlay */
-.onboarding-overlay {
+/* Tour guidato interattivo */
+.tour-overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.85); z-index: 2000;
+  z-index: 2000; pointer-events: none;
+  animation: fadeIn 0.3s ease;
+}
+.tour-overlay.active { pointer-events: auto; }
+.tour-spotlight {
+  position: absolute; z-index: 2001; border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.78);
+  transition: all 0.4s cubic-bezier(.4,0,.2,1);
+  pointer-events: none;
+}
+.tour-tooltip {
+  position: absolute; z-index: 2002; max-width: 340px; width: 90vw;
+  background: rgba(22,20,38,0.95); backdrop-filter: blur(20px);
+  border: 1px solid var(--border); border-radius: 16px;
+  padding: 24px 20px 18px; color: #fff;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  animation: fadeUp 0.35s ease;
+}
+.tour-tooltip-icon { font-size: 32px; margin-bottom: 8px; }
+.tour-tooltip-title { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.tour-tooltip-desc { font-size: 13px; color: var(--text2); line-height: 1.65; margin-bottom: 16px; }
+.tour-tooltip-footer { display: flex; align-items: center; justify-content: space-between; }
+.tour-dots { display: flex; gap: 6px; }
+.tour-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: all 0.3s; }
+.tour-dot.active { background: var(--accent); width: 20px; border-radius: 4px; }
+.tour-skip { font-size: 11px; color: var(--text3); background: none; border: none; cursor: pointer; pointer-events: auto; }
+.tour-skip:hover { color: #fff; }
+.tour-next { pointer-events: auto; }
+
+/* Notification bell */
+.notif-bell {
+  position: relative; cursor: pointer; font-size: 18px;
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--glass); border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.notif-bell:hover { border-color: var(--borderglow); background: var(--glass2); }
+.notif-badge {
+  position: absolute; top: -2px; right: -2px;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 700;
+  min-width: 16px; height: 16px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  animation: fadeIn 0.4s ease;
+  padding: 0 4px; line-height: 1;
 }
-.onboarding-card {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 20px;
-  max-width: 480px; width: 90%; padding: 40px 36px 32px; text-align: center;
-  position: relative; animation: fadeUp 0.5s ease;
+.notif-panel {
+  position: absolute; top: 48px; right: 0;
+  width: 340px; max-height: 420px; overflow-y: auto;
+  background: rgba(22,20,38,0.97); backdrop-filter: blur(20px);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  z-index: 1500; display: none;
+  animation: fadeUp 0.25s ease;
 }
-.onboarding-icon { font-size: 48px; margin-bottom: 16px; }
-.onboarding-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 10px; }
-.onboarding-desc { font-size: 14px; color: var(--text2); line-height: 1.7; margin-bottom: 24px; }
-.onboarding-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; }
-.onboarding-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.3s; }
-.onboarding-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
-.onboarding-actions { display: flex; gap: 12px; justify-content: center; }
-.onboarding-skip { font-size: 12px; color: var(--text3); background: none; border: none; cursor: pointer; position: absolute; top: 16px; right: 20px; }
-.onboarding-skip:hover { color: var(--text); }
+.notif-panel-header {
+  padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.notif-panel-header h4 { font-size: 14px; font-weight: 700; margin: 0; }
+.notif-mark-all { font-size: 11px; color: var(--accent); cursor: pointer; background: none; border: none; }
+.notif-mark-all:hover { text-decoration: underline; }
+.notif-item {
+  padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer; transition: background 0.15s;
+}
+.notif-item:hover { background: rgba(255,255,255,0.03); }
+.notif-item.unread { border-left: 3px solid var(--accent); }
+.notif-item-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.notif-item-body { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.notif-item-time { font-size: 10px; color: var(--text3); margin-top: 4px; }
+.notif-empty { padding: 30px 16px; text-align: center; color: var(--text3); font-size: 13px; }
 .back-link {
   font-size: 12px; color: var(--text2); cursor: pointer;
   margin-bottom: 16px; display: inline-flex; align-items: center; gap: 4px;
@@ -1619,10 +1671,10 @@ body::after {
   .sched-calendar { overflow-x: auto; }
   .cal-body, .cal-header { min-width: 600px; }
 
-  /* Onboarding */
-  .onboarding-card { padding: 28px 20px 24px; }
-  .onboarding-title { font-size: 18px; }
-  .onboarding-desc { font-size: 13px; }
+  /* Tour */
+  .tour-tooltip { position: fixed !important; bottom: 20px; left: 50%; transform: translateX(-50%); top: auto !important; max-width: 92vw; }
+  /* Notifications */
+  .notif-panel { width: 100vw; right: -12px; border-radius: 0 0 14px 14px; }
 
   /* Auth overlay */
   .auth-card { width: 95%; max-width: 380px; padding: 24px; }
@@ -1645,8 +1697,7 @@ body::after {
   .topbar-tab span { display: none; }
   .topbar-tab { padding: 6px 16px; }
   .crea-zona-header { flex-direction: column; align-items: flex-start; gap: 4px; }
-  .onboarding-card { padding: 24px 16px 20px; }
-  .onboarding-icon { font-size: 36px; }
+  .tour-tooltip { max-width: 95vw; padding: 18px 14px 14px; }
 }
 </style>
 </head>
@@ -1992,6 +2043,18 @@ body::after {
       <span id="usage-count" class="usage-num">—</span>
       <span id="usage-label" style="font-weight:400;">gen</span>
     </div>
+    <!-- Notification bell -->
+    <div id="notif-bell" class="notif-bell" style="display:none;" onclick="toggleNotifPanel(event)">
+      🔔
+      <span id="notif-badge" class="notif-badge" style="display:none;">0</span>
+      <div id="notif-panel" class="notif-panel">
+        <div class="notif-panel-header">
+          <h4>Notifiche</h4>
+          <button class="notif-mark-all" onclick="markAllNotifsRead(event)">Segna tutte lette</button>
+        </div>
+        <div id="notif-list"></div>
+      </div>
+    </div>
     <!-- User pill (filled by JS) -->
     <div id="sidebar-user" class="topbar-user" style="display:none;">
       <div class="user-avatar" id="user-avatar">?</div>
@@ -2288,22 +2351,10 @@ body::after {
   </div><!-- /tab-libreria -->
 </div>
 
-<!-- Onboarding Overlay (first-time users) -->
-<div id="onboarding-overlay" class="onboarding-overlay" style="display:none;">
-  <div class="onboarding-card">
-    <button class="onboarding-skip" onclick="completeOnboarding()">Salta ✕</button>
-    <div id="onboarding-slide">
-      <!-- Populated by JS -->
-    </div>
-    <div class="onboarding-dots">
-      <div class="onboarding-dot active" data-slide="0"></div>
-      <div class="onboarding-dot" data-slide="1"></div>
-      <div class="onboarding-dot" data-slide="2"></div>
-    </div>
-    <div class="onboarding-actions">
-      <button class="btn btn-primary" id="onboarding-next" onclick="nextOnboardingSlide()">Avanti →</button>
-    </div>
-  </div>
+<!-- Tour guidato interattivo -->
+<div id="tour-overlay" class="tour-overlay" style="display:none;">
+  <div id="tour-spotlight" class="tour-spotlight"></div>
+  <div id="tour-tooltip" class="tour-tooltip"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2468,73 +2519,234 @@ function setPricingPeriod(period) {
   });
 }
 
-// ---- Onboarding ----
-const _onboardingSlides = [
+// ---- Tour guidato interattivo ----
+const _tourSteps = [
   {
-    icon: '🚀',
-    title: 'Ecco cosa fa Content AI Generator',
-    desc: 'Parti da un articolo, un link o un\'idea.<br>L\'AI genera <strong>contenuti pronti</strong> per LinkedIn, Instagram, Twitter, Newsletter e Video — tutto in un click.'
+    selector: '.source-mode-tabs',
+    icon: '📡',
+    title: 'Da dove partiamo?',
+    desc: 'Scegli la fonte dei tuoi contenuti: <strong>Feed RSS</strong> per le ultime notizie, <strong>Cerca nel Web</strong> per trovare articoli specifici, o <strong>Scrivi tu</strong> per partire dalla tua idea.',
   },
   {
+    selector: '#global-opinion',
     icon: '✍️',
-    title: 'Scegli un argomento, aggiungi la tua voce',
-    desc: 'Cerca sul web, usa i tuoi feed RSS oppure scrivi tu.<br>Aggiungi <strong>la tua opinione</strong> in 1-2 frasi e l\'AI la integrerà in ogni contenuto.'
+    title: 'Aggiungi la tua voce',
+    desc: 'Scrivi qui <strong>la tua opinione</strong> in 1-2 frasi. L\'AI la integrerà nei contenuti per renderli autentici e personali.',
   },
   {
+    selector: '#platform-selector',
+    icon: '📱',
+    title: 'Seleziona le piattaforme',
+    desc: 'Scegli su quali canali pubblicare: <strong>LinkedIn, Instagram, Twitter, Newsletter</strong> o <strong>Video Script</strong>. Puoi selezionarne più di uno.',
+  },
+  {
+    selector: '#btn-ws-generate',
     icon: '⚡',
-    title: 'Contenuti pronti in 60 secondi',
-    desc: 'Ricevi fino a 5 contenuti personalizzati.<br>Copia, modifica, programma la pubblicazione.<br><strong>Il primo contenuto è gratis!</strong>'
-  }
+    title: 'Genera i contenuti',
+    desc: 'Premi qui e in <strong>60 secondi</strong> avrai contenuti pronti per ogni piattaforma selezionata. Potrai modificarli, rigenerarli o copiarli.',
+  },
+  {
+    selector: '.topbar-tab[data-tab="libreria"]',
+    icon: '📚',
+    title: 'La tua Libreria',
+    desc: 'Qui trovi <strong>tutto lo storico</strong>: sessioni, calendario editoriale, monitor dei prompt e statistiche. Il tuo hub di controllo.',
+  },
 ];
-let _onboardingStep = 0;
+let _tourStep = 0;
 
-function showOnboarding() {
-  _onboardingStep = 0;
-  renderOnboardingSlide();
-  document.getElementById('onboarding-overlay').style.display = 'flex';
+function startTour() {
+  _tourStep = 0;
+  showTab('crea');
+  setTimeout(() => {
+    const overlay = document.getElementById('tour-overlay');
+    overlay.style.display = 'block';
+    overlay.classList.add('active');
+    renderTourStep();
+  }, 300);
 }
 
-function renderOnboardingSlide() {
-  const slide = _onboardingSlides[_onboardingStep];
-  document.getElementById('onboarding-slide').innerHTML = `
-    <div class="onboarding-icon">${slide.icon}</div>
-    <h2 class="onboarding-title">${slide.title}</h2>
-    <p class="onboarding-desc">${slide.desc}</p>
-  `;
-  // Update dots
-  document.querySelectorAll('.onboarding-dot').forEach((d, i) => {
-    d.classList.toggle('active', i === _onboardingStep);
-  });
-  // Update button
-  const btn = document.getElementById('onboarding-next');
-  if (_onboardingStep >= _onboardingSlides.length - 1) {
-    btn.textContent = '✨ Inizia subito';
-    btn.onclick = completeOnboarding;
-  } else {
-    btn.textContent = 'Avanti →';
-    btn.onclick = nextOnboardingSlide;
-  }
+function renderTourStep() {
+  const step = _tourSteps[_tourStep];
+  const el = document.querySelector(step.selector);
+  if (!el) { nextTourStep(); return; }
+
+  // Scroll element into view
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  setTimeout(() => {
+    const rect = el.getBoundingClientRect();
+    const pad = 8;
+
+    // Position spotlight
+    const spot = document.getElementById('tour-spotlight');
+    spot.style.top = (rect.top - pad) + 'px';
+    spot.style.left = (rect.left - pad) + 'px';
+    spot.style.width = (rect.width + pad * 2) + 'px';
+    spot.style.height = (rect.height + pad * 2) + 'px';
+
+    // Build dots HTML
+    let dotsHtml = '';
+    for (let i = 0; i < _tourSteps.length; i++) {
+      dotsHtml += `<div class="tour-dot${i === _tourStep ? ' active' : ''}"></div>`;
+    }
+
+    const isLast = _tourStep >= _tourSteps.length - 1;
+    const tooltip = document.getElementById('tour-tooltip');
+    tooltip.innerHTML = `
+      <div class="tour-tooltip-icon">${step.icon}</div>
+      <div class="tour-tooltip-title">${step.title}</div>
+      <div class="tour-tooltip-desc">${step.desc}</div>
+      <div class="tour-tooltip-footer">
+        <div class="tour-dots">${dotsHtml}</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="tour-skip" onclick="completeTour()">Salta</button>
+          <button class="btn btn-primary btn-small tour-next" onclick="nextTourStep()">
+            ${isLast ? '✨ Inizia!' : 'Avanti →'}
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Position tooltip (desktop: near element, mobile: fixed bottom via CSS)
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) {
+      const tooltipH = 220;
+      let top = rect.bottom + pad + 12;
+      if (top + tooltipH > window.innerHeight) {
+        top = rect.top - pad - tooltipH - 12;
+      }
+      let left = rect.left;
+      if (left + 340 > window.innerWidth) left = window.innerWidth - 360;
+      if (left < 12) left = 12;
+      tooltip.style.top = top + 'px';
+      tooltip.style.left = left + 'px';
+    }
+  }, 350);
 }
 
-function nextOnboardingSlide() {
-  _onboardingStep++;
-  if (_onboardingStep >= _onboardingSlides.length) {
-    completeOnboarding();
+function nextTourStep() {
+  _tourStep++;
+  if (_tourStep >= _tourSteps.length) {
+    completeTour();
     return;
   }
-  renderOnboardingSlide();
+  renderTourStep();
 }
 
-function completeOnboarding() {
-  document.getElementById('onboarding-overlay').style.display = 'none';
+function completeTour() {
+  const overlay = document.getElementById('tour-overlay');
+  overlay.classList.remove('active');
+  overlay.style.display = 'none';
   localStorage.setItem('onboarding_completed', '1');
   showTab('crea');
 }
 
 function checkOnboarding() {
   if (!localStorage.getItem('onboarding_completed')) {
-    showOnboarding();
+    startTour();
   }
+}
+
+// ---- Notifiche in-app ----
+let _notifPanelOpen = false;
+let _notifPollTimer = null;
+
+function toggleNotifPanel(e) {
+  e.stopPropagation();
+  const panel = document.getElementById('notif-panel');
+  _notifPanelOpen = !_notifPanelOpen;
+  panel.style.display = _notifPanelOpen ? 'block' : 'none';
+  if (_notifPanelOpen) fetchNotifications();
+}
+
+// Close panel on outside click
+document.addEventListener('click', (e) => {
+  if (_notifPanelOpen && !e.target.closest('#notif-bell')) {
+    document.getElementById('notif-panel').style.display = 'none';
+    _notifPanelOpen = false;
+  }
+});
+
+async function fetchNotifications() {
+  try {
+    const resp = await fetch('/api/notifications');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    renderNotifications(data.notifications || []);
+    updateNotifBadge(data.unread_count || 0);
+  } catch {}
+}
+
+function renderNotifications(notifs) {
+  const list = document.getElementById('notif-list');
+  if (!notifs.length) {
+    list.innerHTML = '<div class="notif-empty">Nessuna notifica</div>';
+    return;
+  }
+  list.innerHTML = notifs.map(n => {
+    const ago = _timeAgo(n.created_at);
+    return `<div class="notif-item${n.read ? '' : ' unread'}" onclick="markNotifRead('${n.id}', this)">
+      <div class="notif-item-title">${_escHtml(n.title)}</div>
+      ${n.body ? `<div class="notif-item-body">${_escHtml(n.body)}</div>` : ''}
+      <div class="notif-item-time">${ago}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateNotifBadge(count) {
+  const badge = document.getElementById('notif-badge');
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+async function markNotifRead(id, el) {
+  if (el) el.classList.remove('unread');
+  try {
+    await fetch('/api/notifications/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notification_id: id }),
+    });
+    fetchNotifications();
+  } catch {}
+}
+
+async function markAllNotifsRead(e) {
+  e.stopPropagation();
+  try {
+    await fetch('/api/notifications/read-all', { method: 'POST' });
+    fetchNotifications();
+  } catch {}
+}
+
+function _escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function _timeAgo(isoStr) {
+  const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
+  if (diff < 60) return 'ora';
+  if (diff < 3600) return Math.floor(diff / 60) + ' min fa';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' ore fa';
+  return Math.floor(diff / 86400) + ' giorni fa';
+}
+
+function startNotifPolling() {
+  document.getElementById('notif-bell').style.display = 'flex';
+  fetchNotifications();
+  if (_notifPollTimer) clearInterval(_notifPollTimer);
+  _notifPollTimer = setInterval(fetchNotifications, 60000);
+}
+
+function stopNotifPolling() {
+  document.getElementById('notif-bell').style.display = 'none';
+  if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
 }
 
 function showAuthForm(type) {
@@ -2641,6 +2853,7 @@ async function doLogout() {
   try {
     await fetch('/auth/logout', { method: 'POST' });
   } catch {}
+  stopNotifPolling();
   clearAuthData();
   showAuthOverlay();
 }
@@ -2650,6 +2863,8 @@ function onAuthSuccess(user) {
   updateSidebarUser(user);
   // Reload data for the new user
   loadWeeklyBanner();
+  // Start notification polling
+  startNotifPolling();
   // Show onboarding for first-time users
   checkOnboarding();
 }
@@ -2695,6 +2910,7 @@ function initAuth() {
         return resp.json().then(me => {
           hideAuthOverlay();
           updateSidebarUser(me.user);
+          startNotifPolling();
           checkOnboarding();
         });
       } else {
@@ -2706,7 +2922,7 @@ function initAuth() {
             return _originalFetch('/auth/me', {
               headers: { 'Authorization': 'Bearer ' + getAccessToken() },
             }).then(r => r.ok ? r.json() : null).then(me => {
-              if (me) { updateSidebarUser(me.user); checkOnboarding(); }
+              if (me) { updateSidebarUser(me.user); startNotifPolling(); checkOnboarding(); }
             });
           } else {
             clearAuthData();

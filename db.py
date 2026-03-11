@@ -487,6 +487,135 @@ def add_prompt_log(user_id: str, prompt_name: str, version: int, content: str, t
 
 
 # =========================================================================
+# USER PROMPTS (per-user active prompts)
+# =========================================================================
+
+def get_user_prompt(user_id: str, prompt_name: str) -> dict | None:
+    """Get a single active prompt for a user by name."""
+    result = (
+        _sb().table("user_prompts")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("prompt_name", prompt_name)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def get_all_user_prompts(user_id: str) -> dict[str, str]:
+    """Get all active prompts for a user. Returns {prompt_name: content}."""
+    result = (
+        _sb().table("user_prompts")
+        .select("prompt_name, content")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {r["prompt_name"]: r["content"] for r in result.data}
+
+
+def upsert_user_prompt(user_id: str, prompt_name: str, content: str, is_base: bool = False):
+    """Insert or update a user's prompt."""
+    _sb().table("user_prompts").upsert({
+        "user_id": user_id,
+        "prompt_name": prompt_name,
+        "content": content,
+        "is_base": is_base,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="user_id,prompt_name").execute()
+
+
+def init_user_prompts(user_id: str, base_prompts: dict[str, str]):
+    """Copy base prompts to user_prompts if the user has none yet. Idempotent."""
+    existing = get_all_user_prompts(user_id)
+    if existing:
+        return  # already initialized
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for name, content in base_prompts.items():
+        rows.append({
+            "user_id": user_id,
+            "prompt_name": name,
+            "content": content,
+            "is_base": True,
+            "created_at": now,
+            "updated_at": now,
+        })
+    if rows:
+        try:
+            _sb().table("user_prompts").insert(rows).execute()
+        except Exception:
+            pass  # race condition or table not ready
+
+
+# =========================================================================
+# NOTIFICATIONS
+# =========================================================================
+
+def get_notifications(user_id: str, limit: int = 30) -> list[dict]:
+    """Get recent notifications for a user, newest first."""
+    result = (
+        _sb().table("notifications")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
+def get_unread_count(user_id: str) -> int:
+    """Get count of unread notifications."""
+    result = (
+        _sb().table("notifications")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .eq("read", False)
+        .execute()
+    )
+    return result.count or 0
+
+
+def create_notification(user_id: str, ntype: str, title: str, body: str = "") -> dict:
+    """Create a new notification for a user."""
+    result = (
+        _sb().table("notifications")
+        .insert({
+            "user_id": user_id,
+            "type": ntype,
+            "title": title,
+            "body": body,
+        })
+        .execute()
+    )
+    return result.data[0] if result.data else {}
+
+
+def mark_notification_read(user_id: str, notification_id: str) -> bool:
+    """Mark a single notification as read."""
+    result = (
+        _sb().table("notifications")
+        .update({"read": True})
+        .eq("user_id", user_id)
+        .eq("id", notification_id)
+        .execute()
+    )
+    return bool(result.data)
+
+
+def mark_all_notifications_read(user_id: str) -> int:
+    """Mark all unread notifications as read. Returns count marked."""
+    result = (
+        _sb().table("notifications")
+        .update({"read": True})
+        .eq("user_id", user_id)
+        .eq("read", False)
+        .execute()
+    )
+    return len(result.data) if result.data else 0
+
+
+# =========================================================================
 # SELECTION PREFERENCES
 # =========================================================================
 

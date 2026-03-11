@@ -109,6 +109,7 @@ def main():
         "profiles", "subscriptions", "articles", "sessions",
         "schedules", "feedback", "feeds_config", "pipeline_logs",
         "prompt_logs", "selection_prefs", "weekly_status",
+        "user_prompts", "notifications",
     ]
     all_ok = True
     for table in tables:
