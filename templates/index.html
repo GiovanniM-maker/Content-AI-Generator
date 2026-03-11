@@ -568,6 +568,28 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Generation overlay */
+.gen-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  z-index: 100;
+  flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+}
+.gen-overlay.active { display: flex; }
+.gen-overlay-spinner {
+  width: 48px; height: 48px;
+  border: 3px solid var(--border); border-top-color: var(--text);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+.gen-overlay-text { font-size: 15px; font-weight: 600; color: var(--text); }
+.gen-overlay-sub { font-size: 12px; color: var(--text2); }
+.gen-overlay-progress {
+  width: 360px; max-width: 85%;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px;
+}
+
 /* Libreria search & filters */
 .libreria-search {
   display: flex; gap: 10px; margin-bottom: 16px;
@@ -2642,6 +2664,22 @@ body::after {
 
 <script>
 // ========================================================
+// INSTANT AUTH CHECK — hide overlay synchronously to prevent landing flash
+// ========================================================
+(function() {
+  try {
+    const raw = localStorage.getItem('cd_auth');
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && d.access_token) {
+        const ov = document.getElementById('auth-overlay');
+        if (ov) { ov.style.display = 'none'; ov.classList.add('hidden'); }
+      }
+    }
+  } catch(e) {}
+})();
+
+// ========================================================
 // AUTH — Token management & API interceptor
 // ========================================================
 
@@ -3468,6 +3506,11 @@ let webSearchSelectedResults = [];  // selected web search results
 let currentUserPlan = 'free';  // Track user plan for platform gating
 let allowedPlatforms = ['linkedin', 'newsletter'];  // Updated after login
 
+// Warn user before leaving during generation
+window.addEventListener('beforeunload', e => {
+  if (window._isGenerating) { e.preventDefault(); }
+});
+
 // Admin system
 const ADMIN_EMAIL = 'giovanni.mavilla.grz@gmail.com';
 let isAdmin = false;
@@ -4013,6 +4056,9 @@ async function generateAll() {
   currentContent = {};
   approvedItems = {};
   carouselImages = {};
+  window._isGenerating = true;
+  const genOverlay = document.getElementById('gen-overlay');
+  genOverlay.classList.add('active');
 
   // Calculate total calls based on selected platforms
   let totalCalls = 0;
@@ -4037,6 +4083,10 @@ async function generateAll() {
     document.getElementById('gen-status').textContent = label;
     document.getElementById('gen-bar').style.width = pct + '%';
     if (percentEl) percentEl.textContent = pct + '%';
+    // Update overlay progress
+    document.getElementById('gen-overlay-bar').style.width = pct + '%';
+    document.getElementById('gen-overlay-pct').textContent = pct + '%';
+    document.getElementById('gen-overlay-status').textContent = label;
     // Calculate remaining ETA based on actual elapsed time
     if (etaEl) {
       const elapsed = (Date.now() - _genStartTime) / 1000;
@@ -4046,6 +4096,7 @@ async function generateAll() {
         etaEl.textContent = '✅ Completato!';
       } else {
         etaEl.textContent = remaining > 0 ? `⏱ ~${remaining}s rimanenti` : '⏱ Quasi fatto...';
+        document.getElementById('gen-overlay-sub').textContent = `⏱ ~${remaining}s rimanenti`;
       }
     }
   }
@@ -4150,8 +4201,16 @@ async function generateAll() {
     }).then(safeJson);
     currentSession = sessResp;
 
+    window._isGenerating = false;
+    genOverlay.classList.remove('active');
     renderGeneratedContent();
+    // Auto-scroll to results
+    setTimeout(() => {
+      results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
   } catch (err) {
+    window._isGenerating = false;
+    genOverlay.classList.remove('active');
     progress.style.display = 'none';
     results.style.display = 'block';
     results.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
@@ -5801,6 +5860,9 @@ async function generateFromCrea() {
   const resultsEl = document.getElementById('gen-results');
   resultsEl.innerHTML = '';
   document.getElementById('btn-crea-generate').disabled = true;
+  window._isGenerating = true;
+  const genOverlay = document.getElementById('gen-overlay');
+  genOverlay.classList.add('active');
 
   const startTime = Date.now();
   let completed = 0;
@@ -5816,6 +5878,11 @@ async function generateFromCrea() {
     const remaining = Math.round(perCall * (totalCalls - completed));
     etaEl.textContent = `⏱ ~${remaining}s rimanenti`;
     statusEl.textContent = `Generazione ${completed + 1}/${totalCalls}: ${job.type}...`;
+    // Update overlay progress
+    document.getElementById('gen-overlay-bar').style.width = pct + '%';
+    document.getElementById('gen-overlay-pct').textContent = pct + '%';
+    document.getElementById('gen-overlay-status').textContent = `${completed + 1}/${totalCalls}: ${job.type}...`;
+    document.getElementById('gen-overlay-sub').textContent = `⏱ ~${remaining}s rimanenti`;
 
     try {
       let resp;
@@ -5861,10 +5928,34 @@ async function generateFromCrea() {
   statusEl.textContent = '✅ Generazione completata!';
   etaEl.textContent = '';
   document.getElementById('btn-crea-generate').disabled = false;
+  window._isGenerating = false;
+  genOverlay.classList.remove('active');
 
   // Render results
   renderCreaResults(results);
   document.getElementById('crea-results-actions').style.display = 'flex';
+
+  // Save session to DB
+  try {
+    const sessResp = await fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        article: { title: sources.map(s => s.title).join(' | '), category: 'Content' },
+        topics: sources.map(s => ({ article: s })),
+        opinion: chatText || '',
+        content: currentContent,
+        carousel_images: carouselImages || {},
+        platforms: Object.keys(platformQty).filter(p => platformQty[p] > 0),
+      }),
+    }).then(safeJson);
+    currentSession = sessResp;
+  } catch(e) { console.error('Session save failed:', e); }
+
+  // Auto-scroll to results
+  setTimeout(() => {
+    document.getElementById('crea-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150);
 }
 
 function renderCreaResults(results) {
@@ -6728,5 +6819,20 @@ function esc(s) {
 initAuth();
 checkPaymentStatus();
 </script>
+
+<!-- Generation overlay -->
+<div id="gen-overlay" class="gen-overlay">
+  <div class="gen-overlay-spinner"></div>
+  <div class="gen-overlay-text" id="gen-overlay-text">Generazione in corso...</div>
+  <div class="gen-overlay-sub" id="gen-overlay-sub"></div>
+  <div class="gen-overlay-progress">
+    <div class="bar-track"><div class="bar-fill" id="gen-overlay-bar" style="width:0%"></div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;">
+      <span id="gen-overlay-status" style="font-size:11px;color:var(--text2);"></span>
+      <span id="gen-overlay-pct" style="font-size:11px;color:var(--text2);">0%</span>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
