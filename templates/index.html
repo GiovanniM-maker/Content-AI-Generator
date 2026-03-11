@@ -7313,6 +7313,8 @@ let _persPlan = 'free';
 let _persLimit = 1;
 let _persCount = 0;
 let _persPreviewMode = 'visual';
+// Cached preview URLs: { templateId: { cover: url, content: url, ... } }
+const _cachedPreviewUrls = {};
 // For template selection callback in Crea flow
 let _templateSelectCallback = null;
 
@@ -7401,7 +7403,19 @@ function renderPersHome() {
   // Show home screen
   showPersScreen('pers-home');
 
-  // Load mini-gallery previews asynchronously for IG templates
+  // Populate cached preview URLs from preset thumbnail_url field
+  _persPresets.forEach(p => {
+    if (p.thumbnail_url) {
+      try {
+        const urls = typeof p.thumbnail_url === 'string' ? JSON.parse(p.thumbnail_url) : p.thumbnail_url;
+        if (urls && typeof urls === 'object' && Object.keys(urls).length) {
+          _cachedPreviewUrls[p.id] = urls;
+        }
+      } catch(e) { /* ignore bad JSON */ }
+    }
+  });
+
+  // Load mini-gallery previews (uses cached URLs when available, skips Playwright)
   _loadCardGalleries();
 }
 
@@ -7431,6 +7445,22 @@ function _loadCardGalleries() {
     if (!tplId) return;
     gal.classList.add('loaded'); // prevent double-loading
 
+    // ── Fast path: use cached Supabase Storage URLs (instant) ──
+    const cached = _cachedPreviewUrls[tplId];
+    if (cached) {
+      ['cover', 'content', 'list', 'cta'].forEach(t => {
+        const slot = gal.querySelector(`.pers-gallery-slot[data-type="${t}"]`);
+        if (slot && cached[t]) {
+          const img = document.createElement('img');
+          img.src = cached[t];
+          img.alt = _slideTypeLabels[t];
+          slot.insertBefore(img, slot.firstChild);
+        }
+      });
+      return; // Skip API call entirely
+    }
+
+    // ── Slow path: fetch from preview endpoint (Playwright render) ──
     const url = isPreset
       ? `/api/templates/preset/${tplId}/preview`
       : `/api/templates/${tplId}/preview`;
@@ -7440,6 +7470,8 @@ function _loadCardGalleries() {
       .then(r => r.json())
       .then(data => {
         if (data.type === 'gallery' && data.slides) {
+          // Cache the URLs for future use within this session
+          _cachedPreviewUrls[tplId] = data.slides;
           ['cover', 'content', 'list', 'cta'].forEach(t => {
             const slot = gal.querySelector(`.pers-gallery-slot[data-type="${t}"]`);
             if (slot && data.slides[t]) {

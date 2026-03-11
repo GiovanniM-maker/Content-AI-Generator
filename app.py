@@ -2555,6 +2555,10 @@ def get_health():
 # Plan limits: how many templates each plan allows
 TEMPLATE_LIMITS = {"free": 1, "pro": 5, "business": 15}
 
+# In-memory preview cache for user templates (cleared on restart / HTML change)
+# Key: "{template_id}_{md5_12chars}"  Value: {"type":"gallery","slides":{...}}
+_preview_cache: dict = {}
+
 
 def _get_user_plan() -> str:
     """Return the user's current plan ('free', 'pro', 'business')."""
@@ -2819,6 +2823,11 @@ REGOLE:
             name=None,
         )
 
+        # Invalidate in-memory preview cache (HTML changed → old previews stale)
+        stale_keys = [k for k in _preview_cache if k.startswith(template_id)]
+        for k in stale_keys:
+            del _preview_cache[k]
+
         _log_pipeline("info", f"Template chat: updated {template_id}")
         return jsonify({
             "reply": reply_text,
@@ -2832,8 +2841,9 @@ REGOLE:
 
 @app.route("/api/templates/<template_id>/preview", methods=["POST"])
 def template_preview(template_id):
-    """Generate a preview of the template.
-    IG: renders all 4 slide types (cover/content/list/cta) via Playwright → base64 PNG gallery.
+    """Generate a preview of the user template.
+    IG: renders all 4 slide types via Playwright → base64 PNG gallery.
+    Uses in-memory cache keyed on content hash to avoid repeated renders.
     NL: returns HTML string for iframe display.
     """
     user_id = _get_user_id()
@@ -2853,6 +2863,15 @@ def template_preview(template_id):
     # For Instagram — render all 4 slide types as mini-gallery
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
 
+    # ── Fast path: in-memory cache (keyed on content hash) ──
+    import hashlib
+    content_hash = hashlib.md5(html_content.encode()).hexdigest()[:12]
+    cache_key = f"{template_id}_{content_hash}"
+    cached = _preview_cache.get(cache_key)
+    if cached:
+        return jsonify(cached)
+
+    # ── Slow path: render via Playwright ──
     try:
         import base64
         from carousel_renderer import render_template_preview
@@ -2868,7 +2887,12 @@ def template_preview(template_id):
         for slide_type, png_bytes in result.items():
             gallery[slide_type] = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('utf-8')}"
 
-        return jsonify({"type": "gallery", "slides": gallery})
+        response_data = {"type": "gallery", "slides": gallery}
+
+        # Store in memory cache
+        _preview_cache[cache_key] = response_data
+
+        return jsonify(response_data)
     except Exception as e:
         _log_pipeline("error", f"Template preview render error: {e}")
         return jsonify({"error": "Errore nel rendering della preview. Riprova."}), 500
@@ -2876,7 +2900,10 @@ def template_preview(template_id):
 
 @app.route("/api/templates/preset/<preset_id>/preview", methods=["GET"])
 def preset_template_preview(preset_id):
-    """Generate preview gallery for a preset template (no auth required for display)."""
+    """Generate preview gallery for a preset template.
+    Returns cached Supabase Storage URLs when available (instant).
+    Falls back to Playwright render → upload → cache on first call.
+    """
     preset = db.get_preset_template_by_id(preset_id)
     if not preset:
         return jsonify({"error": "Preset non trovato"}), 404
@@ -2889,8 +2916,18 @@ def preset_template_preview(preset_id):
     if template_type == "newsletter":
         return jsonify({"type": "html", "html": html_content})
 
+    # ── Fast path: return cached URLs from thumbnail_url ──
+    thumbnail_url = preset.get("thumbnail_url", "")
+    if thumbnail_url:
+        try:
+            cached = json.loads(thumbnail_url)
+            if isinstance(cached, dict) and cached:
+                return jsonify({"type": "gallery", "slides": cached})
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # ── Slow path: render via Playwright, upload to Storage, cache in DB ──
     try:
-        import base64
         from carousel_renderer import render_template_preview
 
         result = render_template_preview(
@@ -2898,9 +2935,17 @@ def preset_template_preview(preset_id):
             aspect_ratio=preset.get("aspect_ratio", "1:1"),
         )
 
+        # Upload PNGs to Supabase Storage and collect public URLs
         gallery = {}
         for slide_type, png_bytes in result.items():
-            gallery[slide_type] = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('utf-8')}"
+            url = db.upload_template_preview_image(preset_id, slide_type, png_bytes)
+            gallery[slide_type] = url
+
+        # Persist URLs in preset_templates.thumbnail_url for future instant loads
+        try:
+            db.update_preset_thumbnail_url(preset_id, json.dumps(gallery))
+        except Exception:
+            pass  # Non-critical: preview still works, just won't be cached
 
         return jsonify({"type": "gallery", "slides": gallery})
     except Exception as e:

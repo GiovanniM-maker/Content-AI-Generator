@@ -58,6 +58,7 @@ def is_configured() -> bool:
 # =========================================================================
 
 TEMPLATE_ASSETS_BUCKET = "template-assets"
+TEMPLATE_PREVIEWS_BUCKET = "template-previews"
 
 
 def upload_template_asset(user_id: str, template_id: str, filename: str,
@@ -75,6 +76,43 @@ def upload_template_asset(user_id: str, template_id: str, filename: str,
     )
     url = _sb().storage.from_(TEMPLATE_ASSETS_BUCKET).get_public_url(path)
     return url.rstrip("?")
+
+
+def ensure_template_previews_bucket():
+    """Create the template-previews Storage bucket if it doesn't exist."""
+    try:
+        _sb().storage.create_bucket(
+            TEMPLATE_PREVIEWS_BUCKET,
+            options={"public": True},
+        )
+    except Exception:
+        pass  # Already exists
+
+
+def upload_template_preview_image(
+    template_id: str, slide_type: str, png_bytes: bytes
+) -> str:
+    """Upload a rendered preview thumbnail to Storage.
+
+    Path: {template_id}/{slide_type}.png
+    Returns the full public URL.
+    """
+    path = f"{template_id}/{slide_type}.png"
+    _sb().storage.from_(TEMPLATE_PREVIEWS_BUCKET).upload(
+        path,
+        png_bytes,
+        file_options={"content-type": "image/png", "upsert": "true"},
+    )
+    url = _sb().storage.from_(TEMPLATE_PREVIEWS_BUCKET).get_public_url(path)
+    return url.rstrip("?")
+
+
+def update_preset_thumbnail_url(preset_id: str, urls_json: str):
+    """Update thumbnail_url for a preset template (JSON string of slide URLs)."""
+    _sb().table("preset_templates").update(
+        {"thumbnail_url": urls_json}
+    ).eq("id", preset_id).execute()
+
 
 def upload_carousel_image(user_id: str, session_id: str, slide_index: int, png_bytes: bytes) -> str:
     """Upload a carousel PNG to Supabase Storage.
