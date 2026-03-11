@@ -890,6 +890,51 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 .catalog-import-all { width: 100%; margin-top: 12px; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .2s; }
 .catalog-import-all:hover { opacity: 0.85; }
 
+/* Dashboard Newspaper */
+.dash-status-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.dash-status-left { display: flex; align-items: center; gap: 12px; }
+.dash-meta { font-size: 11px; color: var(--text2); }
+.dash-status-right { display: flex; gap: 8px; }
+.dash-fetch-banner { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); border-radius: 10px; margin-bottom: 12px; font-size: 13px; color: var(--accent2); }
+.dash-filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.dash-selection-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.15)); border: 1px solid var(--accent); border-radius: 10px; margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+.dash-articles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.dash-article-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; cursor: pointer; transition: all .2s; position: relative; }
+.dash-article-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.dash-article-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(99,102,241,0.3); }
+.dash-article-card .da-cat { font-size: 10px; color: var(--accent2); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.dash-article-card .da-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dash-article-card .da-summary { font-size: 12px; color: var(--text2); line-height: 1.4; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dash-article-card .da-footer { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text3); }
+.dash-article-card .da-score { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 6px; }
+.dash-article-card .da-select-badge { position: absolute; top: 10px; right: 10px; background: var(--accent); color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+
+/* Crea Chat Box */
+.crea-chat-box { width: 100%; min-height: 100px; background: var(--bg); color: var(--text); border: 2px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit; transition: border-color .2s; }
+.crea-chat-box:focus { border-color: var(--accent); outline: none; }
+.crea-selected-list { display: flex; flex-direction: column; gap: 8px; }
+.crea-sel-chip { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
+.crea-sel-chip .csc-title { font-weight: 600; flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crea-sel-chip .csc-source { color: var(--text2); font-size: 11px; }
+.crea-sel-chip .csc-remove { background: none; border: none; color: var(--red); cursor: pointer; font-size: 16px; padding: 0 4px; }
+
+/* Platform Quantity Grid */
+.platform-qty-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.pq-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+.pq-icon { font-size: 18px; width: 28px; text-align: center; }
+.pq-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.pq-control { display: flex; align-items: center; gap: 0; }
+.pq-btn { width: 32px; height: 32px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+.pq-btn:first-child { border-radius: 8px 0 0 8px; }
+.pq-btn:last-child { border-radius: 0 8px 8px 0; }
+.pq-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pq-val { width: 36px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: var(--accent2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg2); }
+.pq-max { font-size: 10px; color: var(--text3); min-width: 40px; }
+.crea-gen-summary { text-align: center; margin-bottom: 12px; font-size: 13px; color: var(--text); }
+.crea-generate-btn { width: 100%; padding: 14px; font-size: 15px; font-weight: 700; border-radius: 12px; }
+.crea-generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.crea-tab-badge { background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px; }
+
 /* Preference bars */
 .pref-bar-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
 .pref-bar-label { min-width: 140px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2049,8 +2094,11 @@ body::after {
 <div class="topbar">
   <div class="topbar-logo">Content AI Generator</div>
   <div class="topbar-tabs">
-    <div class="topbar-tab active" data-tab="crea" onclick="showTab('crea')">
-      <span>✨</span> Crea
+    <div class="topbar-tab active" data-tab="dashboard" onclick="showTab('dashboard')">
+      <span>📰</span> Dashboard
+    </div>
+    <div class="topbar-tab" data-tab="crea" onclick="showTab('crea')">
+      <span>✨</span> Crea <span id="crea-badge" class="crea-tab-badge" style="display:none;">0</span>
     </div>
     <div class="topbar-tab" data-tab="pianifica" onclick="showTab('pianifica')">
       <span>📅</span> Pianifica
@@ -2091,142 +2139,169 @@ body::after {
   <!-- WEEKLY STATUS BANNER -->
   <div id="weekly-banner" class="weekly-banner" style="display:none;"></div>
 
-  <!-- ========== TAB: CREA ========== -->
-  <div id="tab-crea" class="tab-content active">
+  <!-- ========== TAB: DASHBOARD ========== -->
+  <div id="tab-dashboard" class="tab-content active">
 
-    <!-- Hidden legacy screens for backward compat (used by showScreen calls) -->
+    <!-- Status bar -->
+    <div class="dash-status-bar">
+      <div class="dash-status-left">
+        <h1 style="font-size:18px;margin:0;">📰 Le tue notizie</h1>
+        <span id="dash-last-update" class="dash-meta">Caricamento...</span>
+      </div>
+      <div class="dash-status-right">
+        <button class="btn btn-secondary btn-small" id="btn-dash-refresh" onclick="dashRefreshFeeds()">🔄 Aggiorna</button>
+      </div>
+    </div>
+
+    <!-- Auto-fetch banner -->
+    <div id="dash-fetch-banner" class="dash-fetch-banner" style="display:none;">
+      <div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>
+      <span id="dash-fetch-msg">Aggiornamento feed in corso...</span>
+    </div>
+    <div id="dash-fetch-log" class="log-box" style="display:none;max-height:150px;margin-bottom:12px;"></div>
+
+    <!-- Filters -->
+    <div class="dash-filters">
+      <select id="dash-cat-filter" onchange="renderNewspaper()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;">
+        <option value="">Tutte le categorie</option>
+      </select>
+      <select id="dash-score-filter" onchange="renderNewspaper()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;">
+        <option value="0">Tutti i punteggi</option>
+        <option value="5" selected>5+</option>
+        <option value="6">6+</option>
+        <option value="7">7+</option>
+        <option value="8">8+</option>
+      </select>
+      <input type="text" id="dash-search" placeholder="🔍 Cerca articoli..." onkeyup="renderNewspaper()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;flex:1;min-width:150px;">
+      <span id="dash-article-count" class="dash-meta"></span>
+    </div>
+
+    <!-- Selected articles bar -->
+    <div id="dash-selection-bar" class="dash-selection-bar" style="display:none;">
+      <span id="dash-sel-text">0 articoli selezionati</span>
+      <button class="btn btn-green btn-small" onclick="showTab('crea')">✨ Vai a Crea →</button>
+    </div>
+
+    <!-- Articles grid -->
+    <div id="dash-articles" class="dash-articles-grid">
+      <div class="loading"><div class="spinner"></div>Caricamento articoli...</div>
+    </div>
+  </div><!-- /tab-dashboard -->
+
+  <!-- ========== TAB: CREA ========== -->
+  <div id="tab-crea" class="tab-content">
+
+    <!-- Hidden legacy screens for backward compat -->
     <div id="screen-feed" class="screen" style="display:none!important;"></div>
     <div id="screen-topics" class="screen" style="display:none!important;"></div>
     <div id="screen-generate" class="screen" style="display:none!important;"></div>
 
-    <!-- ZONA 1 — Da dove partiamo? -->
+    <!-- ZONA 1 — Chat: Cosa vuoi creare? -->
     <div class="crea-zona">
       <div class="crea-zona-header">
-        <h2 class="crea-zona-title">📝 Da dove partiamo?</h2>
-        <p class="crea-zona-desc">Scegli una fonte per i tuoi contenuti</p>
+        <h2 class="crea-zona-title">💬 Cosa vuoi creare?</h2>
+        <p class="crea-zona-desc">Scrivi liberamente oppure usa gli articoli dal Dashboard</p>
       </div>
-
-      <!-- Source Mode Tabs — Web Search è default -->
-      <div class="source-mode-tabs">
-        <button class="source-mode-tab active" onclick="switchSourceMode('web_search', this)">🔍 Cerca sul web</button>
-        <button class="source-mode-tab" onclick="switchSourceMode('rss', this)">📡 Dai tuoi feed</button>
-        <button class="source-mode-tab" onclick="switchSourceMode('custom_text', this)">✍️ Scrivi tu</button>
+      <textarea id="crea-chat-input" class="crea-chat-box" placeholder="Scrivi qui cosa vuoi creare...&#10;&#10;Es: &quot;Un post LinkedIn sull'impatto dell'AI nel marketing&quot;&#10;Es: &quot;Una newsletter sulle ultime novità di OpenAI e Anthropic&quot;&#10;Es: Incolla un articolo o un appunto"></textarea>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+        <label class="crea-web-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2);">
+          <input type="checkbox" id="crea-web-search-toggle"> 🔍 Cerca sul web prima di generare
+        </label>
+        <span style="font-size:11px;color:var(--text3);" id="crea-chat-count">0 caratteri</span>
       </div>
+      <!-- Web search results (inline, shown only when web search toggle is on) -->
+      <div id="crea-web-results" style="display:none;margin-top:12px;"></div>
+    </div>
 
-      <!-- Smart Brief (shows for RSS mode) -->
-      <div id="smart-brief" class="smart-brief" style="display:none;">
-        <div class="sb-header" onclick="toggleSmartBrief()">
-          <span>🧠 Smart Brief <span style="font-weight:400;font-size:11px;color:var(--text2);margin-left:6px;">— Suggerimenti AI basati sulle tue selezioni</span></span>
-          <span style="display:flex;align-items:center;gap:8px;">
-            <span class="sb-confidence" id="sb-confidence"></span>
-            <span id="sb-chevron" style="font-size:10px;color:var(--text2);transition:transform 0.2s;">▶</span>
-          </span>
-        </div>
-        <div id="sb-body" class="sb-body" style="display:none;">
-          <div id="sb-suggestions"></div>
-        </div>
+    <!-- ZONA 2 — Articoli selezionati dal Dashboard -->
+    <div class="crea-zona" id="crea-selected-zona">
+      <div class="crea-zona-header">
+        <h2 class="crea-zona-title">📰 Articoli selezionati</h2>
+        <span class="crea-zona-badge" id="crea-sel-badge">0 articoli</span>
       </div>
-
-      <!-- Web Search Mode Panel (DEFAULT — active) -->
-      <div id="source-panel-web_search" class="source-mode-panel active">
-        <div class="search-bar">
-          <input type="text" id="web-search-input" placeholder="Cerca un argomento... es. 'AI automazione PMI Italia 2026'" onkeydown="if(event.key==='Enter') webSearch()">
-          <button class="btn btn-primary" onclick="webSearch()" id="btn-web-search">🔍 Cerca</button>
-        </div>
-        <div id="web-search-results"></div>
-        <div id="web-search-error" style="display:none;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:12px 16px;margin-top:12px;font-size:12px;color:#e74c3c;"></div>
-        <div id="web-search-selection-bar" class="selection-bar" style="display:none;">
-          <div class="count"><strong id="ws-sel-count">0</strong>/3 selezionati</div>
-          <button class="btn btn-green btn-small" id="btn-ws-generate" onclick="generateFromSearchResults()" disabled>Genera Contenuti &#8250;</button>
+      <div id="crea-selected-articles" class="crea-selected-list">
+        <div class="empty-state" style="padding:16px;font-size:12px;text-align:center;">
+          <p style="color:var(--text2);margin-bottom:8px;">Nessun articolo selezionato</p>
+          <button class="btn btn-secondary btn-small" onclick="showTab('dashboard')">📰 Vai al Dashboard per selezionare</button>
         </div>
       </div>
+    </div>
 
-      <!-- RSS Mode Panel -->
-      <div id="source-panel-rss" class="source-mode-panel">
-        <div id="rss-feed-status" style="margin-bottom:12px;">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-            <button class="btn btn-secondary btn-small" id="btn-fetch" onclick="fetchFeeds()">🔄 Aggiorna feed</button>
-            <span id="rss-last-refresh" style="font-size:11px;color:var(--text2);"></span>
+    <!-- ZONA 3 — Quanti contenuti per piattaforma -->
+    <div class="crea-zona">
+      <div class="crea-zona-header">
+        <h2 class="crea-zona-title">🎯 Quanti contenuti?</h2>
+      </div>
+
+      <!-- La tua voce (compatto) -->
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">💬 La tua voce (facoltativo)</label>
+        <textarea id="global-opinion" placeholder="Aggiungi la tua angolazione... es: 'Secondo me questa tecnologia cambierà il modo in cui le PMI...'" style="width:100%;min-height:50px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+
+      <!-- Platform quantity selectors -->
+      <div class="platform-qty-grid" id="platform-qty-grid">
+        <div class="pq-row">
+          <span class="pq-icon">💼</span>
+          <span class="pq-name">LinkedIn</span>
+          <div class="pq-control">
+            <button class="pq-btn" onclick="adjustQty('linkedin',-1)">−</button>
+            <span class="pq-val" id="qty-linkedin">0</span>
+            <button class="pq-btn" onclick="adjustQty('linkedin',1)">+</button>
           </div>
-          <div id="fetch-log" class="log-box" style="display:none;max-height:200px;"></div>
+          <span class="pq-max">max 3</span>
         </div>
-        <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
-          <label style="font-size:12px;color:var(--text2);">Min score:</label>
-          <select id="score-filter" onchange="loadTopics()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">
-            <option value="3">3+</option>
-            <option value="4">4+</option>
-            <option value="5" selected>5+</option>
-            <option value="6">6+</option>
-            <option value="7">7+</option>
-            <option value="8">8+</option>
-          </select>
-          <span id="topics-count" style="font-size:11px;color:var(--text2);"></span>
+        <div class="pq-row">
+          <span class="pq-icon">📸</span>
+          <span class="pq-name">Instagram</span>
+          <div class="pq-control">
+            <button class="pq-btn" onclick="adjustQty('instagram',-1)">−</button>
+            <span class="pq-val" id="qty-instagram">0</span>
+            <button class="pq-btn" onclick="adjustQty('instagram',1)">+</button>
+          </div>
+          <span class="pq-max">max 3</span>
         </div>
-        <div id="selection-bar" class="selection-bar" style="display:none;">
-          <div class="count"><strong id="sel-count">0</strong>/3 selezionati</div>
-          <button class="btn btn-green btn-small" id="btn-next" onclick="generateAll()" disabled>Genera Contenuti &#8250;</button>
+        <div class="pq-row">
+          <span class="pq-icon">🐦</span>
+          <span class="pq-name">Twitter/X</span>
+          <div class="pq-control">
+            <button class="pq-btn" onclick="adjustQty('twitter',-1)">−</button>
+            <span class="pq-val" id="qty-twitter">0</span>
+            <button class="pq-btn" onclick="adjustQty('twitter',1)">+</button>
+          </div>
+          <span class="pq-max">max 3</span>
         </div>
-        <div id="topics-list"></div>
-        <div id="rss-empty-state" style="display:none;text-align:center;padding:40px 20px;">
-          <div style="font-size:32px;margin-bottom:12px;">📡</div>
-          <p style="font-size:14px;color:var(--text2);margin-bottom:8px;">Non hai ancora articoli dai feed RSS</p>
-          <p style="font-size:12px;color:var(--text3);margin-bottom:16px;">Configura i tuoi feed nelle Impostazioni, oppure prova la ricerca web!</p>
-          <button class="btn btn-secondary btn-small" onclick="switchSourceMode('web_search', document.querySelector('.source-mode-tab'))">🔍 Prova la ricerca web</button>
+        <div class="pq-row">
+          <span class="pq-icon">📧</span>
+          <span class="pq-name">Newsletter</span>
+          <div class="pq-control">
+            <button class="pq-btn" onclick="adjustQty('newsletter',-1)">−</button>
+            <span class="pq-val" id="qty-newsletter">0</span>
+            <button class="pq-btn" onclick="adjustQty('newsletter',1)">+</button>
+          </div>
+          <span class="pq-max">max 1</span>
+        </div>
+        <div class="pq-row">
+          <span class="pq-icon">🎬</span>
+          <span class="pq-name">Video Script</span>
+          <div class="pq-control">
+            <button class="pq-btn" onclick="adjustQty('video_script',-1)">−</button>
+            <span class="pq-val" id="qty-video_script">0</span>
+            <button class="pq-btn" onclick="adjustQty('video_script',1)">+</button>
+          </div>
+          <span class="pq-max">max 3</span>
         </div>
       </div>
 
-      <!-- Custom Text Mode Panel -->
-      <div id="source-panel-custom_text" class="source-mode-panel">
-        <textarea id="custom-text-input" class="custom-text-area" placeholder="Incolla un articolo, un appunto, o scrivi direttamente il tema che vuoi trattare...&#10;&#10;Esempio: L'intelligenza artificiale sta rivoluzionando il modo in cui le PMI gestiscono il customer service..."></textarea>
-        <div class="custom-text-actions">
-          <button class="btn btn-green" onclick="generateFromCustomText()">Genera Contenuti &#8250;</button>
-          <span style="font-size:11px;color:var(--text2);" id="custom-text-count">0 caratteri</span>
-        </div>
+      <!-- Generation summary -->
+      <div class="crea-gen-summary" id="crea-gen-summary">
+        <span id="crea-gen-total">Seleziona almeno una piattaforma</span>
+        <span id="crea-gen-remaining" style="font-size:11px;color:var(--text3);"></span>
       </div>
-    </div>
 
-    <!-- ZONA 2 — La tua voce -->
-    <div class="crea-zona">
-      <div class="crea-zona-header">
-        <h2 class="crea-zona-title">💬 La tua voce</h2>
-        <span class="crea-zona-badge">facoltativo</span>
-      </div>
-      <textarea id="global-opinion" placeholder="Aggiungi la tua angolazione, es: 'Secondo me questa tecnologia cambierà il modo in cui le PMI...'" style="width:100%;min-height:60px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;resize:vertical;font-family:inherit;"></textarea>
-      <p style="font-size:11px;color:var(--text3);margin-top:6px;">Basta 1-2 frasi. L'AI farà il resto.</p>
-    </div>
-
-    <!-- ZONA 3 — Dove pubblicare -->
-    <div class="crea-zona">
-      <div class="crea-zona-header">
-        <h2 class="crea-zona-title">📢 Dove pubblicare</h2>
-      </div>
-      <div class="platform-selector" id="platform-selector">
-        <label class="platform-check checked" onclick="togglePlatform(this)">
-          <input type="checkbox" value="linkedin" checked>
-          <span class="pc-dot">&#10003;</span>
-          <span class="pc-icon">💼</span> LinkedIn
-        </label>
-        <label class="platform-check checked" onclick="togglePlatform(this)">
-          <input type="checkbox" value="instagram" checked>
-          <span class="pc-dot">&#10003;</span>
-          <span class="pc-icon">📸</span> Instagram
-        </label>
-        <label class="platform-check checked" onclick="togglePlatform(this)">
-          <input type="checkbox" value="newsletter" checked>
-          <span class="pc-dot">&#10003;</span>
-          <span class="pc-icon">📧</span> Newsletter
-        </label>
-        <label class="platform-check" onclick="togglePlatform(this)">
-          <input type="checkbox" value="twitter">
-          <span class="pc-dot">&#10003;</span>
-          <span class="pc-icon">🐦</span> Twitter/X
-        </label>
-        <label class="platform-check" onclick="togglePlatform(this)">
-          <input type="checkbox" value="video_script">
-          <span class="pc-dot">&#10003;</span>
-          <span class="pc-icon">🎬</span> Video Script
-        </label>
-      </div>
+      <button class="btn btn-primary crea-generate-btn" id="btn-crea-generate" onclick="generateFromCrea()" disabled>
+        ✨ Genera contenuti
+      </button>
     </div>
 
     <!-- RISULTATI — Generazione inline -->
@@ -2327,36 +2402,52 @@ body::after {
   <!-- SCREEN 6: Settings -->
   <div id="screen-settings" class="screen">
     <h1>⚙️ Impostazioni</h1>
-    <p class="subtitle">Feed RSS, notifiche e preferenze del tuo account</p>
+    <p class="subtitle">Notifiche e preferenze del tuo account</p>
 
     <!-- ntfy test -->
     <div style="margin-bottom:24px;">
-      <h2 style="font-size:16px;margin-bottom:12px;">Notifiche Push (ntfy)</h2>
+      <h2 style="font-size:16px;margin-bottom:12px;">🔔 Notifiche Push (ntfy)</h2>
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">Ricevi una notifica push quando è ora di pubblicare un contenuto programmato.</p>
       <button class="btn btn-secondary btn-small" onclick="testNtfy()">🔔 Testa notifica</button>
     </div>
 
-    <!-- Feed Catalog -->
-    <div style="margin-bottom:24px;">
-      <h2 style="font-size:16px;margin-bottom:12px;">📚 Catalogo Feed RSS</h2>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">Sfoglia il catalogo e importa feed pre-configurati per categoria.</p>
-      <button class="catalog-toggle-btn" onclick="toggleCatalog()">📚 Sfoglia Catalogo Feed</button>
-      <div id="catalog-container" style="display:none;">
-        <div id="catalog-grid" class="catalog-grid"></div>
-        <button class="catalog-import-all" id="catalog-import-btn" onclick="importSelectedCatalog()" style="display:none;">
-          📥 Importa feed selezionati
-        </button>
-      </div>
+    <!-- Info about auto-feeds -->
+    <div style="margin-bottom:24px;padding:16px;background:var(--bg2);border-radius:12px;border:1px solid var(--border);">
+      <h2 style="font-size:16px;margin-bottom:8px;">📰 Feed RSS</h2>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:4px;">I tuoi feed si aggiornano automaticamente. Le notizie appaiono nella <strong>Dashboard</strong>.</p>
+      <p style="font-size:11px;color:var(--text2);">Hai <span id="settings-feed-count">—</span> feed attivi in <span id="settings-cat-count">—</span> categorie.</p>
     </div>
 
-    <!-- RSS Feeds Management -->
-    <h2 style="font-size:16px;margin-bottom:16px;">Feed RSS per Categoria</h2>
-    <div id="settings-feeds"></div>
-    <div style="margin-top:20px;">
-      <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Aggiungi nuova categoria</h3>
-      <div class="add-feed-row">
-        <input type="text" id="new-cat-name" placeholder="Nome categoria...">
-        <button class="btn btn-secondary btn-small" onclick="addCategory()">+ Aggiungi Categoria</button>
+    <!-- Advanced feed management (collapsible) -->
+    <div style="margin-bottom:24px;">
+      <button onclick="toggleAdvancedFeeds()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text2);padding:8px 0;display:flex;align-items:center;gap:6px;">
+        <span id="adv-feeds-chevron" style="transition:transform 0.2s;">▶</span>
+        ⚙️ Gestione avanzata feed
+      </button>
+      <div id="advanced-feeds-panel" style="display:none;margin-top:12px;">
+        <!-- Feed Catalog -->
+        <div style="margin-bottom:24px;">
+          <h3 style="font-size:14px;margin-bottom:8px;">📚 Catalogo Feed RSS</h3>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">Sfoglia il catalogo e importa feed pre-configurati per categoria.</p>
+          <button class="catalog-toggle-btn" onclick="toggleCatalog()">📚 Sfoglia Catalogo Feed</button>
+          <div id="catalog-container" style="display:none;">
+            <div id="catalog-grid" class="catalog-grid"></div>
+            <button class="catalog-import-all" id="catalog-import-btn" onclick="importSelectedCatalog()" style="display:none;">
+              📥 Importa feed selezionati
+            </button>
+          </div>
+        </div>
+
+        <!-- RSS Feeds Management -->
+        <h3 style="font-size:14px;margin-bottom:16px;">Feed RSS per Categoria</h3>
+        <div id="settings-feeds"></div>
+        <div style="margin-top:20px;">
+          <h4 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Aggiungi nuova categoria</h4>
+          <div class="add-feed-row">
+            <input type="text" id="new-cat-name" placeholder="Nome categoria...">
+            <button class="btn btn-secondary btn-small" onclick="addCategory()">+ Aggiungi Categoria</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2557,28 +2648,28 @@ function setPricingPeriod(period) {
 // ---- Tour guidato interattivo ----
 const _tourSteps = [
   {
-    selector: '.source-mode-tabs',
-    icon: '📡',
-    title: 'Da dove partiamo?',
-    desc: 'Scegli la fonte dei tuoi contenuti: <strong>Feed RSS</strong> per le ultime notizie, <strong>Cerca nel Web</strong> per trovare articoli specifici, o <strong>Scrivi tu</strong> per partire dalla tua idea.',
+    selector: '.topbar-tab[data-tab="dashboard"]',
+    icon: '📰',
+    title: 'La tua Dashboard',
+    desc: 'Qui trovi le <strong>notizie del giorno</strong> aggregate dai tuoi feed RSS. Seleziona gli articoli più interessanti per creare contenuti.',
   },
   {
-    selector: '#global-opinion',
-    icon: '✍️',
-    title: 'Aggiungi la tua voce',
-    desc: 'Scrivi qui <strong>la tua opinione</strong> in 1-2 frasi. L\'AI la integrerà nei contenuti per renderli autentici e personali.',
+    selector: '.topbar-tab[data-tab="crea"]',
+    icon: '✨',
+    title: 'Crea contenuti',
+    desc: 'Scrivi cosa vuoi creare come in una <strong>chat</strong>, oppure usa gli articoli selezionati dal Dashboard. Scegli quanti contenuti per piattaforma.',
   },
   {
-    selector: '#platform-selector',
-    icon: '📱',
-    title: 'Seleziona le piattaforme',
-    desc: 'Scegli su quali canali pubblicare: <strong>LinkedIn, Instagram, Twitter, Newsletter</strong> o <strong>Video Script</strong>. Puoi selezionarne più di uno.',
+    selector: '#platform-qty-grid',
+    icon: '🎯',
+    title: 'Scegli la quantità',
+    desc: 'Decidi <strong>quanti contenuti</strong> generare per ogni piattaforma: fino a 3 per LinkedIn, Instagram e Twitter, 1 newsletter, 3 video script.',
   },
   {
-    selector: '#btn-ws-generate',
-    icon: '⚡',
-    title: 'Genera i contenuti',
-    desc: 'Premi qui e in <strong>60 secondi</strong> avrai contenuti pronti per ogni piattaforma selezionata. Potrai modificarli, rigenerarli o copiarli.',
+    selector: '.topbar-tab[data-tab="pianifica"]',
+    icon: '📅',
+    title: 'Pianifica & Pubblica',
+    desc: 'Programma la <strong>pubblicazione</strong> dei tuoi contenuti. Riceverai una notifica push quando è ora di pubblicare.',
   },
   {
     selector: '.topbar-tab[data-tab="libreria"]',
@@ -2591,7 +2682,7 @@ let _tourStep = 0;
 
 function startTour() {
   _tourStep = 0;
-  showTab('crea');
+  showTab('dashboard');
   setTimeout(() => {
     const overlay = document.getElementById('tour-overlay');
     overlay.style.display = 'block';
@@ -2602,6 +2693,9 @@ function startTour() {
 
 function renderTourStep() {
   const step = _tourSteps[_tourStep];
+  // Switch to the correct tab for certain steps
+  const tabMap = { 0: 'dashboard', 1: 'crea', 2: 'crea', 3: null, 4: null };
+  if (tabMap[_tourStep]) showTab(tabMap[_tourStep]);
   const el = document.querySelector(step.selector);
   if (!el) { nextTourStep(); return; }
 
@@ -2673,7 +2767,7 @@ function completeTour() {
   overlay.classList.remove('active');
   overlay.style.display = 'none';
   localStorage.setItem('onboarding_completed', '1');
-  showTab('crea');
+  showTab('dashboard');
 }
 
 function checkOnboarding() {
@@ -3360,14 +3454,8 @@ function showTab(tabName) {
   if (tabBtn) tabBtn.classList.add('active');
 
   // Load data for the tab
-  if (tabName === 'crea') {
-    // Show the first active sub-screen (or topics if none is active)
-    const activeScreen = tabEl.querySelector('.screen.active');
-    if (activeScreen) {
-      const screenName = activeScreen.id.replace('screen-', '');
-      if (screenName === 'topics') { loadTopics(); checkSmartBriefVisibility(); }
-    }
-  }
+  if (tabName === 'dashboard') loadDashboard();
+  if (tabName === 'crea') renderCreaSelectedArticles();
   if (tabName === 'pianifica') loadSchedule();
   if (tabName === 'libreria') {
     const activeScreen = tabEl.querySelector('.screen.active');
@@ -4872,26 +4960,26 @@ function toggleSessionPreview(previewId, card) {
 function regenerateSession(sessionId) {
   const s = _historySessions.find(x => x.id === sessionId);
   if (!s) { toast('Sessione non trovata'); return; }
-  // Pre-fill the Crea tab with the same article + opinion
+  // Pre-fill the new Crea tab
   showTab('crea');
-  // Set source mode based on original session
-  const sourceMode = s.article?.source_mode || 'web_search';
-  const modeBtn = document.querySelector(`.source-mode-tab[onclick*="${sourceMode}"]`) ||
-                  document.querySelector('.source-mode-tab');
-  switchSourceMode(sourceMode, modeBtn);
-  // If custom text, pre-fill textarea
-  if (sourceMode === 'custom_text' && s.article?.custom_text) {
-    const ct = document.getElementById('custom-text-input');
+  // If custom text, pre-fill chat textarea
+  if (s.article?.custom_text) {
+    const ct = document.getElementById('crea-chat-input');
     if (ct) ct.value = s.article.custom_text;
   }
   // Pre-fill opinion
   const opinionEl = document.getElementById('global-opinion');
   if (opinionEl && s.opinion) opinionEl.value = s.opinion;
-  // Pre-select platforms
+  // Set quantity to 1 for each platform that was used
   if (s.platforms && s.platforms.length) {
-    document.querySelectorAll('.platform-check input[type="checkbox"]').forEach(cb => {
-      cb.checked = s.platforms.includes(cb.value);
+    // Reset all to 0 first
+    Object.keys(platformQty).forEach(p => { platformQty[p] = 0; });
+    s.platforms.forEach(p => {
+      if (platformQty.hasOwnProperty(p)) platformQty[p] = 1;
+      const el = document.getElementById('qty-' + p);
+      if (el) el.textContent = platformQty[p];
     });
+    updateGenSummary();
   }
   // Scroll to top
   document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5059,8 +5147,461 @@ async function deleteSession(sessionId, title) {
   }
 }
 
+// ---- Dashboard (📰 Newspaper) ----
+let dashArticles = [];
+let dashLoaded = false;
+
+async function loadDashboard() {
+  if (!dashLoaded) {
+    // Check freshness first
+    try {
+      const status = await fetch('/api/articles/status').then(safeJson);
+      if (status.stale || status.count === 0) {
+        await autoFetchIfStale();
+      } else {
+        const ago = status.last_fetch ? timeAgo(status.last_fetch) : 'mai';
+        document.getElementById('dash-last-update').textContent = 'Aggiornato ' + ago;
+      }
+    } catch(e) { /* proceed anyway */ }
+  }
+  // Load articles
+  try {
+    dashArticles = await fetch('/api/articles?min_score=0').then(r => r.json());
+    populateCategoryFilter();
+    renderNewspaper();
+    dashLoaded = true;
+  } catch(err) {
+    document.getElementById('dash-articles').innerHTML = '<div class="empty-state">Errore caricamento articoli</div>';
+  }
+}
+
+function timeAgo(isoStr) {
+  try {
+    const d = new Date(isoStr);
+    const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 60) return mins + ' min fa';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h fa';
+    return Math.floor(hrs / 24) + 'g fa';
+  } catch(e) { return ''; }
+}
+
+function populateCategoryFilter() {
+  const sel = document.getElementById('dash-cat-filter');
+  const cats = new Set(dashArticles.map(a => a.feed_category || a.category || 'Altro'));
+  // Keep first option "Tutte le categorie"
+  sel.innerHTML = '<option value="">Tutte le categorie</option>';
+  [...cats].sort().forEach(c => {
+    sel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`;
+  });
+}
+
+function renderNewspaper() {
+  const container = document.getElementById('dash-articles');
+  const catFilter = document.getElementById('dash-cat-filter').value;
+  const scoreFilter = parseInt(document.getElementById('dash-score-filter').value) || 0;
+  const searchTerm = (document.getElementById('dash-search').value || '').toLowerCase().trim();
+
+  let filtered = dashArticles.filter(a => {
+    if (catFilter && (a.feed_category || a.category || 'Altro') !== catFilter) return false;
+    if ((a.score || 0) < scoreFilter) return false;
+    if (searchTerm && !(a.title || '').toLowerCase().includes(searchTerm) && !(a.summary || '').toLowerCase().includes(searchTerm)) return false;
+    return true;
+  });
+
+  document.getElementById('dash-article-count').textContent = filtered.length + ' articoli';
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:40px;"><div style="font-size:32px;margin-bottom:12px;">📰</div><p>Nessun articolo trovato con questi filtri</p></div>';
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(a => {
+    const isSelected = selectedArticles.some(s => s.article.url === a.url);
+    const selIdx = selectedArticles.findIndex(s => s.article.url === a.url);
+    const cat = a.feed_category || a.category || 'Altro';
+    const source = a.source || '';
+    const score = a.score || 0;
+    const dateStr = a.published ? new Date(a.published).toLocaleDateString('it-IT', {day:'numeric',month:'short'}) : '';
+
+    html += `<div class="dash-article-card${isSelected ? ' selected' : ''}" onclick="toggleDashArticle(this, ${JSON.stringify(a).replace(/"/g, '&quot;')})">
+      ${isSelected ? `<div class="da-select-badge">${selIdx + 1}</div>` : ''}
+      <div class="da-cat">${esc(cat)}</div>
+      <div class="da-title">${esc(a.title || 'Senza titolo')}</div>
+      <div class="da-summary">${esc(a.summary || a.description || '')}</div>
+      <div class="da-footer">
+        <span>${esc(source)}${dateStr ? ' · ' + dateStr : ''}</span>
+        <span class="da-score">${score}/10</span>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+  updateDashSelectionBar();
+}
+
+function toggleDashArticle(el, article) {
+  const idx = selectedArticles.findIndex(s => s.article.url === article.url);
+  if (idx >= 0) {
+    selectedArticles.splice(idx, 1);
+  } else {
+    if (selectedArticles.length >= 3) {
+      toast('Massimo 3 articoli! Deselezionane uno prima.');
+      return;
+    }
+    selectedArticles.push({ article, opinion: '' });
+  }
+  renderNewspaper();
+  updateCreaBadge();
+}
+
+function updateDashSelectionBar() {
+  const bar = document.getElementById('dash-selection-bar');
+  if (selectedArticles.length > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('dash-sel-text').textContent = selectedArticles.length + ' articol' + (selectedArticles.length === 1 ? 'o' : 'i') + ' selezionat' + (selectedArticles.length === 1 ? 'o' : 'i');
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function updateCreaBadge() {
+  const badge = document.getElementById('crea-badge');
+  if (selectedArticles.length > 0) {
+    badge.style.display = 'inline';
+    badge.textContent = selectedArticles.length;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+async function dashRefreshFeeds() {
+  const btn = document.getElementById('btn-dash-refresh');
+  btn.disabled = true;
+  btn.textContent = '⏳ Aggiornamento...';
+  await autoFetchIfStale(true);
+  btn.disabled = false;
+  btn.textContent = '🔄 Aggiorna';
+}
+
+async function autoFetchIfStale(force) {
+  const banner = document.getElementById('dash-fetch-banner');
+  const logBox = document.getElementById('dash-fetch-log');
+  banner.style.display = 'flex';
+  logBox.style.display = 'block';
+  logBox.innerHTML = '';
+  try {
+    await fetch('/api/feeds/fetch', { method: 'POST' });
+    // Stream progress
+    const es = new EventSource('/api/feeds/progress');
+    await new Promise((resolve) => {
+      es.onmessage = (ev) => {
+        const d = JSON.parse(ev.data);
+        if (d.message) {
+          logBox.innerHTML += '<div>' + esc(d.message) + '</div>';
+          logBox.scrollTop = logBox.scrollHeight;
+          document.getElementById('dash-fetch-msg').textContent = d.message;
+        }
+        if (d.done) { es.close(); resolve(); }
+      };
+      es.onerror = () => { es.close(); resolve(); };
+    });
+    document.getElementById('dash-last-update').textContent = 'Aggiornato ora';
+  } catch(e) {
+    document.getElementById('dash-fetch-msg').textContent = 'Errore aggiornamento';
+  }
+  banner.style.display = 'none';
+  logBox.style.display = 'none';
+  // Reload articles
+  dashArticles = await fetch('/api/articles?min_score=0').then(r => r.json()).catch(() => []);
+  populateCategoryFilter();
+  renderNewspaper();
+}
+
+// ---- Crea Tab (✨ New) ----
+const platformLimits = { linkedin: 3, instagram: 3, twitter: 3, newsletter: 1, video_script: 3 };
+const platformQty = { linkedin: 0, instagram: 0, twitter: 0, newsletter: 0, video_script: 0 };
+
+// Chat input character counter
+document.addEventListener('DOMContentLoaded', () => {
+  const chatInput = document.getElementById('crea-chat-input');
+  if (chatInput) {
+    chatInput.addEventListener('input', () => {
+      const cnt = document.getElementById('crea-chat-count');
+      if (cnt) cnt.textContent = chatInput.value.length + ' caratteri';
+    });
+  }
+});
+
+function adjustQty(platform, delta) {
+  const max = platformLimits[platform] || 3;
+  platformQty[platform] = Math.max(0, Math.min(max, platformQty[platform] + delta));
+  document.getElementById('qty-' + platform).textContent = platformQty[platform];
+  updateGenSummary();
+}
+
+function updateGenSummary() {
+  const total = Object.values(platformQty).reduce((a, b) => a + b, 0);
+  const summaryEl = document.getElementById('crea-gen-total');
+  const btn = document.getElementById('btn-crea-generate');
+  if (total === 0) {
+    summaryEl.textContent = 'Seleziona almeno una piattaforma';
+    btn.disabled = true;
+    btn.textContent = '✨ Genera contenuti';
+  } else {
+    summaryEl.innerHTML = `<strong>${total}</strong> contenut${total === 1 ? 'o' : 'i'} da generare`;
+    btn.disabled = false;
+    btn.textContent = `✨ Genera ${total} contenut${total === 1 ? 'o' : 'i'}`;
+  }
+  // Check if we have source material
+  const chatText = (document.getElementById('crea-chat-input') || {}).value || '';
+  if (total > 0 && !chatText.trim() && selectedArticles.length === 0) {
+    btn.disabled = true;
+    summaryEl.innerHTML += '<br><span style="font-size:11px;color:var(--red);">Scrivi qualcosa o seleziona articoli dal Dashboard</span>';
+  }
+}
+
+function renderCreaSelectedArticles() {
+  const container = document.getElementById('crea-selected-articles');
+  const badge = document.getElementById('crea-sel-badge');
+  badge.textContent = selectedArticles.length + ' articol' + (selectedArticles.length === 1 ? 'o' : 'i');
+
+  if (!selectedArticles.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px;font-size:12px;text-align:center;">
+      <p style="color:var(--text2);margin-bottom:8px;">Nessun articolo selezionato</p>
+      <button class="btn btn-secondary btn-small" onclick="showTab('dashboard')">📰 Vai al Dashboard per selezionare</button>
+    </div>`;
+  } else {
+    let html = '';
+    selectedArticles.forEach((s, i) => {
+      html += `<div class="crea-sel-chip">
+        <span style="font-weight:700;color:var(--accent2);min-width:20px;">${i + 1}</span>
+        <span class="csc-title">${esc(s.article.title || 'Senza titolo')}</span>
+        <span class="csc-source">${esc(s.article.source || '')}</span>
+        <button class="csc-remove" onclick="removeCreaArticle(${i})" title="Rimuovi">&times;</button>
+      </div>`;
+    });
+    container.innerHTML = html;
+  }
+  updateGenSummary();
+  updateCreaBadge();
+}
+
+function removeCreaArticle(idx) {
+  selectedArticles.splice(idx, 1);
+  renderCreaSelectedArticles();
+  // Also update dashboard if loaded
+  if (dashLoaded) renderNewspaper();
+}
+
+async function generateFromCrea() {
+  const total = Object.values(platformQty).reduce((a, b) => a + b, 0);
+  if (total === 0) { toast('Seleziona almeno una piattaforma!'); return; }
+
+  const chatText = (document.getElementById('crea-chat-input').value || '').trim();
+  const opinion = (document.getElementById('global-opinion').value || '').trim();
+  const webSearchOn = document.getElementById('crea-web-search-toggle').checked;
+
+  // Determine sources
+  let sources = [];
+  if (selectedArticles.length > 0) {
+    sources = selectedArticles.map(s => ({ ...s.article, source_mode: 'rss' }));
+  }
+  if (chatText && !selectedArticles.length) {
+    // Use chat text as custom content
+    sources = [{ title: 'Contenuto personalizzato', description: chatText, summary: chatText, source: 'Tu', url: '', source_mode: 'custom_text', custom_text: chatText }];
+  }
+  if (chatText && selectedArticles.length > 0) {
+    // Chat text becomes the global opinion
+    // (opinion already handled separately)
+  }
+  if (!sources.length && !chatText) { toast('Scrivi qualcosa o seleziona articoli!'); return; }
+  if (!sources.length && chatText) {
+    sources = [{ title: 'Contenuto personalizzato', description: chatText, summary: chatText, source: 'Tu', url: '', source_mode: 'custom_text', custom_text: chatText }];
+  }
+
+  // If web search is on and we have chat text, search first
+  if (webSearchOn && chatText && !selectedArticles.length) {
+    toast('🔍 Ricerca in corso...');
+    try {
+      const searchResp = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: chatText }),
+      }).then(safeJson);
+      if (searchResp.results && searchResp.results.length > 0) {
+        // Score them
+        const scored = await fetch('/api/search/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ results: searchResp.results }),
+        }).then(safeJson);
+        sources = (scored.scored || searchResp.results).slice(0, 3).map(r => ({
+          title: r.title || '', description: r.snippet || r.description || '', summary: r.snippet || r.summary || '',
+          source: r.source || r.domain || '', url: r.url || '', source_mode: 'web_search',
+        }));
+        toast(`✅ Trovati ${sources.length} risultati web`);
+      }
+    } catch(e) { toast('Errore ricerca web, genero dal testo...'); }
+  }
+
+  // Build generation queue
+  const queue = [];
+  const effectiveOpinion = opinion || (chatText && selectedArticles.length > 0 ? chatText : '');
+
+  for (const [platform, qty] of Object.entries(platformQty)) {
+    if (qty <= 0) continue;
+    if (platform === 'newsletter' && qty > 0) {
+      // Newsletter: 1 call with all sources combined
+      queue.push({ type: 'newsletter', sources, opinion: effectiveOpinion });
+      continue;
+    }
+    for (let i = 0; i < qty; i++) {
+      const src = sources[i % sources.length];
+      queue.push({ type: platform, source: src, opinion: effectiveOpinion, variant: i });
+    }
+  }
+
+  // Show progress
+  const resultsSection = document.getElementById('crea-results');
+  resultsSection.style.display = 'block';
+  const progressEl = document.getElementById('gen-progress');
+  progressEl.style.display = 'block';
+  const statusEl = document.getElementById('gen-status');
+  const barEl = document.getElementById('gen-bar');
+  const percentEl = document.getElementById('gen-percent');
+  const etaEl = document.getElementById('gen-eta');
+  const resultsEl = document.getElementById('gen-results');
+  resultsEl.innerHTML = '';
+  document.getElementById('btn-crea-generate').disabled = true;
+
+  const startTime = Date.now();
+  let completed = 0;
+  const totalCalls = queue.length;
+  const results = {};
+
+  for (const job of queue) {
+    const pct = Math.round((completed / totalCalls) * 100);
+    barEl.style.width = pct + '%';
+    percentEl.textContent = pct + '%';
+    const elapsed = (Date.now() - startTime) / 1000;
+    const perCall = completed > 0 ? elapsed / completed : 8;
+    const remaining = Math.round(perCall * (totalCalls - completed));
+    etaEl.textContent = `⏱ ~${remaining}s rimanenti`;
+    statusEl.textContent = `Generazione ${completed + 1}/${totalCalls}: ${job.type}...`;
+
+    try {
+      let resp;
+      if (job.type === 'newsletter') {
+        const topics = job.sources.map(s => ({
+          article: s,
+          opinion: job.opinion,
+        }));
+        resp = await fetch('/api/generate-newsletter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topics }),
+        }).then(safeJson);
+        if (!results.newsletter) results.newsletter = [];
+        results.newsletter.push({ content: resp.content || resp.error || 'Errore', source: 'Newsletter' });
+      } else {
+        const body = {
+          article: job.source,
+          format_type: job.type,
+          opinion: job.opinion,
+          source_mode: job.source.source_mode || 'rss',
+          custom_text: job.source.custom_text || '',
+        };
+        if (job.variant > 0) body.feedback = `Crea una variante diversa (angolazione #${job.variant + 1}). Offri una prospettiva differente.`;
+        resp = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).then(safeJson);
+        if (!results[job.type]) results[job.type] = [];
+        results[job.type].push({ content: resp.content || resp.error || 'Errore', source: job.source.title || 'Contenuto' });
+      }
+    } catch(err) {
+      if (!results[job.type]) results[job.type] = [];
+      results[job.type].push({ content: 'Errore generazione: ' + err.message, source: '' });
+    }
+    completed++;
+  }
+
+  // Done
+  barEl.style.width = '100%';
+  percentEl.textContent = '100%';
+  statusEl.textContent = '✅ Generazione completata!';
+  etaEl.textContent = '';
+  document.getElementById('btn-crea-generate').disabled = false;
+
+  // Render results
+  renderCreaResults(results);
+  document.getElementById('crea-results-actions').style.display = 'flex';
+}
+
+function renderCreaResults(results) {
+  const container = document.getElementById('gen-results');
+  const platformNames = { linkedin: '💼 LinkedIn', instagram: '📸 Instagram', twitter: '🐦 Twitter/X', newsletter: '📧 Newsletter', video_script: '🎬 Video Script' };
+  let html = '';
+
+  for (const [platform, items] of Object.entries(results)) {
+    html += `<div class="content-section"><h3 style="font-size:15px;font-weight:700;margin:20px 0 12px;">${platformNames[platform] || platform}</h3><div class="content-grid">`;
+    items.forEach((item, idx) => {
+      const key = platform + '_' + idx;
+      currentContent[key] = item.content;
+      html += `<div class="content-col" id="col-${key}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text);">#${idx + 1} ${esc(item.source)}</div>
+          <div style="font-size:10px;color:var(--text3);">${item.content.split(/\s+/).length} parole</div>
+        </div>
+        <textarea style="width:100%;min-height:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;line-height:1.5;resize:vertical;font-family:inherit;" onchange="currentContent['${key}']=this.value">${esc(item.content)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-small" onclick="navigator.clipboard.writeText(currentContent['${key}']).then(()=>toast('Copiato!'))">📋 Copia</button>
+          <button class="btn btn-secondary btn-small" onclick="approveCreaItem('${key}', this)">✅ Approva</button>
+        </div>
+      </div>`;
+    });
+    html += '</div></div>';
+  }
+  container.innerHTML = html;
+}
+
+function approveCreaItem(key, btn) {
+  approvedItems[key] = !approvedItems[key];
+  btn.textContent = approvedItems[key] ? '✅ Approvato' : '✅ Approva';
+  btn.style.background = approvedItems[key] ? 'rgba(34,197,94,0.2)' : '';
+  toast(approvedItems[key] ? 'Contenuto approvato!' : 'Approvazione rimossa');
+}
+
+function resetCreaFlow() {
+  document.getElementById('crea-results').style.display = 'none';
+  document.getElementById('gen-progress').style.display = 'none';
+  document.getElementById('gen-results').innerHTML = '';
+  document.getElementById('crea-results-actions').style.display = 'none';
+  currentContent = {};
+  approvedItems = {};
+  // Reset quantities
+  for (const p of Object.keys(platformQty)) { platformQty[p] = 0; document.getElementById('qty-' + p).textContent = '0'; }
+  updateGenSummary();
+}
+
 // ---- Screen 6: Settings ----
 let feedsConfig = {};
+
+function toggleAdvancedFeeds() {
+  const panel = document.getElementById('advanced-feeds-panel');
+  const chevron = document.getElementById('adv-feeds-chevron');
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+    chevron.style.transform = 'rotate(90deg)';
+    // Load feeds if not loaded yet
+    if (!document.getElementById('settings-feeds').innerHTML.trim()) loadSettings();
+  } else {
+    panel.style.display = 'none';
+    chevron.style.transform = '';
+  }
+}
 
 async function loadSettings() {
   const container = document.getElementById('settings-feeds');
@@ -5068,6 +5609,14 @@ async function loadSettings() {
   try {
     feedsConfig = await fetch('/api/feeds/config').then(r => r.json());
     renderFeedsSettings();
+    // Update feed count badges in settings info box
+    const cats = feedsConfig.categories || {};
+    const catCount = Object.keys(cats).length;
+    const feedCount = Object.values(cats).reduce((a, b) => a + b.length, 0);
+    const catEl = document.getElementById('settings-cat-count');
+    const feedEl = document.getElementById('settings-feed-count');
+    if (catEl) catEl.textContent = catCount;
+    if (feedEl) feedEl.textContent = feedCount;
   } catch(err) {
     container.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
   }

@@ -367,12 +367,15 @@ def _load_feeds_config() -> dict:
     user_id = _get_user_id()
     config = db.get_feeds_config(user_id)
     if not config or not config.get("categories"):
-        return {"categories": {
-            "Tool Pratici": [],
-            "Casi Studio": [],
-            "Automazioni": [],
-            "News AI Italia": [],
-        }}
+        # Auto-popola con TUTTO il catalogo per nuovi utenti
+        auto_config: dict = {"categories": {}}
+        for cat_name, feeds in FEED_CATALOG.items():
+            auto_config["categories"][cat_name] = [
+                {"url": f["url"], "name": f["name"]} for f in feeds
+            ]
+        db.save_feeds_config(user_id, auto_config)
+        _log_pipeline("info", f"Auto-populated feeds config with {sum(len(v) for v in auto_config['categories'].values())} feeds from catalog")
+        return auto_config
     return config
 
 
@@ -1346,6 +1349,42 @@ def get_articles():
     min_score = request.args.get("min_score", 0, type=int)
     articles = db.get_articles(user_id, min_score=min_score)
     return jsonify(articles)
+
+
+@app.route("/api/articles/status")
+def get_articles_status():
+    """Check freshness of articles — stale if last fetch >24h ago."""
+    user_id = _get_user_id()
+    articles = db.get_articles(user_id)
+    if not articles:
+        return jsonify({"last_fetch": None, "stale": True, "count": 0})
+    scored_dates = [a.get("scored_at", "") for a in articles if a.get("scored_at")]
+    if not scored_dates:
+        return jsonify({"last_fetch": None, "stale": True, "count": len(articles)})
+    last_fetch = max(scored_dates)
+    try:
+        last_dt = datetime.fromisoformat(last_fetch.replace("Z", "+00:00"))
+        age_hours = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+        stale = age_hours > 24
+    except Exception:
+        stale = True
+    return jsonify({"last_fetch": last_fetch, "stale": stale, "count": len(articles)})
+
+
+# Per-platform session limits (max contents per generation session)
+PLATFORM_SESSION_LIMITS = {
+    "linkedin": 3,
+    "instagram": 3,
+    "twitter": 3,
+    "newsletter": 1,
+    "video_script": 3,
+}
+
+
+@app.route("/api/platform-limits")
+def get_platform_limits():
+    """Return per-platform session limits for frontend quantity selectors."""
+    return jsonify(PLATFORM_SESSION_LIMITS)
 
 
 # ---------------------------------------------------------------------------
