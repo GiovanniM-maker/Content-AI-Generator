@@ -1926,6 +1926,25 @@ body::after {
 .pers-preview-container pre { width: 100%; height: 100%; overflow: auto; padding: 12px; font-size: 12px; margin: 0; background: #1a1a2e; color: #a29bfe; }
 .pers-preview-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 40px; }
 
+/* Mini-gallery on template cards */
+.pers-card-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 100%; height: 140px; background: var(--border); }
+.pers-card-gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pers-card-gallery .pers-gallery-slot { background: linear-gradient(135deg, #1a1a2e, #302b63); display: flex; align-items: center; justify-content: center; font-size: 10px; color: rgba(255,255,255,0.4); overflow: hidden; }
+.pers-card-gallery .pers-gallery-label { position: absolute; bottom: 2px; left: 4px; font-size: 8px; color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 3px; pointer-events: none; }
+.pers-card-gallery .pers-gallery-slot { position: relative; }
+
+/* Gallery preview in chat (all 4 slide types) */
+.pers-preview-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; width: 100%; height: 100%; overflow-y: auto; align-content: start; }
+.pers-preview-gallery-item { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #f5f5f5; cursor: pointer; transition: all 0.2s; }
+.pers-preview-gallery-item:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+.pers-preview-gallery-item img { width: 100%; display: block; }
+.pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.pers-preview-gallery-item.expanded { grid-column: 1 / -1; }
+
+/* Gallery in template-select modal */
+.tpl-select-card .pers-card-gallery { height: 100px; }
+.tpl-select-card .pers-card-gallery .pers-gallery-slot { font-size: 8px; }
+
 /* Template selection modal */
 .template-select-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
 .template-select-modal { background: var(--bg); border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
@@ -1947,6 +1966,8 @@ body::after {
   .pers-chat-messages { max-height: 300px; }
   .pers-preview-container { min-height: 250px; }
   .pers-type-choice { flex-direction: column; }
+  .pers-preview-gallery { grid-template-columns: 1fr; }
+  .pers-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
 </style>
 </head>
@@ -7321,7 +7342,7 @@ function renderPersHome() {
   } else {
     grid.innerHTML = _persTemplates.map(t => `
       <div class="pers-card" onclick="openTemplateChat('${t.id}')">
-        <div class="pers-card-thumb">${t.template_type === 'instagram' ? '📸' : '📧'}</div>
+        ${_renderCardThumb(t, false)}
         <div class="pers-card-body">
           <div class="pers-card-name">${esc(t.name)}</div>
           <div class="pers-card-meta">
@@ -7346,7 +7367,7 @@ function renderPersHome() {
     } else {
       presetsGrid.innerHTML = _persPresets.map(p => `
         <div class="pers-card pers-preset-card">
-          <div class="pers-card-thumb">${p.template_type === 'instagram' ? '📸' : '📧'}</div>
+          ${_renderCardThumb(p, true)}
           <div class="pers-card-body">
             <div class="pers-card-name">${esc(p.name)}</div>
             <div class="pers-card-meta">
@@ -7364,6 +7385,59 @@ function renderPersHome() {
 
   // Show home screen
   showPersScreen('pers-home');
+
+  // Load mini-gallery previews asynchronously for IG templates
+  _loadCardGalleries();
+}
+
+/* ---- Card thumb helpers ---- */
+const _slideTypeLabels = { cover: 'Cover', content: 'Testo', list: 'Lista', cta: 'CTA' };
+
+function _renderCardThumb(tpl, isPreset) {
+  // For IG: render a 2x2 mini-gallery placeholder (images loaded async)
+  if (tpl.template_type === 'instagram' && tpl.html_content && tpl.html_content.trim()) {
+    const types = ['cover', 'content', 'list', 'cta'];
+    return `<div class="pers-card-gallery" data-tpl-id="${tpl.id}" data-is-preset="${isPreset ? '1' : '0'}">
+      ${types.map(t => `<div class="pers-gallery-slot" data-type="${t}">
+        <span class="pers-gallery-label">${_slideTypeLabels[t]}</span>
+      </div>`).join('')}
+    </div>`;
+  }
+  // Fallback: emoji icon (empty IG templates or newsletter)
+  return `<div class="pers-card-thumb">${tpl.template_type === 'instagram' ? '📸' : '📧'}</div>`;
+}
+
+function _loadCardGalleries() {
+  // Find all gallery placeholders and load previews in parallel
+  const galleries = document.querySelectorAll('.pers-card-gallery:not(.loaded)');
+  galleries.forEach(gal => {
+    const tplId = gal.dataset.tplId;
+    const isPreset = gal.dataset.isPreset === '1';
+    if (!tplId) return;
+    gal.classList.add('loaded'); // prevent double-loading
+
+    const url = isPreset
+      ? `/api/templates/preset/${tplId}/preview`
+      : `/api/templates/${tplId}/preview`;
+    const opts = isPreset ? {} : { method: 'POST' };
+
+    fetch(url, opts)
+      .then(r => r.json())
+      .then(data => {
+        if (data.type === 'gallery' && data.slides) {
+          ['cover', 'content', 'list', 'cta'].forEach(t => {
+            const slot = gal.querySelector(`.pers-gallery-slot[data-type="${t}"]`);
+            if (slot && data.slides[t]) {
+              const img = document.createElement('img');
+              img.src = data.slides[t];
+              img.alt = _slideTypeLabels[t];
+              slot.insertBefore(img, slot.firstChild);
+            }
+          });
+        }
+      })
+      .catch(e => console.warn('Gallery preview load failed for', tplId, e));
+  });
 }
 
 function showPersScreen(screenId) {
@@ -7543,12 +7617,22 @@ async function updateTemplatePreview() {
     return;
   }
 
-  // For IG: render via API → base64 PNG
+  // For IG: render all 4 slide types as gallery
   container.innerHTML = '<div class="pers-preview-empty">Rendering preview...</div>';
   try {
     const res = await fetch(`/api/templates/${_persCurrentId}/preview`, { method: 'POST' });
     const data = await res.json();
-    if (data.type === 'image' && data.image) {
+    if (data.type === 'gallery' && data.slides) {
+      const types = ['cover', 'content', 'list', 'cta'];
+      container.innerHTML = `<div class="pers-preview-gallery">
+        ${types.map(t => data.slides[t] ? `
+          <div class="pers-preview-gallery-item" onclick="_expandPreviewSlide('${t}', this)">
+            <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
+            <img src="${data.slides[t]}" alt="${_slideTypeLabels[t]}">
+          </div>` : '').join('')}
+      </div>`;
+    } else if (data.type === 'image' && data.image) {
+      // Legacy single-image fallback
       container.innerHTML = `<img src="${data.image}" alt="Template preview">`;
     } else if (data.type === 'html') {
       container.innerHTML = '<iframe id="pers-preview-iframe"></iframe>';
@@ -7559,6 +7643,37 @@ async function updateTemplatePreview() {
   } catch(e) {
     container.innerHTML = '<div class="pers-preview-empty">Errore nel rendering</div>';
   }
+}
+
+function _expandPreviewSlide(type, el) {
+  // Toggle: click a slide to expand it full-size, click again to go back to gallery
+  const container = document.getElementById('pers-preview-container');
+  const gallery = container.querySelector('.pers-preview-gallery');
+  if (!gallery) return;
+
+  const img = el.querySelector('img');
+  if (!img) return;
+
+  // If already expanded, collapse back
+  if (el.classList.contains('expanded')) {
+    gallery.style.gridTemplateColumns = '1fr 1fr';
+    gallery.querySelectorAll('.pers-preview-gallery-item').forEach(item => {
+      item.style.display = '';
+      item.classList.remove('expanded');
+    });
+    return;
+  }
+
+  // Expand: hide others, make this one full width
+  gallery.querySelectorAll('.pers-preview-gallery-item').forEach(item => {
+    if (item === el) {
+      item.classList.add('expanded');
+      item.style.display = '';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+  gallery.style.gridTemplateColumns = '1fr';
 }
 
 function persPreviewMode(mode, btn) {
@@ -7665,16 +7780,26 @@ function showTemplateSelectModal(type, templates) {
     const title = document.getElementById('tpl-select-title');
     const body = document.getElementById('tpl-select-body');
     title.textContent = `Scegli template ${type === 'instagram' ? 'Instagram' : 'Newsletter'}`;
-    body.innerHTML = templates.map(t => `
-      <div class="tpl-select-card" data-id="${t.id}" onclick="selectTemplateCard('${t.id}')">
-        <div class="pers-card-thumb" style="height:100px;">${type === 'instagram' ? '📸' : '📧'}</div>
+    body.innerHTML = templates.map(t => {
+      // For IG templates with content, show mini-gallery; otherwise emoji
+      const thumbHtml = (type === 'instagram' && t.html_content && t.html_content.trim())
+        ? `<div class="pers-card-gallery" data-tpl-id="${t.id}" data-is-preset="0" style="height:100px;">
+            ${['cover','content','list','cta'].map(st => `<div class="pers-gallery-slot" data-type="${st}">
+              <span class="pers-gallery-label">${_slideTypeLabels[st]}</span>
+            </div>`).join('')}
+          </div>`
+        : `<div class="pers-card-thumb" style="height:100px;">${type === 'instagram' ? '📸' : '📧'}</div>`;
+      return `<div class="tpl-select-card" data-id="${t.id}" onclick="selectTemplateCard('${t.id}')">
+        ${thumbHtml}
         <div class="pers-card-body">
           <div class="pers-card-name">${esc(t.name)}</div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     modal.style.display = 'flex';
     window._tplSelectResolve = resolve;
+    // Load gallery previews for modal cards
+    _loadCardGalleries();
   });
 }
 
