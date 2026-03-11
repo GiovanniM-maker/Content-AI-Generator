@@ -1414,7 +1414,7 @@ body::after {
 .auth-overlay {
   position: fixed; inset: 0; z-index: 9999;
   background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
+  overflow-y: auto; overflow-x: hidden;
   transition: opacity 0.4s ease;
 }
 .auth-overlay.hidden { opacity: 0; pointer-events: none; }
@@ -3102,6 +3102,8 @@ function onAuthSuccess(user) {
   applyAdminGating();
   // Reload data for the new user
   loadWeeklyBanner();
+  // Load Feed data immediately (default tab)
+  loadDashboard();
   // Start notification polling
   startNotifPolling();
   // Show onboarding for first-time users
@@ -3152,6 +3154,23 @@ function initAuth() {
   }
 
   const data = getAuthData();
+
+  // Handle ?login=1 or ?register=1 from landing.html links (only if not logged in)
+  if (!data || !data.access_token) {
+    if (params.has('login') || params.has('register')) {
+      const mode = params.has('login') ? 'login' : 'register';
+      showAuthOverlay();
+      showAuthForm(mode);
+      document.getElementById('landing-wrapper').classList.add('show-auth');
+      window.history.replaceState({}, '', '/app');
+      return;
+    }
+  } else {
+    // Clean URL params if logged in
+    if (params.has('login') || params.has('register')) {
+      window.history.replaceState({}, '', '/app');
+    }
+  }
   if (data && data.access_token) {
     // Validate token by calling /auth/me
     _originalFetch('/auth/me', {
@@ -3163,6 +3182,7 @@ function initAuth() {
           updateSidebarUser(me.user);
           isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
           applyAdminGating();
+          loadDashboard();
           startNotifPolling();
           checkOnboarding();
         });
@@ -3179,6 +3199,7 @@ function initAuth() {
                 updateSidebarUser(me.user);
                 isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
                 applyAdminGating();
+                loadDashboard();
                 startNotifPolling();
                 checkOnboarding();
               }
