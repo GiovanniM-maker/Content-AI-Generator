@@ -11,23 +11,24 @@
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
 <style>
   /* ── DESIGN TOKENS ─────────────────────────────────────── */
   :root {
-    --bg:       #000000;
-    --surface:  #0a0a0a;
-    --card:     rgba(255,255,255,0.04);
-    --border:   rgba(255,255,255,0.08);
-    --violet:   #7c3aed;
-    --violet-l: #a78bfa;
-    --violet-d: #5b21b6;
+    --bg:       #ffffff;
+    --surface:  #f8f8f8;
+    --card:     rgba(0,0,0,0.02);
+    --border:   #e5e5e5;
+    --accent:   #1a1a1a;
+    --accent-l: #404040;
+    --accent-d: #000000;
     --white:    #ffffff;
-    --muted:    #71717a;
-    --subtle:   #27272a;
-    --text:     #e4e4e7;
-    --font-head: 'Syne', sans-serif;
-    --font-body: 'DM Mono', monospace;
+    --dark:     #1a1a1a;
+    --muted:    #6b6b6b;
+    --subtle:   #d4d4d4;
+    --text:     #1a1a1a;
+    --font-head: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     --font-serif:'Instrument Serif', serif;
     --r: 12px;
     --max: 1120px;
@@ -43,23 +44,14 @@
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
   }
-  /* ── NOISE TEXTURE OVERLAY ─────────────────────────────── */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 9999;
-    opacity: 0.4;
-  }
+  /* ── NOISE TEXTURE OVERLAY (disabled for light theme) ── */
   /* ── LAYOUT ────────────────────────────────────────────── */
   .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
   /* ── NAV ───────────────────────────────────────────────── */
   nav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     padding: 18px 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(255,255,255,0.85);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
@@ -69,11 +61,11 @@
     font-family: var(--font-head);
     font-weight: 800;
     font-size: 16px;
-    color: var(--white);
+    color: var(--dark);
     letter-spacing: -0.02em;
     text-decoration: none;
   }
-  .nav-logo span { color: var(--violet-l); }
+  .nav-logo span { color: var(--accent-l); }
   .nav-links { display: flex; align-items: center; gap: 32px; }
   .nav-links a {
     font-size: 13px;
@@ -82,12 +74,12 @@
     transition: color 0.2s;
     font-family: var(--font-head);
   }
-  .nav-links a:hover { color: var(--white); }
+  .nav-links a:hover { color: var(--dark); }
   .btn-nav {
     font-family: var(--font-head);
     font-weight: 700;
     font-size: 13px;
-    background: var(--violet);
+    background: var(--accent);
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -96,7 +88,7 @@
     text-decoration: none;
     transition: background 0.2s, transform 0.15s;
   }
-  .btn-nav:hover { background: var(--violet-d); transform: translateY(-1px); }
+  .btn-nav:hover { background: var(--accent-d); transform: translateY(-1px); }
   /* ── HERO ──────────────────────────────────────────────── */
   .hero {
     min-height: 100vh;
@@ -117,8 +109,8 @@
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     background: radial-gradient(circle at center,
-      rgba(124,58,237,0.18) 0%,
-      rgba(124,58,237,0.06) 40%,
+      rgba(0,0,0,0.04) 0%,
+      rgba(0,0,0,0.015) 40%,
       transparent 70%);
     pointer-events: none;
     animation: pulse-orb 8s ease-in-out infinite;
@@ -131,8 +123,8 @@
   .hero-grid {
     position: absolute; inset: 0; pointer-events: none;
     background-image:
-      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
     background-size: 64px 64px;
     mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
   }
@@ -140,14 +132,14 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(124,58,237,0.12);
-    border: 1px solid rgba(124,58,237,0.3);
+    background: rgba(0,0,0,0.04);
+    border: 1px solid var(--border);
     border-radius: 999px;
     padding: 6px 14px;
     font-size: 12px;
     font-family: var(--font-head);
     font-weight: 600;
-    color: var(--violet-l);
+    color: var(--muted);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     margin-bottom: 28px;
@@ -156,7 +148,7 @@
   .hero-eyebrow::before {
     content: '';
     width: 6px; height: 6px;
-    background: var(--violet-l);
+    background: var(--accent);
     border-radius: 50%;
     animation: blink 2s ease-in-out infinite;
   }
@@ -167,14 +159,14 @@
     font-size: clamp(42px, 6vw, 80px);
     line-height: 1.02;
     letter-spacing: -0.04em;
-    color: var(--white);
+    color: var(--dark);
     margin-bottom: 24px;
     max-width: 860px;
     animation: fade-up 0.6s 0.1s ease both;
   }
   .hero-h1 em {
     font-style: normal;
-    background: linear-gradient(135deg, var(--violet-l) 0%, #c084fc 50%, var(--violet-l) 100%);
+    background: linear-gradient(135deg, var(--accent-l) 0%, var(--muted) 50%, var(--accent-l) 100%);
     background-size: 200%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -190,7 +182,7 @@
     margin-bottom: 40px;
     animation: fade-up 0.6s 0.2s ease both;
   }
-  .hero-sub strong { color: var(--text); }
+  .hero-sub strong { color: var(--dark); }
   .hero-cta-row {
     display: flex;
     align-items: center;
@@ -207,7 +199,7 @@
     font-family: var(--font-head);
     font-weight: 700;
     font-size: 15px;
-    background: var(--violet);
+    background: var(--accent);
     color: #fff;
     border: none;
     border-radius: 10px;
@@ -222,10 +214,10 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
+    background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
     pointer-events: none;
   }
-  .btn-primary:hover { background: #6d28d9; transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,58,237,0.4); }
+  .btn-primary:hover { background: var(--accent-d); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
   .btn-ghost {
     display: inline-flex; align-items: center; gap: 8px;
     font-family: var(--font-head);
@@ -238,7 +230,7 @@
     text-decoration: none;
     transition: all 0.2s;
   }
-  .btn-ghost:hover { color: var(--white); border-color: rgba(255,255,255,0.2); background: var(--card); }
+  .btn-ghost:hover { color: var(--dark); border-color: var(--accent-l); background: var(--card); }
   .hero-disclaimer {
     font-size: 12px;
     color: var(--muted);
@@ -274,11 +266,11 @@
     color: var(--text);
     transition: all 0.2s;
   }
-  .pill:hover { border-color: rgba(124,58,237,0.5); color: var(--violet-l); }
+  .pill:hover { border-color: var(--accent-l); color: var(--dark); }
   .pill .dot { width: 6px; height: 6px; border-radius: 50%; }
   .dot-li { background: #0a66c2; }
   .dot-ig { background: linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); }
-  .dot-tw { background: #000; border: 1px solid #444; }
+  .dot-tw { background: #000; }
   .dot-nl { background: #f97316; }
   .dot-vd { background: #ef4444; }
   /* ── SOCIAL PROOF STRIP ────────────────────────────────── */
@@ -300,13 +292,13 @@
   }
   .proof-avatar {
     width: 32px; height: 32px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--violet), var(--violet-d));
+    background: var(--accent);
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 700; color: #fff; font-family: var(--font-head);
     flex-shrink: 0;
   }
   .proof-text { font-size: 13px; color: var(--muted); }
-  .proof-text strong { color: var(--text); }
+  .proof-text strong { color: var(--dark); }
   .proof-sep { color: var(--subtle); user-select: none; }
   /* ── SECTION COMMON ────────────────────────────────────── */
   section { padding: 100px 0; }
@@ -315,7 +307,7 @@
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--violet-l);
+    color: var(--muted);
     font-weight: 700;
     margin-bottom: 12px;
   }
@@ -325,7 +317,7 @@
     font-size: clamp(30px, 4vw, 48px);
     line-height: 1.1;
     letter-spacing: -0.03em;
-    color: var(--white);
+    color: var(--dark);
     margin-bottom: 16px;
   }
   .section-sub {
@@ -356,9 +348,9 @@
     padding: 16px 18px;
     transition: border-color 0.2s;
   }
-  .compete-list li:hover { border-color: rgba(124,58,237,0.4); }
+  .compete-list li:hover { border-color: var(--accent-l); }
   .compete-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
-  .compete-text strong { display: block; font-family: var(--font-head); font-weight: 700; color: var(--white); font-size: 14px; margin-bottom: 2px; }
+  .compete-text strong { display: block; font-family: var(--font-head); font-weight: 700; color: var(--dark); font-size: 14px; margin-bottom: 2px; }
   .compete-text span { font-size: 13px; color: var(--muted); }
   .compare-table {
     background: var(--card);
@@ -368,7 +360,7 @@
   }
   .cmp-head {
     display: grid; grid-template-columns: 1fr 80px 80px 80px 80px;
-    background: rgba(255,255,255,0.03);
+    background: var(--surface);
     border-bottom: 1px solid var(--border);
     padding: 14px 20px;
     font-size: 12px; font-family: var(--font-head); font-weight: 700;
@@ -383,12 +375,12 @@
     transition: background 0.15s;
   }
   .cmp-row:last-child { border-bottom: none; }
-  .cmp-row:hover { background: rgba(255,255,255,0.02); }
+  .cmp-row:hover { background: rgba(0,0,0,0.02); }
   .cmp-row span:first-child { text-align: left; color: var(--text); font-family: var(--font-head); font-size: 12px; }
   .check { color: #22c55e; font-size: 16px; }
   .cross { color: var(--subtle); font-size: 14px; }
-  .cmp-us { color: var(--violet-l); font-weight: 700; font-family: var(--font-head); font-size: 12px; }
-  .cmp-col-us { background: rgba(124,58,237,0.08); border-left: 1px solid rgba(124,58,237,0.2); border-right: 1px solid rgba(124,58,237,0.2); }
+  .cmp-us { color: var(--accent); font-weight: 700; font-family: var(--font-head); font-size: 12px; }
+  .cmp-col-us { background: rgba(0,0,0,0.04); border-left: 1px solid rgba(0,0,0,0.08); border-right: 1px solid rgba(0,0,0,0.08); }
   /* ── HOW IT WORKS ──────────────────────────────────────── */
   .steps {
     display: grid;
@@ -405,11 +397,11 @@
     position: relative;
     transition: background 0.2s;
   }
-  .step:hover { background: rgba(124,58,237,0.05); }
+  .step:hover { background: var(--surface); }
   .step-num {
     font-family: var(--font-head);
     font-size: 11px;
-    color: var(--violet-l);
+    color: var(--muted);
     font-weight: 800;
     letter-spacing: 0.1em;
     margin-bottom: 20px;
@@ -426,7 +418,7 @@
     font-family: var(--font-head);
     font-size: 16px;
     font-weight: 700;
-    color: var(--white);
+    color: var(--dark);
     margin-bottom: 8px;
     line-height: 1.3;
   }
@@ -451,12 +443,12 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at 0% 0%, rgba(124,58,237,0.08), transparent 60%);
+    background: radial-gradient(circle at 0% 0%, rgba(0,0,0,0.03), transparent 60%);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.3s;
   }
-  .bento-card:hover { border-color: rgba(124,58,237,0.3); transform: translateY(-2px); }
+  .bento-card:hover { border-color: var(--accent-l); transform: translateY(-2px); }
   .bento-card:hover::before { opacity: 1; }
   .bento-card.col-3 { grid-column: span 3; }
   .bento-card.col-2 { grid-column: span 2; }
@@ -466,15 +458,15 @@
   .bento-card h3 {
     font-family: var(--font-head);
     font-size: 17px; font-weight: 700;
-    color: var(--white);
+    color: var(--dark);
     margin-bottom: 8px; line-height: 1.3;
   }
   .bento-card p { font-size: 13px; color: var(--muted); line-height: 1.65; }
   .bento-tag {
     display: inline-block;
-    background: rgba(124,58,237,0.15);
-    color: var(--violet-l);
-    border: 1px solid rgba(124,58,237,0.25);
+    background: rgba(0,0,0,0.06);
+    color: var(--accent-l);
+    border: 1px solid var(--border);
     border-radius: 999px;
     padding: 2px 10px;
     font-size: 11px;
@@ -499,14 +491,14 @@
     transition: border-color 0.2s;
     position: relative;
   }
-  .price-card:hover { border-color: rgba(124,58,237,0.3); }
+  .price-card:hover { border-color: var(--accent-l); }
   .price-card.featured {
-    border-color: rgba(124,58,237,0.5);
-    background: rgba(124,58,237,0.06);
+    border-color: var(--accent);
+    background: rgba(0,0,0,0.02);
   }
   .price-badge {
     position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
-    background: var(--violet);
+    background: var(--accent);
     color: #fff;
     font-family: var(--font-head);
     font-weight: 800;
@@ -528,7 +520,7 @@
   .price-amount {
     font-family: var(--font-head);
     font-size: 48px; font-weight: 800;
-    color: var(--white);
+    color: var(--dark);
     letter-spacing: -0.04em;
     line-height: 1;
     margin-bottom: 4px;
@@ -555,13 +547,13 @@
   .btn-price-primary {
     display: block; width: 100%; text-align: center;
     font-family: var(--font-head); font-weight: 700; font-size: 14px;
-    background: var(--violet); color: #fff;
+    background: var(--accent); color: #fff;
     border: none; border-radius: 10px;
     padding: 14px; cursor: pointer;
     text-decoration: none;
     transition: all 0.2s;
   }
-  .btn-price-primary:hover { background: var(--violet-d); transform: translateY(-1px); box-shadow: 0 8px 30px rgba(124,58,237,0.35); }
+  .btn-price-primary:hover { background: var(--accent-d); transform: translateY(-1px); box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
   .btn-price-ghost {
     display: block; width: 100%; text-align: center;
     font-family: var(--font-head); font-weight: 600; font-size: 14px;
@@ -571,7 +563,7 @@
     text-decoration: none;
     transition: all 0.2s;
   }
-  .btn-price-ghost:hover { color: var(--white); border-color: rgba(255,255,255,0.2); }
+  .btn-price-ghost:hover { color: var(--dark); border-color: var(--accent-l); }
   .price-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 10px; }
   /* ── TESTIMONIALS ──────────────────────────────────────── */
   .testi-grid {
@@ -586,7 +578,7 @@
     padding: 28px;
     transition: border-color 0.2s;
   }
-  .testi-card:hover { border-color: rgba(124,58,237,0.3); }
+  .testi-card:hover { border-color: var(--accent-l); }
   .testi-stars { color: #f59e0b; font-size: 14px; margin-bottom: 16px; letter-spacing: 2px; }
   .testi-quote {
     font-family: var(--font-serif);
@@ -599,11 +591,11 @@
   .testi-author { display: flex; align-items: center; gap: 10px; }
   .testi-av {
     width: 36px; height: 36px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--violet), var(--violet-d));
+    background: var(--accent);
     display: flex; align-items: center; justify-content: center;
     font-family: var(--font-head); font-weight: 700; font-size: 13px; color: #fff;
   }
-  .testi-info strong { display: block; font-family: var(--font-head); font-size: 13px; color: var(--white); }
+  .testi-info strong { display: block; font-family: var(--font-head); font-size: 13px; color: var(--dark); }
   .testi-info span { font-size: 12px; color: var(--muted); }
   /* ── FAQ ───────────────────────────────────────────────── */
   .faq-grid {
@@ -623,12 +615,12 @@
     padding: 20px 24px;
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
     font-family: var(--font-head); font-weight: 700; font-size: 14px;
-    color: var(--white);
+    color: var(--dark);
     transition: color 0.2s;
   }
-  .faq-q:hover { color: var(--violet-l); }
+  .faq-q:hover { color: var(--accent-l); }
   .faq-arrow { font-size: 18px; color: var(--muted); flex-shrink: 0; transition: transform 0.25s; }
-  .faq-item.open .faq-arrow { transform: rotate(45deg); color: var(--violet-l); }
+  .faq-item.open .faq-arrow { transform: rotate(45deg); color: var(--accent); }
   .faq-a {
     max-height: 0; overflow: hidden;
     transition: max-height 0.3s ease, padding 0.3s ease;
@@ -649,7 +641,7 @@
     width: 700px; height: 700px;
     top: 50%; left: 50%;
     transform: translate(-50%,-50%);
-    background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 65%);
+    background: radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 65%);
     pointer-events: none;
   }
   .cta-bottom h2 {
@@ -657,7 +649,7 @@
     font-size: clamp(36px, 5vw, 64px);
     font-weight: 800;
     letter-spacing: -0.03em;
-    color: var(--white);
+    color: var(--dark);
     line-height: 1.1;
     margin-bottom: 20px;
     position: relative;
@@ -683,7 +675,7 @@
   }
   .foot-links { display: flex; gap: 24px; flex-wrap: wrap; }
   .foot-links a { font-size: 12px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
-  .foot-links a:hover { color: var(--text); }
+  .foot-links a:hover { color: var(--dark); }
   .foot-copy { font-size: 12px; color: var(--subtle); }
   /* ── ANIMATIONS ────────────────────────────────────────── */
   @keyframes fade-up {
@@ -707,10 +699,8 @@
   .stat-num {
     font-family: var(--font-head);
     font-size: 36px; font-weight: 800;
-    color: var(--white); line-height: 1;
+    color: var(--dark); line-height: 1;
     margin-bottom: 4px;
-    background: linear-gradient(135deg, var(--white), var(--violet-l));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
   .stat-label { font-size: 12px; color: var(--muted); font-family: var(--font-head); }
   /* ── RESPONSIVE ────────────────────────────────────────── */
@@ -747,7 +737,7 @@
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
     </div>
-    <a href="/app?login=1" class="btn-ghost-nav" style="font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;transition:color .2s;">Accedi</a>
+    <a href="/app?login=1" class="btn-ghost-nav" style="font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;transition:color .2s;margin-right:8px;">Accedi</a>
     <a href="/app?register=1" class="btn-nav">Inizia Gratis →</a>
   </div>
 </nav>
@@ -772,7 +762,7 @@
     </a>
   </div>
   <p class="hero-disclaimer">10 generazioni gratuite · Attivo in 30 secondi · Zero carta di credito</p>
-  <p style="margin-top:12px;font-size:14px;color:var(--muted);font-family:var(--font-head);">Hai già un account? <a href="/app?login=1" style="color:var(--violet-l);font-weight:600;text-decoration:none;">Accedi →</a></p>
+  <p style="margin-top:12px;font-size:14px;color:var(--muted);font-family:var(--font-head);">Hai già un account? <a href="/app?login=1" style="color:var(--accent);font-weight:600;text-decoration:none;">Accedi →</a></p>
   <div class="platforms">
     <p>Genera contenuti per</p>
     <div class="platform-pills">
@@ -1002,7 +992,7 @@
         <p>Il sistema valuta chiarezza, engagement e ottimizzazioni. Ogni contenuto migliore del precedente.</p>
       </div>
       <!-- Riga 3 -->
-      <div class="bento-card col-4" style="background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(124,58,237,0.04));">
+      <div class="bento-card col-4" style="background: rgba(0,0,0,0.03);">
         <span class="bento-tag">Pro Exclusive</span>
         <span class="bento-icon">📋</span>
         <h3>Smart Brief personalizzato</h3>
@@ -1081,7 +1071,7 @@
       <!-- PRO FEATURED -->
       <div class="price-card featured">
         <div class="price-badge">⭐ Più Popolare — Best Value</div>
-        <p class="price-name" style="color: var(--violet-l);">Pro</p>
+        <p class="price-name" style="color: var(--accent);">Pro</p>
         <div class="price-amount"><span>€</span>29</div>
         <p class="price-per">al mese · cancelli quando vuoi</p>
         <p class="price-hook">Tutto quello che ti serve per diventare il creator di riferimento nel tuo settore.</p>
@@ -1165,7 +1155,7 @@
 <!-- ═══════════════════ CTA BOTTOM ════════════ -->
 <section class="cta-bottom">
   <div class="wrap" style="position:relative;">
-    <h2>Smetti di inseguire<br/>le idee. <em style="font-family: var(--font-serif); font-style:italic; background:linear-gradient(135deg,var(--violet-l),#c084fc); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">Inizia a creare.</em></h2>
+    <h2>Smetti di inseguire<br/>le idee. <em style="font-family: var(--font-serif); font-style:italic; color: var(--accent-l);">Inizia a creare.</em></h2>
     <p>10 generazioni gratuite. Nessuna carta richiesta. Risultati dal primo click.</p>
     <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
       <a href="/app?register=1" class="btn-primary" style="font-size:16px; padding:16px 36px;">
