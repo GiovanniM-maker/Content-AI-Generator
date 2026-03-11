@@ -183,11 +183,12 @@ def signup(email: str, password: str, full_name: str = "") -> dict:
             "Password should be at least 6 characters": "La password deve avere almeno 6 caratteri",
             "Unable to validate email address": "Indirizzo email non valido",
             "Signup requires a valid password": "Inserisci una password valida",
+            "Email rate limit exceeded": "Troppi tentativi. Riprova tra qualche minuto",
         }
         for en_msg, it_msg in error_map.items():
             if en_msg.lower() in msg.lower():
                 raise RuntimeError(it_msg)
-        raise RuntimeError(msg)
+        raise RuntimeError("Errore durante la registrazione. Riprova.")
 
     return data
 
@@ -218,11 +219,12 @@ def login(email: str, password: str) -> dict:
         error_map = {
             "Invalid login credentials": "Email o password non corretti",
             "Email not confirmed": "Conferma il tuo indirizzo email prima di accedere",
+            "Email rate limit exceeded": "Troppi tentativi. Riprova tra qualche minuto",
         }
         for en_msg, it_msg in error_map.items():
             if en_msg.lower() in msg.lower():
                 raise RuntimeError(it_msg)
-        raise RuntimeError(msg)
+        raise RuntimeError("Errore di autenticazione. Riprova.")
 
     return {
         "access_token": data.get("access_token"),
@@ -258,8 +260,7 @@ def refresh_session(refresh_token: str) -> dict:
     data = resp.json()
 
     if resp.status_code >= 400:
-        msg = data.get("msg") or data.get("message") or data.get("error_description") or str(data)
-        raise RuntimeError(msg)
+        raise RuntimeError("Sessione scaduta")
 
     return {
         "access_token": data.get("access_token"),
