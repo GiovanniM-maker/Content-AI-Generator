@@ -5834,7 +5834,7 @@ async function generateFromCrea() {
       } else {
         const body = {
           article: job.source,
-          format_type: job.type,
+          format: job.type,
           opinion: job.opinion,
           source_mode: job.source.source_mode || 'rss',
           custom_text: job.source.custom_text || '',
