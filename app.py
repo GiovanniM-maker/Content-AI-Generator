@@ -2896,28 +2896,39 @@ def test_ntfy():
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Background threads — start at module level so Gunicorn workers also run them
+# ---------------------------------------------------------------------------
+
+_bg_started = False
+
+def _start_background_threads():
+    global _bg_started
+    if _bg_started or not db.is_configured():
+        return
+    _bg_started = True
+
+    threading.Thread(target=_check_schedules, daemon=True).start()
+    threading.Thread(target=_retention_cleanup, daemon=True).start()
+
+    try:
+        _log_pipeline("info", "Background threads started — schedule checker + retention cleanup")
+    except Exception:
+        pass
+
+
+# Start background threads when module is loaded (works for both Gunicorn and local dev)
+_start_background_threads()
+
+
+# ---------------------------------------------------------------------------
+# Main (local dev only)
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # Verify Supabase is configured
     if not db.is_configured():
         print("ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env")
         print("Run: python setup_db.py   (after setting up .env)")
         exit(1)
-
-    # Start schedule checker background thread
-    schedule_thread = threading.Thread(target=_check_schedules, daemon=True)
-    schedule_thread.start()
-
-    # Start retention cleanup background thread
-    retention_thread = threading.Thread(target=_retention_cleanup, daemon=True)
-    retention_thread.start()
-
-    try:
-        _log_pipeline("info", "App started — schedule checker + retention cleanup running")
-    except Exception:
-        pass
 
     print("\n  Content AI Generator running on http://localhost:5001\n")
     app.run(debug=True, port=5001, host='0.0.0.0', use_reloader=False)
