@@ -1940,6 +1940,12 @@ body::after {
 .pers-card-gallery .pers-gallery-label { position: absolute; bottom: 2px; left: 4px; font-size: 8px; color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 3px; pointer-events: none; }
 .pers-card-gallery .pers-gallery-slot { position: relative; }
 
+/* Newsletter card mini-preview (scaled iframe) */
+.pers-card-nl-preview { width: 100%; height: 140px; overflow: hidden; position: relative; border-bottom: 1px solid var(--border); background: #f9f9f9; }
+.pers-card-nl-preview iframe { width: 600px; height: 800px; border: none; transform: scale(0.233); transform-origin: top left; pointer-events: none; }
+.tpl-select-card .pers-card-nl-preview { height: 100px; }
+.tpl-select-card .pers-card-nl-preview iframe { transform: scale(0.166); }
+
 /* Gallery preview in chat (all 4 slide types) */
 .pers-preview-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; width: 100%; height: 100%; overflow-y: auto; align-content: start; }
 .pers-preview-gallery-item { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #f5f5f5; cursor: pointer; transition: all 0.2s; }
@@ -7313,6 +7319,8 @@ let _persPlan = 'free';
 let _persLimit = 1;
 let _persCount = 0;
 let _persPreviewMode = 'visual';
+let _persNavigating = false; // guard against double-click race conditions
+let _persSending = false;    // guard for sendTemplateMessage
 // Cached preview URLs: { templateId: { cover: url, content: url, ... } }
 const _cachedPreviewUrls = {};
 // For template selection callback in Crea flow
@@ -7417,6 +7425,8 @@ function renderPersHome() {
 
   // Load mini-gallery previews (uses cached URLs when available, skips Playwright)
   _loadCardGalleries();
+  // Load newsletter mini-previews (scaled iframes)
+  _loadNlPreviews();
 }
 
 /* ---- Card thumb helpers ---- */
@@ -7432,8 +7442,35 @@ function _renderCardThumb(tpl, isPreset) {
       </div>`).join('')}
     </div>`;
   }
-  // Fallback: emoji icon (empty IG templates or newsletter)
+  // For NL with content: show mini-preview (iframe created post-render)
+  if (tpl.template_type === 'newsletter' && tpl.html_content && tpl.html_content.trim()) {
+    return `<div class="pers-card-nl-preview" data-nl-id="${tpl.id}"></div>`;
+  }
+  // Fallback: emoji icon (empty templates)
   return `<div class="pers-card-thumb">${tpl.template_type === 'instagram' ? '📸' : '📧'}</div>`;
+}
+
+function _loadNlPreviews() {
+  const holders = document.querySelectorAll('.pers-card-nl-preview:not(.loaded)');
+  holders.forEach(el => {
+    const tplId = el.dataset.nlId;
+    if (!tplId) return;
+    el.classList.add('loaded');
+    // Look up HTML from templates or presets
+    let html = '';
+    const userTpl = _persTemplates.find(t => t.id === tplId);
+    if (userTpl) { html = userTpl.html_content || ''; }
+    else {
+      const preset = _persPresets.find(p => p.id === tplId);
+      if (preset) html = preset.html_content || '';
+    }
+    if (!html.trim()) return;
+    const iframe = document.createElement('iframe');
+    iframe.sandbox = 'allow-same-origin';
+    iframe.srcdoc = html;
+    iframe.loading = 'lazy';
+    el.appendChild(iframe);
+  });
 }
 
 function _loadCardGalleries() {
@@ -7528,6 +7565,8 @@ function selectAspectRatio(ratio) {
 }
 
 async function createNewTemplateFromWizard() {
+  if (_persNavigating) return;
+  _persNavigating = true;
   const name = document.getElementById('pers-template-name').value.trim() || 'Senza nome';
   try {
     const res = await fetch('/api/templates', {
@@ -7536,16 +7575,19 @@ async function createNewTemplateFromWizard() {
       body: JSON.stringify({ template_type: _persCurrentType, name, aspect_ratio: _persCurrentRatio })
     });
     const data = await res.json();
-    if (!res.ok) { toast(data.error || 'Errore'); return; }
+    if (!res.ok) { toast(data.error || 'Errore'); _persNavigating = false; return; }
     toast('Template creato!');
+    _persNavigating = false; // release before openTemplateChat re-acquires
     openTemplateChat(data.id);
-  } catch(e) { toast('Errore nella creazione'); }
+  } catch(e) { toast('Errore nella creazione'); _persNavigating = false; }
 }
 
 async function openTemplateChat(templateId) {
+  if (_persNavigating) return; // prevent double-click
+  _persNavigating = true;
   try {
     const res = await fetch(`/api/templates/${templateId}`);
-    if (!res.ok) { toast('Template non trovato'); return; }
+    if (!res.ok) { toast('Template non trovato'); _persNavigating = false; return; }
     const tpl = await res.json();
     _persCurrentId = tpl.id;
     _persCurrentType = tpl.template_type;
@@ -7582,6 +7624,7 @@ async function openTemplateChat(templateId) {
 
     showPersScreen('pers-chat');
   } catch(e) { toast('Errore nel caricamento'); }
+  finally { _persNavigating = false; }
 }
 
 // ---- Image upload state ----
@@ -7636,11 +7679,13 @@ async function _uploadTemplateFile() {
 }
 
 async function sendTemplateMessage() {
+  if (_persSending) return; // prevent double-send
   const input = document.getElementById('pers-chat-input');
   const message = input.value.trim();
   const hasImage = !!_persUploadedFile;
   if (!message && !hasImage) return;
   if (!_persCurrentId) return;
+  _persSending = true;
 
   const sendBtn = document.getElementById('pers-send-btn');
   sendBtn.disabled = true;
@@ -7715,6 +7760,7 @@ async function sendTemplateMessage() {
   }
 
   sendBtn.disabled = false;
+  _persSending = false;
   msgContainer.scrollTop = msgContainer.scrollHeight;
   input.focus();
 }
@@ -7746,6 +7792,10 @@ async function updateTemplatePreview() {
   try {
     const res = await fetch(`/api/templates/${_persCurrentId}/preview`, { method: 'POST' });
     const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<div class="pers-preview-empty">${esc(data.error || 'Errore nel rendering della preview')}</div>`;
+      return;
+    }
     if (data.type === 'gallery' && data.slides) {
       const types = ['cover', 'content', 'list', 'cta'];
       container.innerHTML = `<div class="pers-preview-gallery">
@@ -7756,16 +7806,15 @@ async function updateTemplatePreview() {
           </div>` : '').join('')}
       </div>`;
     } else if (data.type === 'image' && data.image) {
-      // Legacy single-image fallback
       container.innerHTML = `<img src="${data.image}" alt="Template preview">`;
     } else if (data.type === 'html') {
       container.innerHTML = '<iframe id="pers-preview-iframe"></iframe>';
       document.getElementById('pers-preview-iframe').srcdoc = data.html;
     } else {
-      container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile</div>';
+      container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile — riprova</div>';
     }
   } catch(e) {
-    container.innerHTML = '<div class="pers-preview-empty">Errore nel rendering</div>';
+    container.innerHTML = '<div class="pers-preview-empty">Errore di connessione. Riprova.</div>';
   }
 }
 
@@ -7824,6 +7873,8 @@ function deleteCurrentTemplate() {
 }
 
 async function clonePreset(presetId, name) {
+  if (_persNavigating) return; // prevent double-click
+  _persNavigating = true;
   try {
     const res = await fetch(`/api/templates/clone/${presetId}`, {
       method: 'POST',
@@ -7831,10 +7882,11 @@ async function clonePreset(presetId, name) {
       body: JSON.stringify({ name: `${name} (personalizzato)` })
     });
     const data = await res.json();
-    if (!res.ok) { toast(data.error || 'Errore'); return; }
+    if (!res.ok) { toast(data.error || 'Errore'); _persNavigating = false; return; }
     toast('Template clonato!');
+    _persNavigating = false; // release before openTemplateChat re-acquires
     openTemplateChat(data.id);
-  } catch(e) { toast('Errore nella clonazione'); }
+  } catch(e) { toast('Errore nella clonazione'); _persNavigating = false; }
 }
 
 // ---- Template selection for Crea flow ----

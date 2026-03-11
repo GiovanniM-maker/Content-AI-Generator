@@ -303,18 +303,38 @@ body { margin: 0; padding: 0; background: #f5f5f5; font-family: -apple-system, B
 .section h2 { font-size: 20px; font-weight: 600; color: #333; margin: 0 0 12px; }
 .section p, .section ul, .section ol { font-size: 16px; color: #555; line-height: 1.7; margin: 0 0 14px; }
 .divider { height: 1px; background: #eee; margin: 0 32px; }
+.btn { display: inline-block; padding: 12px 28px; background: #333; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600; margin-top: 8px; }
+.card-row { display: flex; gap: 16px; padding: 0 32px 24px; }
+.card { flex: 1; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
+.card-img { width: 100%; height: 120px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 13px; }
+.card-body { padding: 14px; }
+.card-body h4 { font-size: 15px; font-weight: 600; color: #333; margin: 0 0 6px; }
+.card-body p { font-size: 13px; color: #777; line-height: 1.5; margin: 0; }
 .exclusive { padding: 28px 32px; background: #f8f9fa; border-left: 4px solid #333; margin: 0 32px; border-radius: 0 8px 8px 0; }
 .exclusive h3 { font-size: 18px; font-weight: 600; color: #1a1a1a; margin: 0 0 10px; }
 .exclusive p { font-size: 15px; color: #555; line-height: 1.65; margin: 0; }
+.social { padding: 20px 32px; text-align: center; }
+.social a { display: inline-block; width: 36px; height: 36px; line-height: 36px; margin: 0 6px; background: #f0f0f0; border-radius: 50%; color: #555; text-decoration: none; font-size: 16px; }
 .footer { padding: 24px 32px; text-align: center; font-size: 13px; color: #999; border-top: 1px solid #eee; }
 .footer a { color: #666; text-decoration: underline; }
 </style></head><body>
 <div class="container">
     <div class="header"><h1>{{NEWSLETTER_TITLE}}</h1></div>
-    <div class="section">{{SECTION_1}}</div>
+    <div class="section">{{SECTION_1}}
+        <a href="#" class="btn">Scopri di pi&ugrave;</a>
+    </div>
     <div class="divider"></div>
     <div class="section">{{SECTION_2}}</div>
+    <div class="card-row">
+        <div class="card"><div class="card-img">Immagine</div><div class="card-body"><h4>Articolo 1</h4><p>Breve anteprima del contenuto in evidenza.</p></div></div>
+        <div class="card"><div class="card-img">Immagine</div><div class="card-body"><h4>Articolo 2</h4><p>Breve anteprima del contenuto in evidenza.</p></div></div>
+    </div>
     <div class="exclusive">{{EXCLUSIVE_SECTION}}</div>
+    <div class="social">
+        <a href="#">&#x2709;</a>
+        <a href="#">&#x1F310;</a>
+        <a href="#">&#x260E;</a>
+    </div>
     <div class="footer">{{FOOTER}}</div>
 </div>
 </body></html>"""
@@ -334,6 +354,15 @@ body { margin: 0; padding: 0; background: #1a1a2e; font-family: Georgia, 'Times 
 .section h2 { font-size: 22px; font-weight: 700; color: #1a1a2e; margin: 0 0 16px; border-bottom: 2px solid #e94560; padding-bottom: 8px; display: inline-block; }
 .section p, .section ul, .section ol { font-size: 16px; color: #444; line-height: 1.8; margin: 0 0 14px; }
 .section-alt { background: #f8f9fa; }
+.btn { display: inline-block; padding: 14px 32px; background: #e94560; color: #fff; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px; }
+.btn-outline { display: inline-block; padding: 10px 24px; background: transparent; color: #e94560; text-decoration: none; border: 2px solid #e94560; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 10px; }
+.featured-img { width: 100%; height: 200px; background: linear-gradient(135deg, #f8f9fa 0%, #e8e8e8 100%); display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-style: italic; }
+.card-grid { display: flex; gap: 16px; padding: 0 32px 28px; }
+.card-grid .card { flex: 1; background: #f8f9fa; border-radius: 10px; overflow: hidden; }
+.card-grid .card-img { height: 100px; background: #e8e8e8; display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 12px; }
+.card-grid .card-body { padding: 14px; }
+.card-grid .card-body h4 { font-size: 15px; font-weight: 700; color: #1a1a2e; margin: 0 0 6px; }
+.card-grid .card-body p { font-size: 13px; color: #666; line-height: 1.5; margin: 0; }
 .exclusive {
     padding: 32px; margin: 0 32px 24px;
     background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
@@ -341,6 +370,8 @@ body { margin: 0; padding: 0; background: #1a1a2e; font-family: Georgia, 'Times 
 }
 .exclusive h3 { font-size: 20px; font-weight: 700; margin: 0 0 12px; color: #e94560; }
 .exclusive p { font-size: 15px; line-height: 1.7; margin: 0; color: rgba(255,255,255,0.85); }
+.social { padding: 24px 32px; text-align: center; border-top: 1px solid #eee; }
+.social a { display: inline-block; width: 40px; height: 40px; line-height: 40px; margin: 0 8px; background: #1a1a2e; border-radius: 50%; color: #fff; text-decoration: none; font-size: 16px; }
 .footer {
     padding: 28px 32px; text-align: center; font-size: 13px; color: #999;
     background: #f5f5f5; border-top: 3px solid #1a1a2e;
@@ -352,9 +383,25 @@ body { margin: 0; padding: 0; background: #1a1a2e; font-family: Georgia, 'Times 
         <h1>{{NEWSLETTER_TITLE}}</h1>
         <div class="subtitle">La tua dose settimanale di contenuti curati</div>
     </div>
-    <div class="section">{{SECTION_1}}</div>
-    <div class="section section-alt">{{SECTION_2}}</div>
-    <div class="exclusive">{{EXCLUSIVE_SECTION}}</div>
+    <div class="featured-img">Immagine di copertina</div>
+    <div class="section">{{SECTION_1}}
+        <br><a href="#" class="btn">Leggi l&#39;articolo</a>
+    </div>
+    <div class="section section-alt">{{SECTION_2}}
+        <br><a href="#" class="btn-outline">Approfondisci</a>
+    </div>
+    <div class="card-grid">
+        <div class="card"><div class="card-img">Img</div><div class="card-body"><h4>In evidenza</h4><p>Contenuto consigliato della settimana.</p></div></div>
+        <div class="card"><div class="card-img">Img</div><div class="card-body"><h4>Da non perdere</h4><p>Una risorsa selezionata per te.</p></div></div>
+    </div>
+    <div class="exclusive">{{EXCLUSIVE_SECTION}}
+        <br><a href="#" style="display:inline-block;padding:10px 24px;background:#e94560;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;margin-top:10px;">Accedi ora</a>
+    </div>
+    <div class="social">
+        <a href="#">&#x2709;</a>
+        <a href="#">&#x1F310;</a>
+        <a href="#">&#x260E;</a>
+    </div>
     <div class="footer">{{FOOTER}}</div>
 </div>
 </body></html>"""
@@ -367,16 +414,29 @@ body { margin: 0; padding: 0; background: #e8ecef; font-family: -apple-system, B
 .top-bar { height: 4px; background: linear-gradient(90deg, #0abde3, #48dbfb, #0abde3); }
 .header { padding: 36px 32px 28px; }
 .header h1 { font-size: 26px; font-weight: 700; color: #16213e; margin: 0; line-height: 1.3; }
+.header .date { font-size: 13px; color: #8395a7; margin-top: 8px; }
 .section { padding: 24px 32px; }
 .section h2 { font-size: 19px; font-weight: 600; color: #16213e; margin: 0 0 12px; }
 .section p, .section ul, .section ol { font-size: 15px; color: #576574; line-height: 1.7; margin: 0 0 12px; }
 .divider { height: 1px; background: #e8ecef; margin: 0 32px; }
+.btn { display: inline-block; padding: 12px 28px; background: #0abde3; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600; margin-top: 8px; }
+.btn-secondary { display: inline-block; padding: 10px 22px; background: #16213e; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 8px; }
+.stats-row { display: flex; gap: 16px; padding: 20px 32px; background: #f8f9fa; }
+.stat-box { flex: 1; text-align: center; padding: 16px 8px; background: #fff; border-radius: 8px; border: 1px solid #e8ecef; }
+.stat-box .num { font-size: 28px; font-weight: 700; color: #0abde3; margin: 0; }
+.stat-box .label { font-size: 12px; color: #8395a7; margin-top: 4px; }
+.card-row { display: flex; gap: 14px; padding: 0 32px 24px; }
+.card-row .card { flex: 1; border: 1px solid #e8ecef; border-radius: 8px; padding: 18px; }
+.card-row .card h4 { font-size: 15px; font-weight: 600; color: #16213e; margin: 0 0 8px; }
+.card-row .card p { font-size: 13px; color: #576574; line-height: 1.5; margin: 0; }
 .exclusive {
     padding: 24px 28px; margin: 16px 32px;
     background: #f0f8ff; border: 1px solid #0abde333; border-radius: 8px;
 }
 .exclusive h3 { font-size: 17px; font-weight: 600; color: #0abde3; margin: 0 0 10px; }
 .exclusive p { font-size: 14px; color: #576574; line-height: 1.65; margin: 0; }
+.social { padding: 20px 32px; text-align: center; }
+.social a { display: inline-block; width: 34px; height: 34px; line-height: 34px; margin: 0 5px; background: #16213e; border-radius: 6px; color: #fff; text-decoration: none; font-size: 14px; }
 .footer {
     padding: 24px 32px; text-align: center; font-size: 12px; color: #8395a7;
     background: #f8f9fa; border-top: 1px solid #e8ecef;
@@ -385,11 +445,32 @@ body { margin: 0; padding: 0; background: #e8ecef; font-family: -apple-system, B
 </style></head><body>
 <div class="container">
     <div class="top-bar"></div>
-    <div class="header"><h1>{{NEWSLETTER_TITLE}}</h1></div>
-    <div class="section">{{SECTION_1}}</div>
+    <div class="header">
+        <h1>{{NEWSLETTER_TITLE}}</h1>
+        <div class="date">Newsletter settimanale</div>
+    </div>
+    <div class="section">{{SECTION_1}}
+        <br><a href="#" class="btn">Scopri di pi&ugrave;</a>
+    </div>
+    <div class="stats-row">
+        <div class="stat-box"><div class="num">12K</div><div class="label">Lettori</div></div>
+        <div class="stat-box"><div class="num">85%</div><div class="label">Apertura</div></div>
+        <div class="stat-box"><div class="num">4.8</div><div class="label">Rating</div></div>
+    </div>
     <div class="divider"></div>
-    <div class="section">{{SECTION_2}}</div>
+    <div class="section">{{SECTION_2}}
+        <br><a href="#" class="btn-secondary">Leggi tutto</a>
+    </div>
+    <div class="card-row">
+        <div class="card"><h4>Quick Tip</h4><p>Un consiglio pratico per la tua strategia.</p></div>
+        <div class="card"><h4>Risorsa</h4><p>Link e strumenti utili selezionati.</p></div>
+    </div>
     <div class="exclusive">{{EXCLUSIVE_SECTION}}</div>
+    <div class="social">
+        <a href="#">&#x2709;</a>
+        <a href="#">&#x1F310;</a>
+        <a href="#">&#x260E;</a>
+    </div>
     <div class="footer">{{FOOTER}}</div>
 </div>
 </body></html>"""
@@ -406,12 +487,20 @@ body { margin: 0; padding: 0; background: #fff5f5; font-family: Georgia, 'Times 
 .section h2 { font-size: 20px; font-weight: 700; color: #2d3436; margin: 0 0 14px; }
 .section p, .section ul, .section ol { font-size: 16px; color: #555; line-height: 1.8; margin: 0 0 14px; }
 .divider { text-align: center; padding: 8px 0; color: #dfe6e9; font-size: 20px; letter-spacing: 8px; }
+.btn { display: inline-block; padding: 12px 28px; background: #e17055; color: #fff; text-decoration: none; border-radius: 24px; font-size: 14px; font-weight: 700; margin-top: 10px; }
+.btn-ghost { display: inline-block; padding: 10px 22px; background: transparent; color: #e17055; text-decoration: none; border: 2px solid #e17055; border-radius: 24px; font-size: 13px; font-weight: 600; margin-top: 8px; }
+.highlight-card { margin: 0 36px 20px; padding: 24px; background: linear-gradient(135deg, #fff5f5 0%, #ffeaa7 100%); border-radius: 12px; border: 1px solid #ffeaa744; }
+.highlight-card h4 { font-size: 17px; font-weight: 700; color: #2d3436; margin: 0 0 8px; }
+.highlight-card p { font-size: 14px; color: #636e72; line-height: 1.6; margin: 0 0 10px; }
+.img-placeholder { width: 100%; height: 180px; background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 600; }
 .exclusive {
     padding: 28px 36px; margin: 8px 28px 20px;
     background: #ffeaa7; border-radius: 12px;
 }
 .exclusive h3 { font-size: 18px; font-weight: 700; color: #2d3436; margin: 0 0 10px; }
 .exclusive p { font-size: 15px; color: #636e72; line-height: 1.7; margin: 0; }
+.social { padding: 20px 36px; text-align: center; }
+.social a { display: inline-block; width: 38px; height: 38px; line-height: 38px; margin: 0 6px; background: #fab1a0; border-radius: 50%; color: #fff; text-decoration: none; font-size: 16px; }
 .footer { padding: 28px 36px; text-align: center; font-size: 13px; color: #b2bec3; }
 .footer a { color: #e17055; text-decoration: none; }
 </style></head><body>
@@ -420,10 +509,25 @@ body { margin: 0; padding: 0; background: #fff5f5; font-family: Georgia, 'Times 
         <h1>{{NEWSLETTER_TITLE}}</h1>
         <div class="greeting">Ciao! Ecco cosa ho preparato per te questa settimana...</div>
     </div>
-    <div class="section">{{SECTION_1}}</div>
+    <div class="img-placeholder">La tua immagine qui</div>
+    <div class="section">{{SECTION_1}}
+        <br><a href="#" class="btn">Continua a leggere</a>
+    </div>
     <div class="divider">&#8226; &#8226; &#8226;</div>
-    <div class="section">{{SECTION_2}}</div>
+    <div class="section">{{SECTION_2}}
+        <br><a href="#" class="btn-ghost">Scopri di pi&ugrave;</a>
+    </div>
+    <div class="highlight-card">
+        <h4>Il consiglio della settimana</h4>
+        <p>Un suggerimento pratico selezionato per te.</p>
+        <a href="#" class="btn-ghost">Leggi tutto</a>
+    </div>
     <div class="exclusive">{{EXCLUSIVE_SECTION}}</div>
+    <div class="social">
+        <a href="#">&#x2709;</a>
+        <a href="#">&#x1F310;</a>
+        <a href="#">&#x260E;</a>
+    </div>
     <div class="footer">{{FOOTER}}</div>
 </div>
 </body></html>"""
