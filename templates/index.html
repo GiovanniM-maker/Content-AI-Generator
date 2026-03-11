@@ -950,6 +950,28 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 .cal-event .cal-ev-time { font-size: 9px; opacity: 0.8; }
 
 .empty-state { color: var(--text2); font-size: 13px; padding: 40px 0; text-align: center; }
+
+/* Onboarding overlay */
+.onboarding-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85); z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.4s ease;
+}
+.onboarding-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 20px;
+  max-width: 480px; width: 90%; padding: 40px 36px 32px; text-align: center;
+  position: relative; animation: fadeUp 0.5s ease;
+}
+.onboarding-icon { font-size: 48px; margin-bottom: 16px; }
+.onboarding-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 10px; }
+.onboarding-desc { font-size: 14px; color: var(--text2); line-height: 1.7; margin-bottom: 24px; }
+.onboarding-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; }
+.onboarding-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.3s; }
+.onboarding-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
+.onboarding-actions { display: flex; gap: 12px; justify-content: center; }
+.onboarding-skip { font-size: 12px; color: var(--text3); background: none; border: none; cursor: pointer; position: absolute; top: 16px; right: 20px; }
+.onboarding-skip:hover { color: var(--text); }
 .back-link {
   font-size: 12px; color: var(--text2); cursor: pointer;
   margin-bottom: 16px; display: inline-flex; align-items: center; gap: 4px;
@@ -1556,6 +1578,76 @@ body::after {
   transition: background 0.2s;
 }
 .upgrade-link:hover { background: rgba(0,168,232,0.2); text-decoration: none; }
+
+/* ===== RESPONSIVE MOBILE ===== */
+@media (max-width: 768px) {
+  /* Topbar: stack vertically */
+  .topbar {
+    flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 8px;
+  }
+  .topbar-logo { font-size: 13px; margin-right: auto; }
+  .topbar-tabs { order: 3; width: 100%; justify-content: center; gap: 2px; }
+  .topbar-tab { padding: 6px 14px; font-size: 12px; }
+  .topbar-right { gap: 8px; }
+  .topbar-usage { font-size: 11px; padding: 4px 8px; }
+  .topbar-user { padding: 3px 8px 3px 3px; }
+  .user-avatar { width: 24px; height: 24px; font-size: 11px; }
+
+  /* Main content */
+  .main-content { padding: 12px; }
+
+  /* Crea zones */
+  .crea-zona { padding: 14px 16px; }
+  .crea-zona-title { font-size: 14px; }
+  .source-mode-tabs { flex-wrap: wrap; }
+  .source-mode-tab { font-size: 12px; padding: 6px 12px; }
+
+  /* Content grid */
+  .content-grid { grid-template-columns: 1fr; }
+  .content-col textarea { min-height: 160px; }
+
+  /* History */
+  .libreria-filters { gap: 4px; }
+  .libreria-filter-chip { padding: 4px 8px; font-size: 11px; }
+  .session-title { font-size: 13px; }
+
+  /* Libreria sub-nav */
+  .libreria-nav { gap: 3px; }
+  .libreria-nav-btn { padding: 6px 12px; font-size: 12px; }
+
+  /* Calendar */
+  .sched-calendar { overflow-x: auto; }
+  .cal-body, .cal-header { min-width: 600px; }
+
+  /* Onboarding */
+  .onboarding-card { padding: 28px 20px 24px; }
+  .onboarding-title { font-size: 18px; }
+  .onboarding-desc { font-size: 13px; }
+
+  /* Auth overlay */
+  .auth-card { width: 95%; max-width: 380px; padding: 24px; }
+
+  /* Modals */
+  .nl-modal { max-width: 95vw; max-height: 90vh; }
+
+  /* Platform selector */
+  .platform-selector { gap: 6px; }
+  .platform-check { padding: 8px 10px; font-size: 12px; }
+
+  /* Buttons */
+  .btn { padding: 8px 16px; font-size: 12px; }
+  h1 { font-size: 20px; }
+  .subtitle { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .topbar-logo { display: none; }
+  .topbar-tab span { display: none; }
+  .topbar-tab { padding: 6px 16px; }
+  .crea-zona-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .onboarding-card { padding: 24px 16px 20px; }
+  .onboarding-icon { font-size: 36px; }
+}
 </style>
 </head>
 <body>
@@ -2058,11 +2150,15 @@ body::after {
         <span>✨ Contenuti generati</span>
       </div>
       <div id="gen-progress" class="gen-progress" style="display:none;">
-        <div class="status" id="gen-status">Generazione in corso...</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="status" id="gen-status">Generazione in corso...</div>
+          <div id="gen-eta" style="font-size:12px;color:var(--text3);">⏱ Calcolo tempo...</div>
+        </div>
         <div class="bar-track"><div class="bar-fill" id="gen-bar" style="width:0%"></div></div>
+        <div id="gen-percent" style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;">0%</div>
       </div>
       <div id="gen-results"></div>
-      <div id="crea-results-actions" style="display:none;text-align:center;padding:20px 0;display:flex;gap:12px;justify-content:center;">
+      <div id="crea-results-actions" style="display:none;text-align:center;padding:20px 0;gap:12px;justify-content:center;">
         <button class="btn btn-secondary" onclick="resetCreaFlow()">🔄 Ricomincia</button>
         <button class="btn btn-secondary" onclick="showTab('libreria')">📚 Vai alla Libreria</button>
       </div>
@@ -2190,6 +2286,24 @@ body::after {
   </div>
 
   </div><!-- /tab-libreria -->
+</div>
+
+<!-- Onboarding Overlay (first-time users) -->
+<div id="onboarding-overlay" class="onboarding-overlay" style="display:none;">
+  <div class="onboarding-card">
+    <button class="onboarding-skip" onclick="completeOnboarding()">Salta ✕</button>
+    <div id="onboarding-slide">
+      <!-- Populated by JS -->
+    </div>
+    <div class="onboarding-dots">
+      <div class="onboarding-dot active" data-slide="0"></div>
+      <div class="onboarding-dot" data-slide="1"></div>
+      <div class="onboarding-dot" data-slide="2"></div>
+    </div>
+    <div class="onboarding-actions">
+      <button class="btn btn-primary" id="onboarding-next" onclick="nextOnboardingSlide()">Avanti →</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2354,6 +2468,75 @@ function setPricingPeriod(period) {
   });
 }
 
+// ---- Onboarding ----
+const _onboardingSlides = [
+  {
+    icon: '🚀',
+    title: 'Ecco cosa fa Content AI Generator',
+    desc: 'Parti da un articolo, un link o un\'idea.<br>L\'AI genera <strong>contenuti pronti</strong> per LinkedIn, Instagram, Twitter, Newsletter e Video — tutto in un click.'
+  },
+  {
+    icon: '✍️',
+    title: 'Scegli un argomento, aggiungi la tua voce',
+    desc: 'Cerca sul web, usa i tuoi feed RSS oppure scrivi tu.<br>Aggiungi <strong>la tua opinione</strong> in 1-2 frasi e l\'AI la integrerà in ogni contenuto.'
+  },
+  {
+    icon: '⚡',
+    title: 'Contenuti pronti in 60 secondi',
+    desc: 'Ricevi fino a 5 contenuti personalizzati.<br>Copia, modifica, programma la pubblicazione.<br><strong>Il primo contenuto è gratis!</strong>'
+  }
+];
+let _onboardingStep = 0;
+
+function showOnboarding() {
+  _onboardingStep = 0;
+  renderOnboardingSlide();
+  document.getElementById('onboarding-overlay').style.display = 'flex';
+}
+
+function renderOnboardingSlide() {
+  const slide = _onboardingSlides[_onboardingStep];
+  document.getElementById('onboarding-slide').innerHTML = `
+    <div class="onboarding-icon">${slide.icon}</div>
+    <h2 class="onboarding-title">${slide.title}</h2>
+    <p class="onboarding-desc">${slide.desc}</p>
+  `;
+  // Update dots
+  document.querySelectorAll('.onboarding-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === _onboardingStep);
+  });
+  // Update button
+  const btn = document.getElementById('onboarding-next');
+  if (_onboardingStep >= _onboardingSlides.length - 1) {
+    btn.textContent = '✨ Inizia subito';
+    btn.onclick = completeOnboarding;
+  } else {
+    btn.textContent = 'Avanti →';
+    btn.onclick = nextOnboardingSlide;
+  }
+}
+
+function nextOnboardingSlide() {
+  _onboardingStep++;
+  if (_onboardingStep >= _onboardingSlides.length) {
+    completeOnboarding();
+    return;
+  }
+  renderOnboardingSlide();
+}
+
+function completeOnboarding() {
+  document.getElementById('onboarding-overlay').style.display = 'none';
+  localStorage.setItem('onboarding_completed', '1');
+  showTab('crea');
+}
+
+function checkOnboarding() {
+  if (!localStorage.getItem('onboarding_completed')) {
+    showOnboarding();
+  }
+}
+
 function showAuthForm(type) {
   document.getElementById('auth-login-form').style.display = type === 'login' ? 'block' : 'none';
   document.getElementById('auth-register-form').style.display = type === 'register' ? 'block' : 'none';
@@ -2467,6 +2650,8 @@ function onAuthSuccess(user) {
   updateSidebarUser(user);
   // Reload data for the new user
   loadWeeklyBanner();
+  // Show onboarding for first-time users
+  checkOnboarding();
 }
 
 function updateSidebarUser(user) {
@@ -2510,6 +2695,7 @@ function initAuth() {
         return resp.json().then(me => {
           hideAuthOverlay();
           updateSidebarUser(me.user);
+          checkOnboarding();
         });
       } else {
         // Try refresh
@@ -2520,7 +2706,7 @@ function initAuth() {
             return _originalFetch('/auth/me', {
               headers: { 'Authorization': 'Bearer ' + getAccessToken() },
             }).then(r => r.ok ? r.json() : null).then(me => {
-              if (me) updateSidebarUser(me.user);
+              if (me) { updateSidebarUser(me.user); checkOnboarding(); }
             });
           } else {
             clearAuthData();
@@ -2843,7 +3029,7 @@ async function webSearch() {
 
 function renderSearchResults(articles) {
   const div = document.getElementById('web-search-results');
-  if (!articles.length) { div.innerHTML = '<div class="empty-state">Nessun risultato trovato</div>'; return; }
+  if (!articles.length) { div.innerHTML = '<div class="empty-state">🔍 Nessun risultato trovato. Prova con parole chiave diverse.</div>'; return; }
   let html = '';
   articles.forEach((art, i) => {
     html += `<div class="search-result-item" data-idx="${i}" onclick="toggleSearchResult(${i}, this)">
@@ -3322,11 +3508,32 @@ async function generateAll() {
   if (platforms.includes('video_script')) totalCalls += selectedArticles.length;
   if (platforms.includes('newsletter')) totalCalls += 1;
   let completed = 0;
+  const _genStartTime = Date.now();
+  const _estSecondsPerCall = 8; // ~8 seconds per API call
+
+  // Initial ETA
+  const etaEl = document.getElementById('gen-eta');
+  const percentEl = document.getElementById('gen-percent');
+  const totalEstSec = totalCalls * _estSecondsPerCall;
+  if (etaEl) etaEl.textContent = `⏱ ~${totalEstSec} secondi`;
 
   function updateProgress(label) {
     completed++;
+    const pct = Math.round((completed / totalCalls) * 100);
     document.getElementById('gen-status').textContent = label;
-    document.getElementById('gen-bar').style.width = Math.round((completed / totalCalls) * 100) + '%';
+    document.getElementById('gen-bar').style.width = pct + '%';
+    if (percentEl) percentEl.textContent = pct + '%';
+    // Calculate remaining ETA based on actual elapsed time
+    if (etaEl) {
+      const elapsed = (Date.now() - _genStartTime) / 1000;
+      const avgPerCall = elapsed / completed;
+      const remaining = Math.round(avgPerCall * (totalCalls - completed));
+      if (completed >= totalCalls) {
+        etaEl.textContent = '✅ Completato!';
+      } else {
+        etaEl.textContent = remaining > 0 ? `⏱ ~${remaining}s rimanenti` : '⏱ Quasi fatto...';
+      }
+    }
   }
 
   try {
@@ -4165,7 +4372,12 @@ function renderCalendar() {
 function renderScheduleList() {
   const list = document.getElementById('schedule-list');
   if (!scheduleData.length) {
-    list.innerHTML = '<div class="empty-state">Nessun contenuto programmato. Genera contenuti e usa il pulsante "Programma" per pianificare la pubblicazione.</div>';
+    list.innerHTML = `<div class="empty-state" style="padding:50px 20px;">
+      <div style="font-size:28px;margin-bottom:10px;">📅</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px;">Nessun contenuto programmato</div>
+      <div style="margin-bottom:14px;">Genera contenuti e usa il pulsante "Programma" per pianificare.</div>
+      <button class="btn btn-primary btn-small" onclick="showTab('crea')">✨ Crea contenuti</button>
+    </div>`;
     return;
   }
   let html = '';
@@ -4320,7 +4532,7 @@ function renderHistoryList() {
   }
 
   if (!filtered.length) {
-    list.innerHTML = '<div class="empty-state">Nessun risultato con i filtri selezionati</div>';
+    list.innerHTML = '<div class="empty-state">🔍 Nessun risultato con i filtri selezionati. Prova a cambiare filtro o termine di ricerca.</div>';
     if (statsEl) statsEl.textContent = `0 di ${_historySessions.length} sessioni`;
     return;
   }
@@ -4332,6 +4544,7 @@ function renderHistoryList() {
   }
 
   const platLabels = { linkedin:'LinkedIn', instagram:'Instagram', twitter:'Twitter', video_script:'Video', newsletter:'Newsletter' };
+  const platIcons = { linkedin:'💼', instagram:'📸', twitter:'🐦', video_script:'🎬', newsletter:'📧' };
   let html = '';
   filtered.forEach(s => {
     const date = new Date(s.created_at).toLocaleDateString('it-IT', {
@@ -4342,21 +4555,90 @@ function renderHistoryList() {
     const platBadges = (s.platforms || []).map(p =>
       `<span class="session-plat-badge">${platLabels[p] || p}</span>`
     ).join('');
+
+    // Build inline preview snippets (first 120 chars of each content)
+    let previewHtml = '';
+    const content = s.content || {};
+    for (const [key, text] of Object.entries(content)) {
+      if (!text) continue;
+      const plat = key.replace(/_\d+$/, '');
+      const icon = platIcons[plat] || '📄';
+      const snippet = text.substring(0, 120).replace(/\n/g, ' ') + (text.length > 120 ? '...' : '');
+      previewHtml += `<div style="padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;font-size:12px;line-height:1.5;">
+        <span style="font-weight:600;">${icon} ${platLabels[plat] || plat}</span>
+        <div style="color:var(--text2);margin-top:3px;">${esc(snippet)}</div>
+        <button class="btn btn-secondary btn-small" style="margin-top:6px;font-size:11px;" onclick="event.stopPropagation();navigator.clipboard.writeText(${JSON.stringify(text).replace(/'/g, '&#39;')}).then(()=>toast('Copiato!'))">📋 Copia</button>
+      </div>`;
+    }
+
+    const safeTitle = esc(s.article?.title || 'Senza titolo').replace(/'/g, "\\'");
     html += `
-    <div class="session-card" onclick='openSession("${s.id}")'>
-      <div style="flex:1;min-width:0;">
-        <div class="session-title">${esc(s.article?.title || 'Senza titolo')}</div>
-        <div class="session-meta">${date} · ${totalPieces} contenuti</div>
-        <div class="session-platforms">${platBadges || '<span class="session-plat-badge">tutte</span>'}</div>
+    <div class="session-card" style="display:block;cursor:pointer;" onclick="toggleSessionPreview('preview-${s.id}', this)">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div class="session-title">${esc(s.article?.title || 'Senza titolo')}</div>
+          <div class="session-meta">${date} · ${totalPieces} contenuti</div>
+          <div class="session-platforms">${platBadges || '<span class="session-plat-badge">tutte</span>'}</div>
+        </div>
+        <button class="btn btn-secondary btn-small" onclick="event.stopPropagation();regenerateSession('${s.id}')" title="Rigenera con stesse impostazioni" style="flex-shrink:0;">🔄</button>
+        <button class="btn btn-secondary btn-small" onclick="event.stopPropagation();deleteSession('${s.id}','${safeTitle}')" style="color:var(--red);flex-shrink:0;" title="Elimina">🗑</button>
+        <span class="session-chevron" style="color:var(--text2);font-size:18px;transition:transform 0.2s;">▸</span>
       </div>
-      <button class="btn btn-secondary btn-small" onclick="event.stopPropagation();deleteSession('${s.id}','${esc(s.article?.title || 'Senza titolo').replace(/'/g, "\\'")}')" style="color:var(--red);flex-shrink:0;" title="Elimina sessione">🗑</button>
-      <span style="color:var(--text2);font-size:18px;">&#8250;</span>
+      <div id="preview-${s.id}" class="session-preview" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+        ${previewHtml || '<div class="empty-state" style="padding:10px;">Nessun contenuto salvato</div>'}
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn btn-secondary btn-small" onclick="event.stopPropagation();openSession('${s.id}')">📄 Dettaglio completo</button>
+          <button class="btn btn-primary btn-small" onclick="event.stopPropagation();regenerateSession('${s.id}')">🔄 Rigenera</button>
+        </div>
+      </div>
     </div>`;
   });
   list.innerHTML = html;
 }
 
 function filterHistory() { renderHistoryList(); }
+
+function toggleSessionPreview(previewId, card) {
+  const preview = document.getElementById(previewId);
+  if (!preview) return;
+  const chevron = card.querySelector('.session-chevron');
+  if (preview.style.display === 'none') {
+    preview.style.display = 'block';
+    if (chevron) chevron.style.transform = 'rotate(90deg)';
+  } else {
+    preview.style.display = 'none';
+    if (chevron) chevron.style.transform = '';
+  }
+}
+
+function regenerateSession(sessionId) {
+  const s = _historySessions.find(x => x.id === sessionId);
+  if (!s) { toast('Sessione non trovata'); return; }
+  // Pre-fill the Crea tab with the same article + opinion
+  showTab('crea');
+  // Set source mode based on original session
+  const sourceMode = s.article?.source_mode || 'web_search';
+  const modeBtn = document.querySelector(`.source-mode-tab[onclick*="${sourceMode}"]`) ||
+                  document.querySelector('.source-mode-tab');
+  switchSourceMode(sourceMode, modeBtn);
+  // If custom text, pre-fill textarea
+  if (sourceMode === 'custom_text' && s.article?.custom_text) {
+    const ct = document.getElementById('custom-text-input');
+    if (ct) ct.value = s.article.custom_text;
+  }
+  // Pre-fill opinion
+  const opinionEl = document.getElementById('global-opinion');
+  if (opinionEl && s.opinion) opinionEl.value = s.opinion;
+  // Pre-select platforms
+  if (s.platforms && s.platforms.length) {
+    document.querySelectorAll('.platform-check input[type="checkbox"]').forEach(cb => {
+      cb.checked = s.platforms.includes(cb.value);
+    });
+  }
+  // Scroll to top
+  document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
+  toast('Sessione caricata — modifica e rigenera!');
+}
 
 function toggleHistoryFilter(chip) {
   const filter = chip.dataset.filter;
@@ -4538,7 +4820,11 @@ function renderFeedsSettings() {
   const categories = feedsConfig.categories || {};
 
   if (!Object.keys(categories).length) {
-    container.innerHTML = '<div class="empty-state">Nessun feed configurato. Aggiungi una categoria per iniziare.</div>';
+    container.innerHTML = `<div class="empty-state" style="padding:40px 20px;">
+      <div style="font-size:28px;margin-bottom:10px;">📡</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px;">Nessun feed configurato</div>
+      <div>Aggiungi una categoria qui sotto per iniziare a ricevere articoli.</div>
+    </div>`;
     return;
   }
 
