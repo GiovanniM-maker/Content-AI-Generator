@@ -407,6 +407,190 @@ ASPECT_DIMENSIONS = {
 }
 
 
+import json as _json
+
+
+def _detect_slide_type(slide_text: str, index: int, total: int) -> str:
+    """
+    Auto-detect slide type from content and position.
+    Returns: 'cover' | 'content' | 'list' | 'cta'
+    """
+    # First slide is always cover
+    if index == 0:
+        return "cover"
+
+    # Last slide with CTA keywords → cta
+    if index == total - 1 and total > 2:
+        cta_keywords = [
+            "segui", "follow", "salva", "save", "condividi", "share",
+            "iscriviti", "subscribe", "commenta", "comment", "like",
+            "link in bio", "scopri", "clicca", "tap", "swipe",
+            "metti like", "lascia un", "tagga", "repost",
+        ]
+        lower = slide_text.lower()
+        if any(kw in lower for kw in cta_keywords):
+            return "cta"
+
+    # Detect list patterns: lines starting with bullet markers
+    lines = [l.strip() for l in slide_text.strip().split('\n') if l.strip()]
+    bullet_markers = ('•', '-', '*', '✓', '✔', '→', '▸', '▹', '►', '·')
+    numbered_pattern = re.compile(r'^\d+[\.\)]\s')
+    bullet_lines = sum(
+        1 for l in lines
+        if l.startswith(bullet_markers) or numbered_pattern.match(l)
+    )
+    # If more than half the lines are bullets, it's a list slide
+    if len(lines) >= 2 and bullet_lines >= len(lines) * 0.5:
+        return "list"
+
+    return "content"
+
+
+def _parse_template_html(template_html: str) -> dict:
+    """
+    Parse template_html which can be either:
+    - A raw HTML string (legacy single-template) → {"cover": html, "content": html, "list": html, "cta": html}
+    - A JSON string with keys: cover, content, list, cta
+
+    Returns dict with all 4 keys guaranteed.
+    """
+    if not template_html:
+        return {"cover": "", "content": "", "list": "", "cta": ""}
+
+    stripped = template_html.strip()
+
+    # Try JSON first
+    if stripped.startswith('{'):
+        try:
+            parsed = _json.loads(stripped)
+            if isinstance(parsed, dict):
+                # Ensure all 4 keys exist; fallback to 'content' for missing ones
+                fallback = parsed.get("content", "")
+                return {
+                    "cover": parsed.get("cover", fallback),
+                    "content": parsed.get("content", fallback),
+                    "list": parsed.get("list", fallback),
+                    "cta": parsed.get("cta", fallback),
+                }
+        except (ValueError, _json.JSONDecodeError):
+            pass
+
+    # Legacy: single HTML string — use for all types
+    return {"cover": stripped, "content": stripped, "list": stripped, "cta": stripped}
+
+
+def _inject_font(html: str) -> str:
+    """Inject local @font-face for Inter if template doesn't include it."""
+    if not html:
+        return html
+    if "Inter" in html and str(FONT_URI) not in html and "@font-face" not in html:
+        font_css = f"""<style>@font-face {{
+            font-family: 'Inter';
+            src: url('{FONT_URI}') format('truetype');
+            font-weight: 100 900; font-style: normal;
+        }}</style>"""
+        html = html.replace("</head>", f"{font_css}</head>", 1)
+    elif "{{FONT_URI}}" in html:
+        html = html.replace("{{FONT_URI}}", FONT_URI)
+    return html
+
+
+def _prepare_slide_html(
+    template: str,
+    slide_text: str,
+    slide_type: str,
+    index: int,
+    total: int,
+    brand_name: str,
+    brand_handle: str,
+) -> str:
+    """
+    Prepare the final HTML for a single slide by substituting placeholders.
+
+    Multi-type placeholders:
+      Cover:   {{COVER_TITLE}}, {{COVER_SUBTITLE}}
+      Content: {{CONTENT_HEADER}}, {{CONTENT_BODY}}
+      List:    {{LIST_HEADER}}, {{LIST_ITEMS}}
+      CTA:     {{CTA_TEXT}}, {{CTA_BUTTON}}
+      Legacy:  {{SLIDE_CONTENT}} (all types)
+      Common:  {{SLIDE_NUM}}, {{TOTAL_SLIDES}}, {{BRAND_NAME}}, {{BRAND_HANDLE}}
+    """
+    html = template
+    html = _inject_font(html)
+
+    lines = [l.strip() for l in slide_text.strip().split('\n') if l.strip()]
+
+    # --- Process per slide type ---
+    if slide_type == "cover":
+        # Cover: first line = title, rest = subtitle
+        title = lines[0] if lines else ""
+        subtitle = ' '.join(lines[1:]) if len(lines) > 1 else ""
+        title = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', title)
+        subtitle = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', subtitle)
+        html = html.replace("{{COVER_TITLE}}", title)
+        html = html.replace("{{COVER_SUBTITLE}}", subtitle)
+
+    elif slide_type == "list":
+        # List: first short line = header, rest = list items
+        header = ""
+        item_lines = lines
+        if lines and len(lines[0]) < 60 and len(lines) > 1:
+            header = lines[0]
+            item_lines = lines[1:]
+        # Build HTML list items
+        items_html = ""
+        for item in item_lines:
+            # Strip bullet markers
+            clean = re.sub(r'^[\•\-\*✓✔→▸▹►·]\s*', '', item)
+            clean = re.sub(r'^\d+[\.\)]\s*', '', clean)
+            clean = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', clean)
+            items_html += f"<li>{_html_esc_keep_tags(clean)}</li>"
+        header = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', header)
+        html = html.replace("{{LIST_HEADER}}", header)
+        html = html.replace("{{LIST_ITEMS}}", items_html)
+
+    elif slide_type == "cta":
+        # CTA: main text + optional button text (last line if short)
+        cta_text = ""
+        button_text = "Segui per altri tips"
+        if lines:
+            if len(lines) >= 2 and len(lines[-1]) < 40:
+                button_text = lines[-1]
+                cta_text = '<br>'.join(_html_esc(l) for l in lines[:-1])
+            else:
+                cta_text = '<br>'.join(_html_esc(l) for l in lines)
+        html = html.replace("{{CTA_TEXT}}", cta_text)
+        html = html.replace("{{CTA_BUTTON}}", _html_esc(button_text))
+
+    else:  # content
+        # Content: first short line = header, rest = body
+        header = ""
+        body_lines = lines
+        if lines and len(lines[0]) < 60 and len(lines) > 1:
+            header = lines[0]
+            body_lines = lines[1:]
+        body_html = ""
+        for line in body_lines:
+            line = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', line)
+            body_html += f'<p>{_html_esc_keep_tags(line)}</p>'
+        header = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', header)
+        html = html.replace("{{CONTENT_HEADER}}", header)
+        html = html.replace("{{CONTENT_BODY}}", body_html)
+
+    # --- Legacy fallback: {{SLIDE_CONTENT}} for old templates ---
+    processed_text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', slide_text)
+    processed_text = processed_text.replace('\n', '<br>')
+    html = html.replace("{{SLIDE_CONTENT}}", processed_text)
+
+    # --- Common placeholders ---
+    html = html.replace("{{SLIDE_NUM}}", str(index + 1))
+    html = html.replace("{{TOTAL_SLIDES}}", str(total))
+    html = html.replace("{{BRAND_NAME}}", _html_esc(brand_name))
+    html = html.replace("{{BRAND_HANDLE}}", _html_esc(brand_handle))
+
+    return html
+
+
 def render_carousel_from_template(
     text: str,
     template_html: str,
@@ -416,10 +600,11 @@ def render_carousel_from_template(
 ) -> dict:
     """
     Render carousel text into PNG byte arrays using a custom user template.
-    The template contains placeholders that get substituted per slide.
 
-    Placeholders: {{SLIDE_CONTENT}}, {{SLIDE_NUM}}, {{TOTAL_SLIDES}},
-                  {{BRAND_NAME}}, {{BRAND_HANDLE}}
+    template_html can be:
+    - Legacy: a single HTML string with {{SLIDE_CONTENT}} placeholder
+    - Multi-type: a JSON string {"cover": "...", "content": "...", "list": "...", "cta": "..."}
+      Each type uses its own placeholders (see _prepare_slide_html).
 
     Returns: { 'slides_bytes': [bytes, ...], 'caption': '...' }
     """
@@ -429,6 +614,7 @@ def render_carousel_from_template(
 
     total = len(slides_text)
     width, height = ASPECT_DIMENSIONS.get(aspect_ratio, (1080, 1080))
+    templates = _parse_template_html(template_html)
 
     slides_bytes = []
 
@@ -440,31 +626,12 @@ def render_carousel_from_template(
         page = browser.new_page(viewport={"width": width, "height": height})
 
         for i, slide_text in enumerate(slides_text):
-            # Process markdown bold in slide text
-            processed_text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', slide_text)
-            # Convert newlines to <br> for HTML rendering
-            processed_text = processed_text.replace('\n', '<br>')
+            slide_type = _detect_slide_type(slide_text, i, total)
+            template = templates.get(slide_type, templates["content"])
 
-            # Substitute placeholders in template
-            html = template_html
-
-            # Inject local @font-face if template uses Inter but doesn't have file:// font path
-            # (preset templates in DB don't have the server-side font path)
-            if "Inter" in html and str(FONT_URI) not in html and "@font-face" not in html:
-                font_css = f"""<style>@font-face {{
-                    font-family: 'Inter';
-                    src: url('{FONT_URI}') format('truetype');
-                    font-weight: 100 900; font-style: normal;
-                }}</style>"""
-                html = html.replace("</head>", f"{font_css}</head>", 1)
-            elif "{{FONT_URI}}" in html:
-                html = html.replace("{{FONT_URI}}", FONT_URI)
-
-            html = html.replace("{{SLIDE_CONTENT}}", processed_text)
-            html = html.replace("{{SLIDE_NUM}}", str(i + 1))
-            html = html.replace("{{TOTAL_SLIDES}}", str(total))
-            html = html.replace("{{BRAND_NAME}}", _html_esc(brand_name))
-            html = html.replace("{{BRAND_HANDLE}}", _html_esc(brand_handle))
+            html = _prepare_slide_html(
+                template, slide_text, slide_type, i, total, brand_name, brand_handle
+            )
 
             page.set_content(html, wait_until="networkidle")
             page.wait_for_timeout(500)
@@ -486,3 +653,58 @@ def render_carousel_from_template_async(
 ) -> dict:
     """Wrapper that can be called from Flask thread."""
     return render_carousel_from_template(text, template_html, aspect_ratio, brand_name, brand_handle)
+
+
+def render_template_preview(
+    template_html: str,
+    aspect_ratio: str = "1:1",
+    brand_name: str = "Il Tuo Brand",
+    brand_handle: str = "@tuobrand",
+) -> dict:
+    """
+    Render preview thumbnails for all 4 slide types of a template.
+    Uses example content to show how each type looks.
+
+    Returns: { 'cover': bytes, 'content': bytes, 'list': bytes, 'cta': bytes }
+    """
+    templates = _parse_template_html(template_html)
+    width, height = ASPECT_DIMENSIONS.get(aspect_ratio, (1080, 1080))
+
+    example_content = {
+        "cover": "5 Strategie di Marketing\nche Cambieranno il Tuo Business nel 2026",
+        "content": "Conosci il tuo pubblico\nPrima di qualsiasi strategia, devi capire chi sono i tuoi clienti. **Analizza i dati**, studia i competitor e crea delle buyer personas dettagliate.",
+        "list": "Strumenti essenziali\n• **Google Analytics** per il traffico\n• **Canva** per la grafica\n• **Buffer** per la programmazione\n• **ChatGPT** per i copy\n• **Notion** per l'organizzazione",
+        "cta": "Ti è stato utile questo contenuto?\nSalva per dopo e condividi\nSegui per altri tips",
+    }
+
+    result = {}
+
+    if sync_playwright is None:
+        raise RuntimeError("Playwright non è installato")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+
+        for slide_type in ("cover", "content", "list", "cta"):
+            template = templates.get(slide_type, templates.get("content", ""))
+            if not template:
+                continue
+
+            html = _prepare_slide_html(
+                template,
+                example_content[slide_type],
+                slide_type,
+                index={"cover": 0, "content": 1, "list": 2, "cta": 3}[slide_type],
+                total=4,
+                brand_name=brand_name,
+                brand_handle=brand_handle,
+            )
+
+            page.set_content(html, wait_until="networkidle")
+            page.wait_for_timeout(500)
+            result[slide_type] = page.screenshot(type="png")
+
+        browser.close()
+
+    return result

@@ -2662,28 +2662,48 @@ def template_chat(template_id):
     # Build system prompt based on template type
     if template_type == "instagram":
         dimensions = {"1:1": "1080x1080", "4:3": "1080x810", "3:4": "1080x1440"}.get(aspect_ratio, "1080x1080")
-        system_prompt = f"""Sei un designer HTML esperto. Stai creando un template HTML per slide di un carosello Instagram.
+        system_prompt = f"""Sei un designer HTML esperto. Stai creando un template per caroselli Instagram con 4 TIPI DI SLIDE.
 
-SPECIFICHE TEMPLATE:
-- Dimensioni viewport: {dimensions}px (aspect ratio {aspect_ratio})
-- Il template definisce lo STILE VISIVO delle slide (colori, font, layout, decorazioni)
-- L'HTML deve essere completo e autonomo (inline CSS, no file esterni)
-- Usa Google Fonts via @import se servono font custom
+SPECIFICHE:
+- Viewport: {dimensions}px (aspect ratio {aspect_ratio})
+- Ogni tipo di slide è un HTML completo e autonomo (CSS inline nel <style>)
+- NON usare @font-face per Inter — il sistema lo inietta automaticamente
+- Puoi usare Google Fonts via @import per altri font
+- Tutti i tipi devono condividere lo STESSO stile visivo (colori, font, decorazioni)
 
-PLACEHOLDER OBBLIGATORI (il sistema li sostituirà con il contenuto reale):
-- {{{{SLIDE_CONTENT}}}} — testo principale della slide (può contenere header + body in HTML)
-- {{{{SLIDE_NUM}}}} — numero slide corrente
-- {{{{TOTAL_SLIDES}}}} — numero totale slide
-- {{{{BRAND_NAME}}}} — nome del brand dell'utente
-- {{{{BRAND_HANDLE}}}} — handle social dell'utente
+I 4 TIPI DI SLIDE:
+1. **cover** — Prima slide del carosello. Titolo grande che cattura l'attenzione.
+   Placeholder: {{{{COVER_TITLE}}}}, {{{{COVER_SUBTITLE}}}}
+2. **content** — Slide con testo libero (header + paragrafo).
+   Placeholder: {{{{CONTENT_HEADER}}}}, {{{{CONTENT_BODY}}}}
+3. **list** — Slide con elenco puntato/numerato.
+   Placeholder: {{{{LIST_HEADER}}}}, {{{{LIST_ITEMS}}}} (HTML: <li>...</li>)
+4. **cta** — Ultima slide, call-to-action (segui, salva, condividi).
+   Placeholder: {{{{CTA_TEXT}}}}, {{{{CTA_BUTTON}}}}
+
+PLACEHOLDER COMUNI (in tutti i tipi):
+- {{{{SLIDE_NUM}}}}, {{{{TOTAL_SLIDES}}}}, {{{{BRAND_NAME}}}}, {{{{BRAND_HANDLE}}}}
+
+FORMATO RISPOSTA (OBBLIGATORIO):
+Rispondi SEMPRE in JSON con questa struttura esatta:
+{{{{
+  "reply": "Il tuo messaggio all'utente in italiano",
+  "html": {{{{
+    "cover": "<!DOCTYPE html><html>...HTML COMPLETO cover...</html>",
+    "content": "<!DOCTYPE html><html>...HTML COMPLETO content...</html>",
+    "list": "<!DOCTYPE html><html>...HTML COMPLETO list...</html>",
+    "cta": "<!DOCTYPE html><html>...HTML COMPLETO cta...</html>"
+  }}}}
+}}}}
 
 REGOLE:
-1. Rispondi SEMPRE in formato JSON con due campi: "reply" (il tuo messaggio all'utente) e "html" (l'HTML completo aggiornato)
-2. L'HTML deve essere completo da <!DOCTYPE html> a </html>
-3. Includi contenuto di esempio nei placeholder per la preview (es. "5 Tool AI che cambieranno il tuo lavoro")
-4. Ogni modifica deve produrre l'HTML COMPLETO aggiornato, non solo la parte modificata
-5. Il design deve essere professionale e moderno
-6. Rispondi in italiano"""
+1. Rispondi SEMPRE nel formato JSON sopra — il campo "html" è un OGGETTO con 4 chiavi
+2. Ogni tipo deve essere un HTML completo da <!DOCTYPE html> a </html>
+3. Tutti i 4 tipi devono avere lo stesso stile (palette colori, font, decorazioni)
+4. Ogni modifica genera TUTTO il JSON aggiornato con tutti e 4 i tipi
+5. Se l'utente chiede di modificare un solo tipo (es. "cambia i bullet"), aggiorna quello ma ritorna sempre tutti e 4
+6. Il design deve essere professionale e moderno
+7. Rispondi in italiano"""
     else:  # newsletter
         system_prompt = """Sei un designer HTML esperto di email marketing. Stai creando un template HTML per newsletter email.
 
@@ -2746,7 +2766,12 @@ REGOLE:
         try:
             parsed = json.loads(cleaned)
             reply_text = parsed.get("reply", "")
-            new_html = parsed.get("html", current_html)
+            raw_html = parsed.get("html", current_html)
+            # For IG: "html" is a dict with {cover, content, list, cta} — serialize to JSON string
+            if isinstance(raw_html, dict):
+                new_html = json.dumps(raw_html)
+            else:
+                new_html = raw_html
         except json.JSONDecodeError:
             # Fallback: try to find HTML in the response
             html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
@@ -2784,7 +2809,7 @@ REGOLE:
 @app.route("/api/templates/<template_id>/preview", methods=["POST"])
 def template_preview(template_id):
     """Generate a preview of the template.
-    IG: renders HTML via Playwright → returns base64 PNG.
+    IG: renders all 4 slide types (cover/content/list/cta) via Playwright → base64 PNG gallery.
     NL: returns HTML string for iframe display.
     """
     user_id = _get_user_id()
@@ -2799,32 +2824,64 @@ def template_preview(template_id):
         return jsonify({"error": "Template vuoto — inizia a chattare per crearlo"}), 400
 
     if template_type == "newsletter":
-        # For newsletter, just return the HTML for iframe rendering
         return jsonify({"type": "html", "html": html_content})
 
-    # For Instagram, render via Playwright → base64 PNG
+    # For Instagram — render all 4 slide types as mini-gallery
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
-    dimensions = {"1:1": (1080, 1080), "4:3": (1080, 810), "3:4": (1080, 1440)}
-    width, height = dimensions.get(aspect_ratio, (1080, 1080))
 
     try:
-        from playwright.sync_api import sync_playwright
         import base64
-        import tempfile
+        from carousel_renderer import render_template_preview
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page(viewport={"width": width, "height": height})
-            page.set_content(html_content, wait_until="networkidle")
-            page.wait_for_timeout(500)
-            png_bytes = page.screenshot(type="png")
-            browser.close()
+        result = render_template_preview(
+            template_html=html_content,
+            aspect_ratio=aspect_ratio,
+            brand_name=request.json.get("brand_name", "Il Tuo Brand") if request.json else "Il Tuo Brand",
+            brand_handle=request.json.get("brand_handle", "@tuobrand") if request.json else "@tuobrand",
+        )
 
-        b64 = base64.b64encode(png_bytes).decode("utf-8")
-        return jsonify({"type": "image", "image": f"data:image/png;base64,{b64}"})
+        gallery = {}
+        for slide_type, png_bytes in result.items():
+            gallery[slide_type] = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('utf-8')}"
+
+        return jsonify({"type": "gallery", "slides": gallery})
     except Exception as e:
         _log_pipeline("error", f"Template preview render error: {e}")
         return jsonify({"error": "Errore nel rendering della preview. Riprova."}), 500
+
+
+@app.route("/api/templates/preset/<preset_id>/preview", methods=["GET"])
+def preset_template_preview(preset_id):
+    """Generate preview gallery for a preset template (no auth required for display)."""
+    preset = db.get_preset_template_by_id(preset_id)
+    if not preset:
+        return jsonify({"error": "Preset non trovato"}), 404
+
+    html_content = preset.get("html_content", "")
+    if not html_content.strip():
+        return jsonify({"error": "Preset vuoto"}), 400
+
+    template_type = preset.get("template_type", "instagram")
+    if template_type == "newsletter":
+        return jsonify({"type": "html", "html": html_content})
+
+    try:
+        import base64
+        from carousel_renderer import render_template_preview
+
+        result = render_template_preview(
+            template_html=html_content,
+            aspect_ratio=preset.get("aspect_ratio", "1:1"),
+        )
+
+        gallery = {}
+        for slide_type, png_bytes in result.items():
+            gallery[slide_type] = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('utf-8')}"
+
+        return jsonify({"type": "gallery", "slides": gallery})
+    except Exception as e:
+        _log_pipeline("error", f"Preset preview render error: {e}")
+        return jsonify({"error": "Errore nel rendering della preview."}), 500
 
 
 @app.route("/api/templates/clone/<preset_id>", methods=["POST"])
