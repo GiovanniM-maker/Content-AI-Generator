@@ -440,23 +440,6 @@ h3 { font-family: 'Syne', sans-serif; letter-spacing: -0.02em; }
 .btn-approve.approved { background: var(--green); color: #000; box-shadow: 0 0 20px rgba(52,211,153,0.2); }
 .content-col.approved { border-color: var(--green); box-shadow: 0 0 20px rgba(52,211,153,0.1); }
 
-/* Opinion inline */
-.opinion-inline {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-.opinion-inline label {
-  font-size: 11px;
-  color: var(--text2);
-  display: block;
-  margin-bottom: 4px;
-}
-.opinion-inline textarea {
-  min-height: 60px;
-  font-size: 12px;
-}
-.opinion-inline .btn { margin-top: 6px; }
 
 /* Feedback label */
 .fb-label {
@@ -3507,7 +3490,7 @@ let currentContent = {};
 let selectedPlatforms = ['linkedin', 'instagram', 'newsletter'];
 let currentSourceMode = 'web_search';  // 'web_search' (default), 'rss', 'custom_text'
 let webSearchSelectedResults = [];  // selected web search results
-let _creaArticles = [];  // sources for Crea flow (used by regenerateSingle/integrateOpinion)
+let _creaArticles = [];  // sources for Crea flow (used by regenerateSingle)
 let currentUserPlan = 'free';  // Track user plan for platform gating
 let allowedPlatforms = ['linkedin', 'newsletter'];  // Updated after login
 
@@ -4274,11 +4257,6 @@ function renderGeneratedContent() {
         <div class="col-sub">${esc(s.article.title)}</div>
         <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
         <textarea id="content-linkedin_${i}" oninput="updateCount('linkedin_${i}')">${esc(text)}</textarea>
-        <div class="opinion-inline">
-          <label>🎯 La tua opinione su questo tema (opzionale):</label>
-          <textarea id="opinion-linkedin_${i}" placeholder="Cosa ne pensi? La tua prospettiva verrà integrata nel post...">${esc(s.opinion || '')}</textarea>
-          <button class="btn btn-secondary btn-small" onclick="integrateOpinion('linkedin', ${i})">Integra opinione</button>
-        </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyC('linkedin_${i}')">Copia</button>
@@ -4325,11 +4303,6 @@ function renderGeneratedContent() {
           <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${i})">🎨 Rigenera img</button>
         </div>
         <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
-        <div class="opinion-inline">
-          <label>🎯 La tua opinione (opzionale):</label>
-          <textarea id="opinion-${key}" placeholder="Cosa ne pensi?">${esc(s.opinion || '')}</textarea>
-          <button class="btn btn-secondary btn-small" onclick="integrateOpinion('instagram', ${i})">Integra opinione</button>
-        </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia testo</button>
@@ -4367,11 +4340,6 @@ function renderGeneratedContent() {
         <div class="col-sub">${esc(s.article.title)}</div>
         <div class="col-meta">${meta}</div>
         <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:140px;">${esc(text)}</textarea>
-        <div class="opinion-inline">
-          <label>🎯 La tua opinione (opzionale):</label>
-          <textarea id="opinion-${key}" placeholder="Cosa ne pensi?">${esc(s.opinion || '')}</textarea>
-          <button class="btn btn-secondary btn-small" onclick="integrateOpinion('twitter', ${i})">Integra opinione</button>
-        </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
@@ -4407,11 +4375,6 @@ function renderGeneratedContent() {
         <div class="col-sub">${esc(s.article.title)}</div>
         <div class="col-meta">${sectionCount} sezioni &middot; ${words} parole</div>
         <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:200px;">${esc(text)}</textarea>
-        <div class="opinion-inline">
-          <label>🎯 La tua opinione (opzionale):</label>
-          <textarea id="opinion-${key}" placeholder="Cosa ne pensi?">${esc(s.opinion || '')}</textarea>
-          <button class="btn btn-secondary btn-small" onclick="integrateOpinion('video_script', ${i})">Integra opinione</button>
-        </div>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
@@ -4591,65 +4554,6 @@ function toggleFeedback(btn) {
   const fb = col.querySelector('.feedback-row');
   fb.classList.toggle('open');
   if (fb.classList.contains('open')) fb.querySelector('textarea').focus();
-}
-
-function integrateOpinion(format, idx) {
-  const key = format + '_' + idx;
-  const opinionTa = document.getElementById('opinion-' + key);
-  const opinion = opinionTa ? opinionTa.value.trim() : '';
-  if (!opinion) { toast('Scrivi la tua opinione prima!'); return; }
-  const src = selectedArticles[idx] || _creaArticles[idx] || (_creaArticles.length ? _creaArticles[idx % _creaArticles.length] : null);
-  if (src) src.opinion = opinion;
-
-  const ta = document.getElementById('content-' + key);
-  const col = ta.closest('.content-col');
-  const intBtn = col.querySelector('.opinion-inline .btn');
-  intBtn.disabled = true; intBtn.textContent = '...';
-
-  const article = src ? src.article : { title: '', description: '' };
-
-  // Newsletter uses a separate endpoint
-  let apiCall;
-  if (format === 'newsletter') {
-    const topics = (selectedArticles.length ? selectedArticles : _creaArticles).map(s => ({
-      article: s.article || s, opinion: s.opinion || ''
-    }));
-    // Override the opinion on the matching topic
-    if (topics[idx]) topics[idx].opinion = opinion;
-    else if (topics[0]) topics[0].opinion = opinion;
-    apiCall = fetch('/api/generate-newsletter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topics }),
-    });
-  } else {
-    apiCall = fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ article, opinion, format, source_mode: article.source_mode || 'rss', custom_text: article.custom_text || '' }),
-    });
-  }
-
-  apiCall
-  .then(safeJson)
-  .then(data => {
-    if (data.error) throw new Error(data.error);
-    ta.value = data.content;
-    currentContent[key] = data.content;
-    updateCount(key);
-    intBtn.disabled = false; intBtn.textContent = 'Integra opinione';
-    if (format === 'instagram') reRenderCarousel(key, idx);
-    approvedItems[key] = false;
-    const appBtn = col.querySelector('.btn-approve');
-    if (appBtn) { appBtn.classList.remove('approved'); appBtn.textContent = 'Approva'; }
-    col.classList.remove('approved');
-    toast('Opinione integrata!');
-    saveSessionContent();
-  })
-  .catch(err => {
-    toast('Errore: ' + err.message);
-    intBtn.disabled = false; intBtn.textContent = 'Integra opinione';
-  });
 }
 
 function approveContent(key, btn) {
@@ -6206,11 +6110,6 @@ function renderCreaResults(results) {
             <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${idx})">🎨 Rigenera img</button>
           </div>
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
-          <div class="opinion-inline">
-            <label>🎯 La tua opinione (opzionale):</label>
-            <textarea id="opinion-${key}" placeholder="Cosa ne pensi?">${esc((_creaArticles[idx] || {}).opinion || '')}</textarea>
-            <button class="btn btn-secondary btn-small" onclick="integrateOpinion('instagram', ${idx})">Integra opinione</button>
-          </div>
           <div class="col-actions">
             <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia testo</button>
@@ -6235,11 +6134,6 @@ function renderCreaResults(results) {
           <div class="col-sub">${esc(item.source)}</div>
           <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
-          <div class="opinion-inline">
-            <label>🎯 La tua opinione su questo tema (opzionale):</label>
-            <textarea id="opinion-${key}" placeholder="Cosa ne pensi? La tua prospettiva verrà integrata nel post...">${esc((_creaArticles[idx] || {}).opinion || '')}</textarea>
-            <button class="btn btn-secondary btn-small" onclick="integrateOpinion('${platform}', ${idx})">Integra opinione</button>
-          </div>
           <div class="col-actions">
             <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
