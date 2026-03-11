@@ -340,7 +340,7 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
     payload = {"model": model, "messages": messages, "temperature": temperature}
     resp = requests.post(
         f"{OPENROUTER_BASE}/chat/completions",
-        headers=headers, json=payload, timeout=120,
+        headers=headers, json=payload, timeout=240,
     )
     content_type = resp.headers.get("Content-Type", "")
     if "application/json" not in content_type and "text/json" not in content_type:
