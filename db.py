@@ -736,66 +736,81 @@ def init_user_prompts(user_id: str, base_prompts: dict[str, str]):
 
 def get_notifications(user_id: str, limit: int = 30) -> list[dict]:
     """Get recent notifications for a user, newest first."""
-    result = (
-        _sb().table("notifications")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .limit(limit)
-        .execute()
-    )
-    return result.data
+    try:
+        result = (
+            _sb().table("notifications")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data
+    except Exception:
+        return []
 
 
 def get_unread_count(user_id: str) -> int:
     """Get count of unread notifications."""
-    result = (
-        _sb().table("notifications")
-        .select("id", count="exact")
-        .eq("user_id", user_id)
-        .eq("read", False)
-        .execute()
-    )
-    return result.count or 0
+    try:
+        result = (
+            _sb().table("notifications")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .eq("read", False)
+            .execute()
+        )
+        return result.count or 0
+    except Exception:
+        return 0
 
 
 def create_notification(user_id: str, ntype: str, title: str, body: str = "") -> dict:
     """Create a new notification for a user."""
-    result = (
-        _sb().table("notifications")
-        .insert({
-            "user_id": user_id,
-            "type": ntype,
-            "title": title,
-            "body": body,
-        })
-        .execute()
-    )
-    return result.data[0] if result.data else {}
+    try:
+        result = (
+            _sb().table("notifications")
+            .insert({
+                "user_id": user_id,
+                "type": ntype,
+                "title": title,
+                "body": body,
+            })
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+    except Exception:
+        return {}
 
 
 def mark_notification_read(user_id: str, notification_id: str) -> bool:
     """Mark a single notification as read."""
-    result = (
-        _sb().table("notifications")
-        .update({"read": True})
-        .eq("user_id", user_id)
-        .eq("id", notification_id)
-        .execute()
-    )
-    return bool(result.data)
+    try:
+        result = (
+            _sb().table("notifications")
+            .update({"read": True})
+            .eq("user_id", user_id)
+            .eq("id", notification_id)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        return False
 
 
 def mark_all_notifications_read(user_id: str) -> int:
     """Mark all unread notifications as read. Returns count marked."""
-    result = (
-        _sb().table("notifications")
-        .update({"read": True})
-        .eq("user_id", user_id)
-        .eq("read", False)
-        .execute()
-    )
-    return len(result.data) if result.data else 0
+    try:
+        result = (
+            _sb().table("notifications")
+            .update({"read": True})
+            .eq("user_id", user_id)
+            .eq("read", False)
+            .execute()
+        )
+        return len(result.data) if result.data else 0
+    except Exception:
+        return 0
 
 
 # =========================================================================
