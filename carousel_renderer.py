@@ -447,6 +447,19 @@ def render_carousel_from_template(
 
             # Substitute placeholders in template
             html = template_html
+
+            # Inject local @font-face if template uses Inter but doesn't have file:// font path
+            # (preset templates in DB don't have the server-side font path)
+            if "Inter" in html and str(FONT_URI) not in html and "@font-face" not in html:
+                font_css = f"""<style>@font-face {{
+                    font-family: 'Inter';
+                    src: url('{FONT_URI}') format('truetype');
+                    font-weight: 100 900; font-style: normal;
+                }}</style>"""
+                html = html.replace("</head>", f"{font_css}</head>", 1)
+            elif "{{FONT_URI}}" in html:
+                html = html.replace("{{FONT_URI}}", FONT_URI)
+
             html = html.replace("{{SLIDE_CONTENT}}", processed_text)
             html = html.replace("{{SLIDE_NUM}}", str(i + 1))
             html = html.replace("{{TOTAL_SLIDES}}", str(total))
