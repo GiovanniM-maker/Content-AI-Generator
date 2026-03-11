@@ -955,6 +955,22 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 .pq-row.pq-locked .pq-btn { cursor: not-allowed; }
 .pq-lock-badge { font-size: 9px; background: var(--accent); color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: auto; }
 
+/* Breadcrumb */
+.breadcrumb { font-size: 12px; color: var(--text3); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+.breadcrumb-item { color: var(--text3); text-decoration: none; cursor: pointer; transition: color .2s; }
+.breadcrumb-item:hover { color: var(--accent); }
+.breadcrumb-sep { color: var(--border); font-size: 10px; }
+.breadcrumb-current { color: var(--text); font-weight: 600; }
+
+/* Admin-only elements */
+.admin-only { display: none; }
+body.is-admin .admin-only { display: flex; }
+
+/* Landing login shortcut */
+.landing-login-link { display: inline-block; margin-top: 12px; font-size: 14px; color: var(--text2); }
+.landing-login-link a { color: var(--accent); font-weight: 600; cursor: pointer; text-decoration: none; }
+.landing-login-link a:hover { text-decoration: underline; }
+
 /* Collapsible Platform Panel (Crea) */
 .crea-platforms-toggle { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: all .2s; margin-bottom: 4px; user-select: none; }
 .crea-platforms-toggle:hover { border-color: var(--accent); }
@@ -1845,6 +1861,7 @@ body::after {
           <button class="auth-btn landing-cta-secondary" onclick="document.getElementById('landing-pricing').scrollIntoView({behavior:'smooth'})">Vedi i piani</button>
         </div>
         <p class="landing-trust">10 generazioni gratuite &bull; Nessuna carta richiesta &bull; Setup in 30 secondi</p>
+        <p class="landing-login-link">Hai già un account? <a onclick="showAuthForm('login'); document.getElementById('landing-wrapper').classList.add('show-auth');">Accedi</a></p>
         <!-- Shown only for logged-in users viewing the landing via ?landing -->
         <a href="/" id="landing-back-to-app" style="display:none;margin-top:16px;color:var(--accent2);font-size:14px;font-weight:600;text-decoration:none;">Vai al Feed &rarr;</a>
       </div>
@@ -2025,8 +2042,8 @@ body::after {
         <div id="auth-login-form">
           <h2>Accedi</h2>
           <div id="auth-login-error" class="auth-error"></div>
-          <input type="email" id="login-email" class="auth-input" placeholder="Email" autocomplete="email">
-          <input type="password" id="login-password" class="auth-input" placeholder="Password" autocomplete="current-password">
+          <input type="email" id="login-email" class="auth-input" placeholder="Email" autocomplete="email" required>
+          <input type="password" id="login-password" class="auth-input" placeholder="Password" autocomplete="current-password" required>
           <button class="auth-btn" id="btn-login" onclick="doLogin()">Accedi</button>
           <div class="auth-toggle">Non hai un account? <a onclick="showAuthForm('register')">Registrati</a></div>
         </div>
@@ -2036,9 +2053,9 @@ body::after {
           <h2>Crea Account</h2>
           <div id="auth-register-error" class="auth-error"></div>
           <div id="auth-register-success" class="auth-success"></div>
-          <input type="text" id="register-name" class="auth-input" placeholder="Nome completo" autocomplete="name">
-          <input type="email" id="register-email" class="auth-input" placeholder="Email" autocomplete="email">
-          <input type="password" id="register-password" class="auth-input" placeholder="Password (min 6 caratteri)" autocomplete="new-password">
+          <input type="text" id="register-name" class="auth-input" placeholder="Nome completo" autocomplete="name" required>
+          <input type="email" id="register-email" class="auth-input" placeholder="Email" autocomplete="email" required>
+          <input type="password" id="register-password" class="auth-input" placeholder="Password (min 6 caratteri)" autocomplete="new-password" required minlength="6">
           <button class="auth-btn" id="btn-register" onclick="doRegister()">Registrati</button>
           <div class="auth-toggle">Hai già un account? <a onclick="showAuthForm('login')">Accedi</a></div>
         </div>
@@ -2201,6 +2218,7 @@ body::after {
 
   <!-- ========== TAB: DASHBOARD ========== -->
   <div id="tab-feed" class="tab-content active">
+    <div id="breadcrumb-feed" class="breadcrumb"><span class="breadcrumb-current">📰 Feed</span></div>
 
     <!-- ===== PHASE 1: Category Picker ===== -->
     <div id="dash-category-picker" style="display:none;">
@@ -2277,11 +2295,12 @@ body::after {
 
   <!-- ========== TAB: CREA ========== -->
   <div id="tab-crea" class="tab-content">
+    <div id="breadcrumb-crea" class="breadcrumb"><span class="breadcrumb-current">✨ Crea</span></div>
 
     <!-- Hidden legacy screens for backward compat -->
-    <div id="screen-feed" class="screen" style="display:none!important;"></div>
-    <div id="screen-topics" class="screen" style="display:none!important;"></div>
-    <div id="screen-generate" class="screen" style="display:none!important;"></div>
+    <div id="screen-feed" class="screen" style="display:none;"></div>
+    <div id="screen-topics" class="screen" style="display:none;"></div>
+    <div id="screen-generate" class="screen" style="display:none;"></div>
 
     <!-- ✨ Crea — Centered Layout (Claude-style) -->
     <div class="crea-centered">
@@ -2405,6 +2424,7 @@ body::after {
 
   <!-- ========== TAB: PIANIFICA ========== -->
   <div id="tab-pianifica" class="tab-content">
+    <div id="breadcrumb-pianifica" class="breadcrumb"><span class="breadcrumb-current">📅 Pianifica</span></div>
 
   <!-- SCREEN 4: Schedule -->
   <div id="screen-schedule" class="screen active">
@@ -2438,12 +2458,17 @@ body::after {
 
   <!-- ========== TAB: LIBRERIA ========== -->
   <div id="tab-libreria" class="tab-content">
+    <div id="breadcrumb-libreria" class="breadcrumb">
+      <span class="breadcrumb-current">📚 Libreria</span>
+      <span class="breadcrumb-sep">›</span>
+      <span id="breadcrumb-libreria-sub" class="breadcrumb-current">Cronologia</span>
+    </div>
 
   <!-- Sub-navigation Libreria -->
   <div class="libreria-nav">
     <button class="libreria-nav-btn active" data-section="history" onclick="showLibreriaSection('history', this)">📋 Cronologia</button>
     <button class="libreria-nav-btn" data-section="settings" onclick="showLibreriaSection('settings', this)">⚙️ Impostazioni</button>
-    <button class="libreria-nav-btn" data-section="monitor" onclick="showLibreriaSection('monitor', this)">🔧 Avanzate</button>
+    <button class="libreria-nav-btn admin-only" id="btn-avanzate" data-section="monitor" onclick="showLibreriaSection('monitor', this)">🔧 Avanzate</button>
   </div>
 
   <!-- SCREEN 5: History -->
@@ -2600,7 +2625,7 @@ body::after {
       <textarea id="cal-detail-content" readonly style="width:100%;min-height:260px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.6;resize:vertical;font-family:inherit;"></textarea>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(document.getElementById('cal-detail-content').value).then(()=>toast('Contenuto copiato!'))">📋 Copia contenuto</button>
-        <button class="btn btn-secondary btn-small" id="cal-detail-delete-btn" onclick="" style="color:var(--red);">🗑 Rimuovi</button>
+        <button class="btn btn-secondary btn-small" id="cal-detail-delete-btn" style="color:var(--red);">🗑 Rimuovi</button>
       </div>
     </div>
   </div>
@@ -3061,18 +3086,38 @@ async function doLogout() {
   } catch {}
   stopNotifPolling();
   clearAuthData();
+  isAdmin = false;
+  document.body.classList.remove('is-admin');
   showAuthOverlay();
+  // Show login form directly (not the landing page)
+  showAuthForm('login');
+  document.getElementById('landing-wrapper').classList.add('show-auth');
 }
 
 function onAuthSuccess(user) {
   hideAuthOverlay();
   updateSidebarUser(user);
+  // Admin detection
+  isAdmin = (user && user.email === ADMIN_EMAIL);
+  applyAdminGating();
   // Reload data for the new user
   loadWeeklyBanner();
   // Start notification polling
   startNotifPolling();
   // Show onboarding for first-time users
   checkOnboarding();
+}
+
+function applyAdminGating() {
+  if (isAdmin) {
+    document.body.classList.add('is-admin');
+    // Admin gets all platforms
+    allowedPlatforms = ['linkedin', 'instagram', 'twitter', 'newsletter', 'video_script'];
+    applyPlatformLocks();
+    applyPlatformQtyLocks();
+  } else {
+    document.body.classList.remove('is-admin');
+  }
 }
 
 function updateSidebarUser(user) {
@@ -3116,6 +3161,8 @@ function initAuth() {
         return resp.json().then(me => {
           hideAuthOverlay();
           updateSidebarUser(me.user);
+          isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
+          applyAdminGating();
           startNotifPolling();
           checkOnboarding();
         });
@@ -3128,7 +3175,13 @@ function initAuth() {
             return _originalFetch('/auth/me', {
               headers: { 'Authorization': 'Bearer ' + getAccessToken() },
             }).then(r => r.ok ? r.json() : null).then(me => {
-              if (me) { updateSidebarUser(me.user); startNotifPolling(); checkOnboarding(); }
+              if (me) {
+                updateSidebarUser(me.user);
+                isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
+                applyAdminGating();
+                startNotifPolling();
+                checkOnboarding();
+              }
             });
           } else {
             clearAuthData();
@@ -3270,6 +3323,10 @@ async function loadUsageBar() {
     currentUserPlan = data.subscription?.plan || usage.plan || 'free';
     const planDetails = data.plan_details || {};
     allowedPlatforms = planDetails.platforms || ['linkedin', 'newsletter'];
+    // Admin override: all platforms + unlimited
+    if (isAdmin) {
+      allowedPlatforms = ['linkedin', 'instagram', 'twitter', 'newsletter', 'video_script'];
+    }
     applyPlatformLocks();
     applyPlatformQtyLocks();
 
@@ -3377,6 +3434,10 @@ let currentSourceMode = 'web_search';  // 'web_search' (default), 'rss', 'custom
 let webSearchSelectedResults = [];  // selected web search results
 let currentUserPlan = 'free';  // Track user plan for platform gating
 let allowedPlatforms = ['linkedin', 'newsletter'];  // Updated after login
+
+// Admin system
+const ADMIN_EMAIL = 'giovanni.mavilla.grz@gmail.com';
+let isAdmin = false;
 
 // ---- Source Mode ----
 function switchSourceMode(mode, btn) {
@@ -3603,6 +3664,11 @@ function showScreen(name) {
 }
 
 function showLibreriaSection(section, btn) {
+  // Admin-only guard for monitor section
+  if (section === 'monitor' && !isAdmin) {
+    toast('🔒 Sezione riservata all\'amministratore');
+    return;
+  }
   // Switch sub-nav active state
   document.querySelectorAll('.libreria-nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
@@ -3610,25 +3676,17 @@ function showLibreriaSection(section, btn) {
   const libTab = document.getElementById('tab-libreria');
   if (libTab) libTab.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + section).classList.add('active');
+  // Update breadcrumb
+  const subNames = { history: 'Cronologia', settings: 'Impostazioni', monitor: 'Avanzate' };
+  const bcSub = document.getElementById('breadcrumb-libreria-sub');
+  if (bcSub) bcSub.textContent = subNames[section] || section;
   // Load data
   if (section === 'history') loadHistory();
   if (section === 'monitor') loadMonitor();
   if (section === 'settings') loadSettings();
 }
 
-function resetCreaFlow() {
-  // Hide results section
-  const resultsSection = document.getElementById('crea-results');
-  if (resultsSection) resultsSection.style.display = 'none';
-  const genResults = document.getElementById('gen-results');
-  if (genResults) { genResults.innerHTML = ''; genResults.style.display = 'none'; }
-  const genProgress = document.getElementById('gen-progress');
-  if (genProgress) genProgress.style.display = 'none';
-  const creaActions = document.getElementById('crea-results-actions');
-  if (creaActions) creaActions.style.display = 'none';
-  // Scroll to top
-  document.querySelector('.main').scrollTo({ top: 0, behavior: 'smooth' });
-}
+// resetCreaFlow() defined below with full cleanup logic
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -5811,15 +5869,25 @@ function approveCreaItem(key, btn) {
 }
 
 function resetCreaFlow() {
-  document.getElementById('crea-results').style.display = 'none';
-  document.getElementById('gen-progress').style.display = 'none';
-  document.getElementById('gen-results').innerHTML = '';
-  document.getElementById('crea-results-actions').style.display = 'none';
+  const resultsSection = document.getElementById('crea-results');
+  if (resultsSection) resultsSection.style.display = 'none';
+  const genProgress = document.getElementById('gen-progress');
+  if (genProgress) genProgress.style.display = 'none';
+  const genResults = document.getElementById('gen-results');
+  if (genResults) { genResults.innerHTML = ''; genResults.style.display = 'none'; }
+  const creaActions = document.getElementById('crea-results-actions');
+  if (creaActions) creaActions.style.display = 'none';
   currentContent = {};
   approvedItems = {};
   // Reset quantities
-  for (const p of Object.keys(platformQty)) { platformQty[p] = 0; document.getElementById('qty-' + p).textContent = '0'; }
+  for (const p of Object.keys(platformQty)) {
+    platformQty[p] = 0;
+    const el = document.getElementById('qty-' + p);
+    if (el) el.textContent = '0';
+  }
   updateGenSummary();
+  // Scroll to top
+  document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ---- Screen 6: Settings ----

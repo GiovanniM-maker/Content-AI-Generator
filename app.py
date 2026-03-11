@@ -87,6 +87,14 @@ MODEL_GENERATION = "anthropic/claude-sonnet-4-5"
 
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+
+# Admin email — full access, bypasses all plan limits
+ADMIN_EMAIL = "giovanni.mavilla.grz@gmail.com"
+
+
+def _is_admin() -> bool:
+    """Check if current user is the admin."""
+    return getattr(g, "user_email", "") == ADMIN_EMAIL
 BEEHIIV_PUB_ID = os.getenv("BEEHIIV_PUB_ID", "")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://content-ai-generator-1.onrender.com")
 
@@ -859,10 +867,19 @@ def get_subscription_status():
     # Check generation usage
     usage = payments.check_generation_limit(g.user_id, plan)
 
+    plan_details = payments.get_plan_limits(plan)
+    # Admin override: all platforms, unlimited generations
+    if _is_admin():
+        plan_details = dict(plan_details)  # copy
+        plan_details["platforms"] = ["linkedin", "instagram", "twitter", "newsletter", "video_script"]
+        usage = {"allowed": True, "used": usage.get("used", 0), "limit": -1,
+                 "limit_type": "unlimited", "plan": plan}
+
     return jsonify({
         "subscription": subscription or {"plan": "free", "status": "active"},
-        "plan_details": payments.get_plan_limits(plan),
+        "plan_details": plan_details,
         "usage": usage,
+        "is_admin": _is_admin(),
     })
 
 
@@ -1283,10 +1300,20 @@ Return ONLY a valid JSON array, no markdown, no explanation.
 
             result = _llm_call([{"role": "user", "content": prompt}])
             result = result.strip()
+            # Strip markdown code fences if present
             if result.startswith("```"):
                 result = result.split("\n", 1)[1]
                 result = result.rsplit("```", 1)[0]
-            parsed = json.loads(result)
+            # Try direct parse first; if it fails, extract JSON array via regex
+            try:
+                parsed = json.loads(result)
+            except json.JSONDecodeError:
+                import re
+                match = re.search(r'\[.*\]', result, re.DOTALL)
+                if match:
+                    parsed = json.loads(match.group(0))
+                else:
+                    raise ValueError(f"No JSON array found in LLM response: {result[:200]}")
 
             for item in parsed:
                 idx = item["index"] - 1
@@ -1634,17 +1661,17 @@ def generate_content():
     subscription = db.get_subscription(user_id)
     user_plan = (subscription or {}).get("plan", "free")
 
-    # Check platform access
-    if not payments.check_platform_access(user_plan, format_type):
+    # Check platform access (admin bypasses all limits)
+    if not _is_admin() and not payments.check_platform_access(user_plan, format_type):
         return jsonify({
             "error": f"La piattaforma '{format_type}' non è disponibile nel piano {user_plan.upper()}. Effettua l'upgrade per accedervi.",
             "code": "PLAN_LIMIT",
             "upgrade_required": True,
         }), 403
 
-    # Check generation limit
+    # Check generation limit (admin bypasses)
     usage = payments.check_generation_limit(user_id, user_plan)
-    if not usage["allowed"]:
+    if not _is_admin() and not usage["allowed"]:
         if usage["limit_type"] == "lifetime":
             limit_msg = f"Hai raggiunto il limite di {usage['limit']} generazioni totali per il piano {user_plan.upper()}. Effettua l'upgrade per continuare."
         else:
@@ -1745,7 +1772,7 @@ def generate_newsletter():
     subscription = db.get_subscription(user_id)
     user_plan = (subscription or {}).get("plan", "free")
 
-    if not payments.check_platform_access(user_plan, "newsletter"):
+    if not _is_admin() and not payments.check_platform_access(user_plan, "newsletter"):
         return jsonify({
             "error": "La newsletter non è disponibile nel tuo piano. Effettua l'upgrade.",
             "code": "PLAN_LIMIT",
