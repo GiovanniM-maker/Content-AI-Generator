@@ -1951,6 +1951,10 @@ body::after {
 .pers-preview-gallery-item { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #f5f5f5; cursor: pointer; transition: all 0.2s; }
 .pers-preview-gallery-item:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 .pers-preview-gallery-item img { width: 100%; display: block; }
+.pers-preview-iframe-wrap { width: 100%; padding-top: 100%; overflow: hidden; position: relative; background: #fff; }
+.pers-preview-iframe-wrap iframe { width: 1080px; height: 1080px; border: none; transform: scale(0.22); transform-origin: top left; pointer-events: none; position: absolute; top: 0; left: 0; }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap { padding-top: 0; height: 400px; }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: scale(0.37); }
 .pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .pers-preview-gallery-item.expanded { grid-column: 1 / -1; }
 
@@ -5397,13 +5401,16 @@ function renderHistoryList() {
     // Build inline preview snippets (first 120 chars of each content)
     let previewHtml = '';
     const content = s.content || {};
+    const cImgs = s.carousel_images || {};
     for (const [key, text] of Object.entries(content)) {
       if (!text) continue;
       const plat = key.replace(/_\d+$/, '');
       const icon = platIcons[plat] || '📄';
       const snippet = text.substring(0, 120).replace(/\n/g, ' ') + (text.length > 120 ? '...' : '');
+      const slides = cImgs[key] || [];
       previewHtml += `<div style="padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;font-size:12px;line-height:1.5;">
         <span style="font-weight:600;">${icon} ${platLabels[plat] || plat}</span>
+        ${slides.length ? `<div style="display:flex;gap:4px;overflow-x:auto;margin:6px 0;padding:2px 0;">${slides.slice(0,4).map((u,si) => `<img src="${esc(u)}" alt="Slide ${si+1}" style="height:60px;border-radius:4px;flex-shrink:0;" loading="lazy">`).join('')}${slides.length>4?`<span style="align-self:center;color:var(--text3);font-size:11px;">+${slides.length-4}</span>`:''}</div>` : ''}
         <div style="color:var(--text2);margin-top:3px;">${esc(snippet)}</div>
         <button class="btn btn-secondary btn-small" style="margin-top:6px;font-size:11px;" onclick="event.stopPropagation();navigator.clipboard.writeText(${JSON.stringify(text).replace(/'/g, '&#39;')}).then(()=>toast('Copiato!'))">📋 Copia</button>
       </div>`;
@@ -5548,16 +5555,23 @@ function openSession(sessionId) {
         const hasIg = Object.keys(content).some(k => k.startsWith('instagram_'));
         if (hasIg) {
           html += '<div class="content-section"><h2>📸 Instagram</h2><div class="content-grid">';
+          const cImages = s.carousel_images || {};
           s.topics.forEach((t, i) => {
             const text = content['instagram_' + i] || '';
             if (!text) return;
+            const imgKey = 'instagram_' + i;
+            const slides = cImages[imgKey] || [];
             html += `
             <div class="content-col">
               <h3>Carosello ${i+1}</h3>
               <div class="col-sub">${esc(t.article?.title || '')}</div>
+              ${slides.length ? `<div class="lib-carousel-imgs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding:4px 0;">
+                ${slides.map((url, si) => `<img src="${esc(url)}" alt="Slide ${si+1}" style="height:120px;border-radius:6px;flex-shrink:0;border:1px solid var(--border);" loading="lazy">`).join('')}
+              </div>` : ''}
               <textarea readonly style="min-height:160px;">${esc(text)}</textarea>
               <div class="col-actions">
                 <button class="btn btn-primary btn-small" onclick="navigator.clipboard.writeText(this.closest('.content-col').querySelector('textarea').value).then(()=>toast('Copiato!'))">Copia</button>
+                ${slides.length ? `<button class="btn btn-secondary btn-small" onclick="_downloadAllSlides(this, '${esc(imgKey)}')">⬇ Scarica slide</button>` : ''}
               </div>
             </div>`;
           });
@@ -5622,6 +5636,30 @@ function openSession(sessionId) {
 
       detail.innerHTML = html;
     });
+}
+
+// ---- Download all carousel slides ----
+async function _downloadAllSlides(btn, key) {
+  const session = currentSession;
+  if (!session) return;
+  const slides = (session.carousel_images || {})[key] || [];
+  if (!slides.length) return;
+  btn.disabled = true;
+  btn.textContent = 'Scaricando...';
+  for (let i = 0; i < slides.length; i++) {
+    try {
+      const resp = await fetch(slides[i]);
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${key}_slide_${i+1}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch(e) { console.warn('Download failed for slide', i, e); }
+  }
+  btn.disabled = false;
+  btn.textContent = '⬇ Scarica slide';
+  toast('Slide scaricate!');
 }
 
 // ---- Delete session ----
@@ -7787,35 +7825,36 @@ async function updateTemplatePreview() {
     return;
   }
 
-  // For IG: render all 4 slide types as gallery
-  container.innerHTML = '<div class="pers-preview-empty">Rendering preview...</div>';
+  // For IG: render all 4 slide types as client-side iframes (no Playwright needed)
+  let templates = {};
   try {
-    const res = await fetch(`/api/templates/${_persCurrentId}/preview`, { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) {
-      container.innerHTML = `<div class="pers-preview-empty">${esc(data.error || 'Errore nel rendering della preview')}</div>`;
-      return;
-    }
-    if (data.type === 'gallery' && data.slides) {
-      const types = ['cover', 'content', 'list', 'cta'];
-      container.innerHTML = `<div class="pers-preview-gallery">
-        ${types.map(t => data.slides[t] ? `
-          <div class="pers-preview-gallery-item" onclick="_expandPreviewSlide('${t}', this)">
-            <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
-            <img src="${data.slides[t]}" alt="${_slideTypeLabels[t]}">
-          </div>` : '').join('')}
-      </div>`;
-    } else if (data.type === 'image' && data.image) {
-      container.innerHTML = `<img src="${data.image}" alt="Template preview">`;
-    } else if (data.type === 'html') {
-      container.innerHTML = '<iframe id="pers-preview-iframe"></iframe>';
-      document.getElementById('pers-preview-iframe').srcdoc = data.html;
-    } else {
-      container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile — riprova</div>';
-    }
+    const parsed = JSON.parse(_persCurrentHtml);
+    if (parsed && typeof parsed === 'object') templates = parsed;
   } catch(e) {
-    container.innerHTML = '<div class="pers-preview-empty">Errore di connessione. Riprova.</div>';
+    // Legacy single HTML — show as single iframe
+    templates = { cover: _persCurrentHtml, content: _persCurrentHtml, list: _persCurrentHtml, cta: _persCurrentHtml };
   }
+
+  const types = ['cover', 'content', 'list', 'cta'];
+  const hasSlides = types.some(t => templates[t] && templates[t].trim());
+
+  if (!hasSlides) {
+    container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile — template vuoto</div>';
+    return;
+  }
+
+  container.innerHTML = `<div class="pers-preview-gallery">
+    ${types.map(t => templates[t] ? `
+      <div class="pers-preview-gallery-item" onclick="_expandPreviewSlide('${t}', this)">
+        <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
+        <div class="pers-preview-iframe-wrap"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
+      </div>` : '').join('')}
+  </div>`;
+  // Set srcdoc via JS to avoid HTML attribute escaping issues
+  container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]').forEach(iframe => {
+    const st = iframe.dataset.slideType;
+    if (templates[st]) iframe.srcdoc = templates[st];
+  });
 }
 
 function _expandPreviewSlide(type, el) {

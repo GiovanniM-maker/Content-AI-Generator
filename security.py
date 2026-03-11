@@ -32,12 +32,25 @@ def init_sentry(app: Flask):
     if not dsn:
         return
 
+    def _before_send(event, hint):
+        """Filter out noisy transient errors (Redis connection, etc.)."""
+        exc = hint.get("exc_info")
+        if exc:
+            exc_type, exc_value = exc[0], exc[1]
+            msg = str(exc_value).lower()
+            # Ignore Redis/Upstash transient connection errors
+            if "redis" in msg or "upstash" in msg:
+                if "connection" in msg or "timeout" in msg or "reading from" in msg:
+                    return None
+        return event
+
     sentry_sdk.init(
         dsn=dsn,
         integrations=[FlaskIntegration()],
         traces_sample_rate=0.1,  # 10% of requests
         environment=os.getenv("FLASK_ENV", "production"),
         send_default_pii=False,  # Don't send user emails/IPs to Sentry
+        before_send=_before_send,
     )
 
 
@@ -96,6 +109,12 @@ def init_rate_limiter(app: Flask) -> Limiter:
 
     # Swallow backend errors so requests aren't killed when Redis is down
     app.config["RATELIMIT_SWALLOW_ERRORS"] = True
+    # Short connection timeout so we don't block requests when Redis is unreachable
+    app.config["RATELIMIT_STORAGE_OPTIONS"] = {
+        "socket_connect_timeout": 2,
+        "socket_timeout": 2,
+        "retry_on_timeout": False,
+    }
 
     try:
         _limiter = Limiter(
