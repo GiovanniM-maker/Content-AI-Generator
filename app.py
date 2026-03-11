@@ -355,7 +355,14 @@ def _log_prompt_version(prompt_name: str, content: str, trigger: str = "init"):
 
 
 def _log_pipeline(level: str, message: str, extra: dict | None = None, user_id: str | None = None):
-    uid = user_id or _get_user_id()
+    uid = user_id
+    if not uid:
+        uid = getattr(g, "user_id", None)
+    if not uid:
+        # No authenticated user (e.g. Stripe webhook, background task)
+        # Log to app logger but skip DB write (requires user_id FK)
+        app.logger.info(f"[pipeline/{level}] {message}")
+        return
     db.add_pipeline_log(uid, level, message, extra)
 
 
@@ -694,7 +701,18 @@ def stripe_webhook():
         return jsonify({"error": "Invalid signature"}), 400
 
     result = payments.handle_webhook_event(event)
-    _log_pipeline("info", f"Stripe webhook: {event.get('type', 'unknown')} → {result.get('action', 'ignored')}")
+
+    # Extract user_id from webhook metadata for logging (may be absent)
+    webhook_user_id = None
+    try:
+        obj = event.get("data", {}).get("object", {})
+        webhook_user_id = (
+            (obj.get("metadata") or {}).get("user_id")
+            or (obj.get("client_reference_id"))
+        )
+    except Exception:
+        pass
+    _log_pipeline("info", f"Stripe webhook: {event.get('type', 'unknown')} → {result.get('action', 'ignored')}", user_id=webhook_user_id)
 
     return jsonify(result)
 
@@ -988,7 +1006,9 @@ def _do_fetch(user_id: str, state: dict, feeds_config: dict):
         try:
             articles_text = ""
             for idx, art in enumerate(batch):
-                articles_text += f"\n---\nARTICLE {idx + 1}:\nTitle: {art['title']}\nDescription: {art['description']}\n"
+                safe_title = _sanitize_user_input(art.get("title", ""), max_length=500)
+                safe_desc = _sanitize_user_input(art.get("description", ""), max_length=1000)
+                articles_text += f"\n---\nARTICLE {idx + 1}:\nTitle: {safe_title}\nDescription: {safe_desc}\n"
 
             prompt = f"""Analyze these articles about AI/tech. For EACH article return a JSON array element with:
 - "index": article number (1-based)
@@ -1245,7 +1265,7 @@ def web_search():
         return jsonify({"results": results, "query": query})
     except Exception as e:
         _log_pipeline("error", f"Search error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Errore nella ricerca. Riprova tra poco."}), 500
 
 
 @app.route("/api/search/score", methods=["POST"])
@@ -1411,7 +1431,7 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
         return jsonify({"content": result, "format": format_type})
     except Exception as e:
         _log_pipeline("error", f"LLM generation error ({format_type}): {e}")
-        return jsonify({"error": f"LLM error: {e}"}), 500
+        return jsonify({"error": "Errore nella generazione del contenuto. Riprova tra poco."}), 500
 
 
 @app.route("/api/generate-newsletter", methods=["POST"])
@@ -1505,13 +1525,13 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
         return jsonify({"content": result, "format": "newsletter"})
     except Exception as e:
         _log_pipeline("error", f"LLM newsletter error: {e}")
-        return jsonify({"error": f"LLM error: {e}"}), 500
+        return jsonify({"error": "Errore nella generazione della newsletter. Riprova tra poco."}), 500
 
 
 @app.route("/api/newsletter/html", methods=["POST"])
 def newsletter_to_html():
     body = request.json
-    text = (body.get("text") or "").strip()
+    text = _sanitize_user_input((body.get("text") or ""), max_length=20000)
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
@@ -1553,7 +1573,7 @@ TESTO NEWSLETTER:
         return jsonify({"html": html_result})
     except Exception as e:
         _log_pipeline("error", f"Newsletter HTML conversion error: {e}")
-        return jsonify({"error": f"Conversion error: {e}"}), 500
+        return jsonify({"error": "Errore nella conversione HTML. Riprova tra poco."}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -1886,7 +1906,7 @@ def render_carousel_images():
         return jsonify(result)
     except Exception as e:
         _log_pipeline("error", f"Carousel render error: {e}")
-        return jsonify({"error": f"Render error: {e}"}), 500
+        return jsonify({"error": "Errore nel rendering del carosello. Riprova tra poco."}), 500
 
 
 # ---------------------------------------------------------------------------
