@@ -2074,9 +2074,10 @@ def notify_completion():
         "twitter": "Twitter/X", "newsletter": "Newsletter",
         "video_script": "Video Script"
     }
+    import re as _re
     platform_list = ", ".join(
-        platform_names.get(p.replace(/_\d+$/, ""), p)
-        for p in set(p.replace(/_\d+$/, "") for p in platforms)
+        platform_names.get(p, p)
+        for p in set(_re.sub(r"_\d+$", "", p) for p in platforms)
     )
 
     try:

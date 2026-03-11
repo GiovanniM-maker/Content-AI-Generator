@@ -4598,7 +4598,7 @@ function integrateOpinion(format, idx) {
   const opinionTa = document.getElementById('opinion-' + key);
   const opinion = opinionTa ? opinionTa.value.trim() : '';
   if (!opinion) { toast('Scrivi la tua opinione prima!'); return; }
-  const src = selectedArticles[idx] || _creaArticles[idx];
+  const src = selectedArticles[idx] || _creaArticles[idx] || (_creaArticles.length ? _creaArticles[idx % _creaArticles.length] : null);
   if (src) src.opinion = opinion;
 
   const ta = document.getElementById('content-' + key);
@@ -4610,7 +4610,7 @@ function integrateOpinion(format, idx) {
   fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ article, opinion, format }),
+    body: JSON.stringify({ article, opinion, format, source_mode: article.source_mode || 'rss', custom_text: article.custom_text || '' }),
   })
   .then(safeJson)
   .then(data => {
@@ -4682,14 +4682,14 @@ function regenerateSingle(format, idx) {
   const sendBtn = fbRow ? fbRow.querySelector('.btn-green') : null;
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '...'; }
 
-  const s = selectedArticles[idx] || _creaArticles[idx] || { article: { title: '', description: '' }, opinion: '' };
+  const s = selectedArticles[idx] || _creaArticles[idx] || (_creaArticles.length ? _creaArticles[idx % _creaArticles.length] : null) || { article: { title: '', description: '' }, opinion: '' };
   const opinionTa = document.getElementById('opinion-' + key);
   const opinion = opinionTa ? opinionTa.value.trim() : (s.opinion || '');
 
   fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ article: s.article, opinion, format, feedback }),
+    body: JSON.stringify({ article: s.article, opinion, format, feedback, source_mode: (s.article || {}).source_mode || 'rss', custom_text: (s.article || {}).custom_text || '' }),
   })
   .then(safeJson)
   .then(data => {
@@ -4705,7 +4705,15 @@ function regenerateSingle(format, idx) {
     const appBtn = col.querySelector('.btn-approve');
     if (appBtn) { appBtn.classList.remove('approved'); appBtn.textContent = 'Approva'; }
     col.classList.remove('approved');
-    if (feedback) toast('Rigenerato con feedback!');
+    if (feedback) {
+      toast('Rigenerato con feedback!');
+      // Also persist feedback for prompt tuning
+      fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format_type: format, feedback }),
+      }).catch(() => {});
+    }
     saveSessionContent();
   })
   .catch(err => {
@@ -4737,7 +4745,14 @@ function regenerateNewsletter() {
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Rigenera'; }
     if (fbTextarea) fbTextarea.value = '';
     if (fbRow) fbRow.classList.remove('open');
-    if (feedback) toast('Newsletter rigenerata con feedback!');
+    if (feedback) {
+      toast('Newsletter rigenerata con feedback!');
+      fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format_type: 'newsletter', feedback }),
+      }).catch(() => {});
+    }
     saveSessionContent();
   })
   .catch(err => {
@@ -6123,8 +6138,9 @@ async function generateFromCrea() {
 
 function renderCreaResults(results) {
   const container = document.getElementById('gen-results');
-  const platformNames = { linkedin: '💼 LinkedIn', instagram: '📸 Instagram', twitter: '🐦 Twitter/X', newsletter: '📧 Newsletter', video_script: '🎬 Video Script' };
+  const platformNames = { linkedin: '💼 LinkedIn', instagram: '📸 Instagram Caroselli', twitter: '🐦 Twitter/X', newsletter: '📧 Newsletter', video_script: '🎬 Video Script' };
   let html = '';
+  let hasInstagram = false;
 
   for (const [platform, items] of Object.entries(results)) {
     html += `<div class="content-section"><h2>${platformNames[platform] || platform}</h2><div class="content-grid">`;
@@ -6132,38 +6148,104 @@ function renderCreaResults(results) {
       const key = platform + '_' + idx;
       currentContent[key] = item.content;
       const text = item.content;
-      const words = text.split(/\s+/).filter(Boolean).length;
       const isApproved = approvedItems[key];
-      html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="${platform}" data-idx="${idx}" id="col-${key}">
-        <h3>${platform === 'newsletter' ? 'Newsletter' : (platform === 'video_script' ? 'Script' : 'Post')} ${idx + 1}</h3>
-        <div class="col-sub">${esc(item.source)}</div>
-        <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
-        <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
-        <div class="opinion-inline">
-          <label>🎯 La tua opinione su questo tema (opzionale):</label>
-          <textarea id="opinion-${key}" placeholder="Cosa ne pensi? La tua prospettiva verrà integrata nel post..."></textarea>
-          <button class="btn btn-secondary btn-small" onclick="integrateOpinion('${platform}', ${idx})">Integra opinione</button>
-        </div>
-        <div class="col-actions">
-          <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-          <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
-          <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
-        </div>
-        <div class="feedback-row" id="fb-${key}">
-          <label class="fb-label">📝 Feedback:</label>
-          <textarea placeholder="Come vuoi che lo riscriva?" id="fb-text-${key}"></textarea>
-          <button class="btn btn-green btn-small" onclick="regenerateSingle('${platform}', ${idx})">Rigenera</button>
-        </div>
-        <div class="schedule-row">
-          <label>📅 Programma:</label>
-          <input type="datetime-local" id="sched-${key}">
-          <button class="btn btn-orange btn-small" onclick="scheduleContent('${platform}', ${idx})">Programma</button>
-        </div>
-      </div>`;
+
+      if (platform === 'instagram') {
+        // --- Instagram: carousel with image viewer ---
+        hasInstagram = true;
+        const { slides, caption } = parseCarousel(text);
+        const imgViewerId = 'img-viewer-' + idx;
+        html += `
+        <div class="content-col ${isApproved ? 'approved' : ''}" data-format="instagram" data-idx="${idx}" id="col-${key}">
+          <h3>Carosello ${idx + 1}</h3>
+          <div class="col-sub">${esc(item.source)}</div>
+          <div class="col-meta">${slides.length} slide</div>
+          <div class="img-carousel" id="${imgViewerId}">
+            <div class="rendering-overlay" id="render-loading-${key}">
+              <div class="spinner"></div>
+              <span>Rendering immagini...</span>
+            </div>
+          </div>
+          ${caption ? `<div class="carousel-caption-box"><strong>Didascalia:</strong> ${esc(caption)}</div>` : ''}
+          <div class="carousel-actions">
+            <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
+            <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${idx})">🎨 Rigenera img</button>
+          </div>
+          <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
+          <div class="opinion-inline">
+            <label>🎯 La tua opinione (opzionale):</label>
+            <textarea id="opinion-${key}" placeholder="Cosa ne pensi?">${esc((_creaArticles[idx] || {}).opinion || '')}</textarea>
+            <button class="btn btn-secondary btn-small" onclick="integrateOpinion('instagram', ${idx})">Integra opinione</button>
+          </div>
+          <div class="col-actions">
+            <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
+            <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia testo</button>
+            <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
+          </div>
+          <div class="feedback-row" id="fb-${key}">
+            <label class="fb-label">📝 Feedback:</label>
+            <textarea placeholder="Come vuoi che lo riscriva?" id="fb-text-${key}"></textarea>
+            <button class="btn btn-green btn-small" onclick="regenerateSingle('instagram', ${idx})">Rigenera</button>
+          </div>
+          <div class="schedule-row">
+            <label>📅 Programma:</label>
+            <input type="datetime-local" id="sched-${key}">
+            <button class="btn btn-orange btn-small" onclick="scheduleContent('instagram', ${idx})">Programma</button>
+          </div>
+        </div>`;
+      } else {
+        // --- All other platforms ---
+        const words = text.split(/\s+/).filter(Boolean).length;
+        html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="${platform}" data-idx="${idx}" id="col-${key}">
+          <h3>${platform === 'newsletter' ? 'Newsletter' : (platform === 'video_script' ? 'Script' : 'Post')} ${idx + 1}</h3>
+          <div class="col-sub">${esc(item.source)}</div>
+          <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
+          <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
+          <div class="opinion-inline">
+            <label>🎯 La tua opinione su questo tema (opzionale):</label>
+            <textarea id="opinion-${key}" placeholder="Cosa ne pensi? La tua prospettiva verrà integrata nel post...">${esc((_creaArticles[idx] || {}).opinion || '')}</textarea>
+            <button class="btn btn-secondary btn-small" onclick="integrateOpinion('${platform}', ${idx})">Integra opinione</button>
+          </div>
+          <div class="col-actions">
+            <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
+            <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
+            <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
+          </div>
+          <div class="feedback-row" id="fb-${key}">
+            <label class="fb-label">📝 Feedback:</label>
+            <textarea placeholder="Come vuoi che lo riscriva?" id="fb-text-${key}"></textarea>
+            <button class="btn btn-green btn-small" onclick="regenerateSingle('${platform}', ${idx})">Rigenera</button>
+          </div>
+          <div class="schedule-row">
+            <label>📅 Programma:</label>
+            <input type="datetime-local" id="sched-${key}">
+            <button class="btn btn-orange btn-small" onclick="scheduleContent('${platform}', ${idx})">Programma</button>
+          </div>
+        </div>`;
+      }
     });
     html += '</div></div>';
   }
   container.innerHTML = html;
+
+  // Trigger carousel image rendering for Instagram
+  if (hasInstagram) {
+    renderCreaCarouselImages(results.instagram || []);
+  }
+}
+
+// Render carousel images for Crea flow Instagram results
+async function renderCreaCarouselImages(igItems) {
+  const palettes = [0, 1, 2];
+  const promises = [];
+  igItems.forEach((item, i) => {
+    const key = 'instagram_' + i;
+    const text = currentContent[key] || '';
+    if (!text.trim()) return;
+    promises.push(renderSingleCarouselImages(key, text, palettes[i % palettes.length], i));
+  });
+  await Promise.allSettled(promises);
+  saveSessionContent();
 }
 
 function approveCreaItem(key, btn) {
