@@ -1508,6 +1508,156 @@ body::after {
   border-radius: 8px; font-size: 12px;
   margin-bottom: 14px; display: none;
 }
+/* --- Auth Social Login Button --- */
+.auth-btn-social {
+  width: 100%; padding: 12px 16px;
+  background: var(--bg2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  font-size: 14px; font-weight: 500;
+  cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 10px;
+  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+}
+.auth-btn-social:hover {
+  background: var(--bg3); border-color: var(--accent2);
+  transform: translateY(-1px);
+}
+.auth-btn-social:active { transform: translateY(0); }
+/* --- Auth Divider --- */
+.auth-divider {
+  display: flex; align-items: center;
+  margin: 18px 0; gap: 12px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border);
+}
+.auth-divider span {
+  font-size: 12px; color: var(--text2);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.auth-divider-light {
+  display: flex; align-items: center;
+  margin: 14px 0; gap: 12px;
+}
+.auth-divider-light::before, .auth-divider-light::after {
+  content: ''; flex: 1; height: 1px;
+  background: rgba(255,255,255,0.05);
+}
+.auth-divider-light span {
+  font-size: 11px; color: var(--text2);
+}
+/* --- Password Wrap (input + toggle) --- */
+.auth-password-wrap {
+  position: relative; margin-bottom: 14px;
+}
+.auth-password-wrap .auth-input {
+  padding-right: 44px; margin-bottom: 0;
+}
+.auth-pw-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; padding: 4px 6px; opacity: 0.5;
+  transition: opacity 0.2s; line-height: 1;
+}
+.auth-pw-toggle:hover { opacity: 1; }
+/* --- Password Strength Meter --- */
+.pw-strength {
+  display: flex; align-items: center; gap: 10px;
+  margin: 6px 0 10px;
+}
+.pw-bar {
+  flex: 1; height: 4px; background: var(--bg3);
+  border-radius: 2px; overflow: hidden;
+}
+.pw-bar-fill {
+  height: 100%; width: 0; border-radius: 2px;
+  transition: width 0.3s, background 0.3s;
+  background: var(--red);
+}
+.pw-label {
+  font-size: 11px; color: var(--text2);
+  min-width: 60px; text-align: right;
+}
+/* --- Password Requirements Checklist --- */
+.pw-requirements {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 4px 12px; margin-bottom: 14px;
+}
+.pw-req {
+  font-size: 11px; color: var(--text2);
+  transition: color 0.2s;
+}
+.pw-req.met { color: var(--green); }
+/* --- Auth Input Code (MFA) --- */
+.auth-input-code {
+  text-align: center; letter-spacing: 12px;
+  font-size: 24px; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 14px 16px;
+}
+/* --- Auth Subtitle --- */
+.auth-subtitle {
+  font-size: 13px; color: var(--text2);
+  margin-bottom: 16px; line-height: 1.5;
+}
+/* --- Auth Forgot Link --- */
+.auth-forgot {
+  text-align: right; margin: -8px 0 14px;
+}
+.auth-forgot a {
+  font-size: 12px; color: var(--accent2);
+  cursor: pointer; text-decoration: none;
+}
+.auth-forgot a:hover { text-decoration: underline; }
+/* --- Auth Link Button --- */
+.auth-btn-link {
+  width: 100%; padding: 10px 16px;
+  background: transparent; color: var(--accent2);
+  border: 1px solid rgba(124,58,237,0.3);
+  border-radius: 10px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: background 0.2s, border-color 0.2s;
+}
+.auth-btn-link:hover {
+  background: rgba(124,58,237,0.1);
+  border-color: var(--accent2);
+}
+/* --- MFA Settings Section --- */
+.mfa-section {
+  padding: 16px; background: var(--bg2);
+  border-radius: 12px; border: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.mfa-section h2 { font-size: 16px; margin-bottom: 8px; }
+.mfa-status {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+}
+.mfa-badge {
+  padding: 3px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+}
+.mfa-badge.active {
+  background: rgba(52,211,153,0.15); color: var(--green);
+}
+.mfa-badge.inactive {
+  background: rgba(248,113,113,0.15); color: var(--red);
+}
+.mfa-qr-wrap {
+  text-align: center; padding: 20px;
+  background: #fff; border-radius: 10px;
+  margin: 12px 0; display: inline-block;
+}
+.mfa-qr-wrap img, .mfa-qr-wrap svg {
+  width: 200px; height: 200px;
+}
+.mfa-secret-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; padding: 8px 14px;
+  background: var(--bg3); border-radius: 8px;
+  word-break: break-all; margin: 8px 0;
+  user-select: all; color: var(--text);
+}
 /* ====== LANDING PAGE ====== */
 .landing-wrapper {
   width: 100%; min-height: 100vh;
@@ -2205,9 +2355,26 @@ body::after {
         <div id="auth-login-form">
           <h2>Accedi</h2>
           <div id="auth-login-error" class="auth-error"></div>
+
+          <!-- Social login -->
+          <button class="auth-btn-social" id="btn-google-login" onclick="doGoogleLogin()">
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Continua con Google
+          </button>
+
+          <div class="auth-divider"><span>oppure</span></div>
+
           <input type="email" id="login-email" class="auth-input" placeholder="Email" autocomplete="email" required>
-          <input type="password" id="login-password" class="auth-input" placeholder="Password" autocomplete="current-password" required>
+          <div class="auth-password-wrap">
+            <input type="password" id="login-password" class="auth-input" placeholder="Password" autocomplete="current-password" required style="margin-bottom:0;">
+            <button type="button" class="auth-pw-toggle" onclick="togglePwVisibility('login-password', this)" title="Mostra password">👁</button>
+          </div>
+          <div class="auth-forgot"><a onclick="showAuthForm('forgot')">Password dimenticata?</a></div>
           <button class="auth-btn" id="btn-login" onclick="doLogin()">Accedi</button>
+
+          <div class="auth-divider-light"><span>oppure</span></div>
+          <button class="auth-btn-link" onclick="showAuthForm('magic')">🔗 Accedi con Magic Link (senza password)</button>
+
           <div class="auth-toggle">Non hai un account? <a onclick="showAuthForm('register')">Registrati</a></div>
         </div>
 
@@ -2216,11 +2383,85 @@ body::after {
           <h2>Crea Account</h2>
           <div id="auth-register-error" class="auth-error"></div>
           <div id="auth-register-success" class="auth-success"></div>
+
+          <button class="auth-btn-social" onclick="doGoogleLogin()">
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Registrati con Google
+          </button>
+
+          <div class="auth-divider"><span>oppure</span></div>
+
           <input type="text" id="register-name" class="auth-input" placeholder="Nome completo" autocomplete="name" required>
           <input type="email" id="register-email" class="auth-input" placeholder="Email" autocomplete="email" required>
-          <input type="password" id="register-password" class="auth-input" placeholder="Password (min 6 caratteri)" autocomplete="new-password" required minlength="6">
-          <button class="auth-btn" id="btn-register" onclick="doRegister()">Registrati</button>
+          <div class="auth-password-wrap">
+            <input type="password" id="register-password" class="auth-input" placeholder="Password" autocomplete="new-password" required minlength="8" oninput="updatePwStrength(this.value)" style="margin-bottom:0;">
+            <button type="button" class="auth-pw-toggle" onclick="togglePwVisibility('register-password', this)" title="Mostra password">👁</button>
+          </div>
+          <div class="pw-strength" id="pw-strength">
+            <div class="pw-bar"><div class="pw-bar-fill" id="pw-bar-fill"></div></div>
+            <span class="pw-label" id="pw-label"></span>
+          </div>
+          <div class="pw-requirements" id="pw-requirements">
+            <div id="pw-req-len" class="pw-req">&#x2717; Almeno 8 caratteri</div>
+            <div id="pw-req-upper" class="pw-req">&#x2717; Una lettera maiuscola</div>
+            <div id="pw-req-lower" class="pw-req">&#x2717; Una lettera minuscola</div>
+            <div id="pw-req-num" class="pw-req">&#x2717; Un numero</div>
+          </div>
+          <button class="auth-btn" id="btn-register" onclick="doRegister()">Crea Account</button>
           <div class="auth-toggle">Hai già un account? <a onclick="showAuthForm('login')">Accedi</a></div>
+        </div>
+
+        <!-- FORGOT PASSWORD FORM -->
+        <div id="auth-forgot-form" style="display:none;">
+          <h2>Recupera Password</h2>
+          <p class="auth-subtitle">Inserisci la tua email e ti invieremo un link per reimpostare la password.</p>
+          <div id="auth-forgot-error" class="auth-error"></div>
+          <div id="auth-forgot-success" class="auth-success"></div>
+          <input type="email" id="forgot-email" class="auth-input" placeholder="Email" autocomplete="email" required>
+          <button class="auth-btn" id="btn-forgot" onclick="doForgotPassword()">Invia link di recupero</button>
+          <div class="auth-toggle"><a onclick="showAuthForm('login')">&larr; Torna al login</a></div>
+        </div>
+
+        <!-- MAGIC LINK FORM -->
+        <div id="auth-magic-form" style="display:none;">
+          <h2>Magic Link</h2>
+          <p class="auth-subtitle">Ti invieremo un link di accesso via email. Nessuna password necessaria.</p>
+          <div id="auth-magic-error" class="auth-error"></div>
+          <div id="auth-magic-success" class="auth-success"></div>
+          <input type="email" id="magic-email" class="auth-input" placeholder="Email" autocomplete="email" required>
+          <button class="auth-btn" id="btn-magic" onclick="doMagicLink()">Invia Magic Link</button>
+          <div class="auth-toggle"><a onclick="showAuthForm('login')">&larr; Torna al login</a></div>
+        </div>
+
+        <!-- RESET PASSWORD FORM (shown after clicking reset link in email) -->
+        <div id="auth-reset-form" style="display:none;">
+          <h2>Nuova Password</h2>
+          <p class="auth-subtitle">Scegli la tua nuova password.</p>
+          <div id="auth-reset-error" class="auth-error"></div>
+          <div id="auth-reset-success" class="auth-success"></div>
+          <div class="auth-password-wrap">
+            <input type="password" id="reset-password" class="auth-input" placeholder="Nuova password" autocomplete="new-password" required minlength="8" oninput="updatePwStrength(this.value, '-reset')" style="margin-bottom:0;">
+            <button type="button" class="auth-pw-toggle" onclick="togglePwVisibility('reset-password', this)">👁</button>
+          </div>
+          <div class="pw-strength" id="pw-strength-reset">
+            <div class="pw-bar"><div class="pw-bar-fill" id="pw-bar-fill-reset"></div></div>
+            <span class="pw-label" id="pw-label-reset"></span>
+          </div>
+          <div class="auth-password-wrap">
+            <input type="password" id="reset-password-confirm" class="auth-input" placeholder="Conferma password" autocomplete="new-password" required style="margin-bottom:0;">
+            <button type="button" class="auth-pw-toggle" onclick="togglePwVisibility('reset-password-confirm', this)">👁</button>
+          </div>
+          <button class="auth-btn" id="btn-reset" onclick="doResetPassword()">Aggiorna Password</button>
+        </div>
+
+        <!-- MFA VERIFICATION (shown during login when 2FA is enabled) -->
+        <div id="auth-mfa-form" style="display:none;">
+          <h2>Verifica 2FA</h2>
+          <p class="auth-subtitle">Inserisci il codice a 6 cifre dalla tua app di autenticazione.</p>
+          <div id="auth-mfa-error" class="auth-error"></div>
+          <input type="text" id="mfa-code" class="auth-input auth-input-code" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+          <button class="auth-btn" id="btn-mfa-verify" onclick="doMfaVerify()">Verifica</button>
+          <div class="auth-toggle"><a onclick="showAuthForm('login')">Usa un altro metodo</a></div>
         </div>
       </div>
     </div>
@@ -2671,6 +2912,17 @@ body::after {
   <div id="screen-settings" class="screen">
     <h1>⚙️ Impostazioni</h1>
     <p class="subtitle">Notifiche e preferenze del tuo account</p>
+
+    <!-- 2FA / MFA Settings -->
+    <div class="mfa-section">
+      <h2>🔐 Autenticazione a Due Fattori (2FA)</h2>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        Aggiungi un ulteriore livello di sicurezza al tuo account con un codice TOTP.
+      </p>
+      <div id="mfa-settings-content">
+        <p style="font-size:12px;color:var(--text2);">Caricamento...</p>
+      </div>
+    </div>
 
     <!-- ntfy test -->
     <div style="margin-bottom:24px;">
@@ -3321,12 +3573,13 @@ function stopNotifPolling() {
 }
 
 function showAuthForm(type) {
-  document.getElementById('auth-login-form').style.display = type === 'login' ? 'block' : 'none';
-  document.getElementById('auth-register-form').style.display = type === 'register' ? 'block' : 'none';
-  // Clear errors
-  document.getElementById('auth-login-error').style.display = 'none';
-  document.getElementById('auth-register-error').style.display = 'none';
-  document.getElementById('auth-register-success').style.display = 'none';
+  const forms = ['login','register','forgot','magic','reset','mfa'];
+  forms.forEach(f => {
+    const el = document.getElementById(`auth-${f}-form`);
+    if (el) el.style.display = f === type ? 'block' : 'none';
+  });
+  // Clear all error/success messages
+  document.querySelectorAll('.auth-error, .auth-success').forEach(el => el.style.display = 'none');
 }
 
 async function doLogin() {
@@ -3354,6 +3607,27 @@ async function doLogin() {
       errDiv.textContent = data.error || 'Errore di login';
       errDiv.style.display = 'block';
       return;
+    }
+    // Check if MFA is required
+    if (data.access_token && data.user) {
+      // Check MFA factors
+      try {
+        const mfaResp = await _originalFetch('/auth/mfa/factors', {
+          headers: { 'Authorization': 'Bearer ' + data.access_token },
+        });
+        const mfaData = await mfaResp.json();
+        if (mfaData.factors && mfaData.factors.length > 0) {
+          // MFA required — show MFA form
+          _mfaPendingData = {
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            user: data.user,
+            factor_id: mfaData.factors[0].id,
+          };
+          showAuthForm('mfa');
+          return;
+        }
+      } catch {}
     }
     setAuthData({
       access_token: data.access_token,
@@ -3417,6 +3691,438 @@ async function doRegister() {
     errDiv.style.display = 'block';
   } finally {
     btn.disabled = false; btn.textContent = 'Registrati';
+  }
+}
+
+/* --- Password visibility toggle --- */
+function togglePwVisibility(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+/* --- Password strength meter --- */
+function updatePwStrength(value, suffix) {
+  const sfx = suffix || '';
+  const fill = document.getElementById('pw-bar-fill' + sfx);
+  const label = document.getElementById('pw-label' + sfx);
+  const reqLen = document.getElementById('pw-req-len');
+  const reqUpper = document.getElementById('pw-req-upper');
+  const reqLower = document.getElementById('pw-req-lower');
+  const reqNum = document.getElementById('pw-req-num');
+  if (!fill || !label) return;
+
+  const hasLen = value.length >= 8;
+  const hasUpper = /[A-Z]/.test(value);
+  const hasLower = /[a-z]/.test(value);
+  const hasNum = /\d/.test(value);
+  const hasSpecial = /[^A-Za-z0-9]/.test(value);
+  const checks = [hasLen, hasUpper, hasLower, hasNum].filter(Boolean).length;
+
+  // Update requirement indicators (only on register form)
+  if (reqLen) { reqLen.className = 'pw-req' + (hasLen ? ' met' : ''); reqLen.innerHTML = (hasLen ? '&#x2713;' : '&#x2717;') + ' Almeno 8 caratteri'; }
+  if (reqUpper) { reqUpper.className = 'pw-req' + (hasUpper ? ' met' : ''); reqUpper.innerHTML = (hasUpper ? '&#x2713;' : '&#x2717;') + ' Una lettera maiuscola'; }
+  if (reqLower) { reqLower.className = 'pw-req' + (hasLower ? ' met' : ''); reqLower.innerHTML = (hasLower ? '&#x2713;' : '&#x2717;') + ' Una lettera minuscola'; }
+  if (reqNum) { reqNum.className = 'pw-req' + (hasNum ? ' met' : ''); reqNum.innerHTML = (hasNum ? '&#x2713;' : '&#x2717;') + ' Un numero'; }
+
+  // Strength bar
+  let pct = 0, color = 'var(--red)', txt = '';
+  if (!value) { fill.style.width = '0'; label.textContent = ''; return; }
+  if (checks <= 1) { pct = 20; color = 'var(--red)'; txt = 'Debole'; }
+  else if (checks === 2) { pct = 40; color = '#f59e0b'; txt = 'Discreta'; }
+  else if (checks === 3) { pct = 65; color = '#eab308'; txt = 'Buona'; }
+  else if (checks === 4 && hasSpecial && value.length >= 10) { pct = 100; color = 'var(--green)'; txt = 'Ottima'; }
+  else if (checks === 4) { pct = 85; color = 'var(--green)'; txt = 'Forte'; }
+  fill.style.width = pct + '%';
+  fill.style.background = color;
+  label.textContent = txt;
+  label.style.color = color;
+}
+
+/* --- Google OAuth --- */
+async function doGoogleLogin() {
+  const btn = document.getElementById('btn-google-login');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  try {
+    const resp = await _originalFetch('/auth/oauth/google');
+    const data = await resp.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      showToast('Google login non configurato. Contatta il supporto.', 'error');
+    }
+  } catch (e) {
+    showToast('Errore di connessione per Google login.', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+}
+
+/* --- Forgot Password --- */
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const errDiv = document.getElementById('auth-forgot-error');
+  const successDiv = document.getElementById('auth-forgot-success');
+  const btn = document.getElementById('btn-forgot');
+  errDiv.style.display = 'none';
+  successDiv.style.display = 'none';
+
+  if (!email) {
+    errDiv.textContent = 'Inserisci la tua email';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Invio in corso...';
+  try {
+    const resp = await _originalFetch('/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await resp.json();
+    // Always show success (no email enumeration)
+    successDiv.textContent = data.message || 'Se l\'email è registrata, riceverai un link per reimpostare la password.';
+    successDiv.style.display = 'block';
+  } catch (e) {
+    errDiv.textContent = 'Errore di connessione. Riprova.';
+    errDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Invia link di recupero';
+  }
+}
+
+/* --- Magic Link --- */
+async function doMagicLink() {
+  const email = document.getElementById('magic-email').value.trim();
+  const errDiv = document.getElementById('auth-magic-error');
+  const successDiv = document.getElementById('auth-magic-success');
+  const btn = document.getElementById('btn-magic');
+  errDiv.style.display = 'none';
+  successDiv.style.display = 'none';
+
+  if (!email) {
+    errDiv.textContent = 'Inserisci la tua email';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Invio in corso...';
+  try {
+    const resp = await _originalFetch('/auth/magic-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await resp.json();
+    successDiv.textContent = data.message || 'Controlla la tua email per il link di accesso.';
+    successDiv.style.display = 'block';
+  } catch (e) {
+    errDiv.textContent = 'Errore di connessione. Riprova.';
+    errDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Invia Magic Link';
+  }
+}
+
+/* --- Reset Password (after clicking link in email) --- */
+let _resetAccessToken = null;
+
+async function doResetPassword() {
+  const pw = document.getElementById('reset-password').value;
+  const pw2 = document.getElementById('reset-password-confirm').value;
+  const errDiv = document.getElementById('auth-reset-error');
+  const successDiv = document.getElementById('auth-reset-success');
+  const btn = document.getElementById('btn-reset');
+  errDiv.style.display = 'none';
+  successDiv.style.display = 'none';
+
+  if (!pw || !pw2) {
+    errDiv.textContent = 'Compila entrambi i campi';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (pw !== pw2) {
+    errDiv.textContent = 'Le password non corrispondono';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/\d/.test(pw)) {
+    errDiv.textContent = 'La password deve avere almeno 8 caratteri, una maiuscola, una minuscola e un numero';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (!_resetAccessToken) {
+    errDiv.textContent = 'Token di reset non valido. Richiedi un nuovo link di recupero.';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Aggiornamento...';
+  try {
+    const resp = await _originalFetch('/auth/update-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + _resetAccessToken,
+      },
+      body: JSON.stringify({ new_password: pw }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      errDiv.textContent = data.error || 'Errore nell\'aggiornamento della password';
+      errDiv.style.display = 'block';
+      return;
+    }
+    successDiv.textContent = 'Password aggiornata! Reindirizzamento al login...';
+    successDiv.style.display = 'block';
+    _resetAccessToken = null;
+    localStorage.removeItem('cd_password_reset');
+    setTimeout(() => showAuthForm('login'), 2000);
+  } catch (e) {
+    errDiv.textContent = 'Errore di connessione. Riprova.';
+    errDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Aggiorna Password';
+  }
+}
+
+/* --- MFA Verification (during login) --- */
+let _mfaPendingData = null;  // { access_token, refresh_token, user, factor_id }
+
+async function doMfaVerify() {
+  const code = document.getElementById('mfa-code').value.trim();
+  const errDiv = document.getElementById('auth-mfa-error');
+  const btn = document.getElementById('btn-mfa-verify');
+  errDiv.style.display = 'none';
+
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+    errDiv.textContent = 'Inserisci un codice a 6 cifre valido';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (!_mfaPendingData) {
+    errDiv.textContent = 'Sessione MFA scaduta. Riprova il login.';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Verifica...';
+  try {
+    const resp = await _originalFetch('/auth/mfa/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + _mfaPendingData.access_token,
+      },
+      body: JSON.stringify({ factor_id: _mfaPendingData.factor_id, code }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      errDiv.textContent = data.error || 'Codice non valido. Riprova.';
+      errDiv.style.display = 'block';
+      return;
+    }
+    // MFA verified — complete login
+    const finalToken = data.access_token || _mfaPendingData.access_token;
+    const finalRefresh = data.refresh_token || _mfaPendingData.refresh_token;
+    const mfaUser = _mfaPendingData.user;
+    setAuthData({
+      access_token: finalToken,
+      refresh_token: finalRefresh,
+      user: mfaUser,
+    });
+    _mfaPendingData = null;
+    onAuthSuccess(mfaUser);
+  } catch (e) {
+    errDiv.textContent = 'Errore di connessione. Riprova.';
+    errDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Verifica';
+  }
+}
+
+/* --- Handle auth callback on page load --- */
+function handleAuthCallback() {
+  // Check for password reset flow
+  const resetData = localStorage.getItem('cd_password_reset');
+  if (resetData) {
+    try {
+      const parsed = JSON.parse(resetData);
+      if (parsed.access_token) {
+        _resetAccessToken = parsed.access_token;
+        showAuthOverlay();
+        showAuthForm('reset');
+        return true;
+      }
+    } catch {}
+    localStorage.removeItem('cd_password_reset');
+  }
+
+  // Check for auth error
+  const authError = localStorage.getItem('cd_auth_error');
+  if (authError) {
+    localStorage.removeItem('cd_auth_error');
+    showAuthOverlay();
+    showAuthForm('login');
+    setTimeout(() => {
+      const errDiv = document.getElementById('auth-login-error');
+      if (errDiv) { errDiv.textContent = authError; errDiv.style.display = 'block'; }
+    }, 100);
+    return true;
+  }
+
+  // Check for OAuth success tokens
+  const oauthToken = localStorage.getItem('cd_oauth_access_token');
+  if (oauthToken) {
+    const refreshToken = localStorage.getItem('cd_oauth_refresh_token') || '';
+    localStorage.removeItem('cd_oauth_access_token');
+    localStorage.removeItem('cd_oauth_refresh_token');
+    // Fetch user info with this token
+    _originalFetch('/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + oauthToken },
+    }).then(r => r.json()).then(data => {
+      if (data.user) {
+        setAuthData({ access_token: oauthToken, refresh_token: refreshToken, user: data.user });
+        onAuthSuccess(data.user);
+      }
+    }).catch(() => {});
+    return true;
+  }
+
+  return false;
+}
+
+/* --- MFA Settings (enrollment/unenrollment) --- */
+let _mfaEnrollData = null;
+
+async function loadMfaStatus() {
+  const container = document.getElementById('mfa-settings-content');
+  if (!container) return;
+  try {
+    const resp = await fetch('/auth/mfa/factors');
+    const data = await resp.json();
+    const factors = data.factors || [];
+    const hasActive = factors.length > 0;
+
+    if (hasActive) {
+      container.innerHTML = `
+        <div class="mfa-status">
+          <span class="mfa-badge active">Attiva</span>
+          <span style="font-size:12px;color:var(--text2);">Autenticazione a due fattori attiva</span>
+        </div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+          La tua app di autenticazione è configurata. I codici vengono richiesti ad ogni login.
+        </p>
+        <button class="btn btn-secondary btn-small" onclick="disableMfa('${factors[0].id}')" style="background:rgba(248,113,113,0.1);border-color:rgba(248,113,113,0.3);color:var(--red);">
+          Disattiva 2FA
+        </button>`;
+    } else {
+      container.innerHTML = `
+        <div class="mfa-status">
+          <span class="mfa-badge inactive">Non attiva</span>
+          <span style="font-size:12px;color:var(--text2);">2FA non configurata</span>
+        </div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+          Proteggi il tuo account con un codice TOTP dalla tua app di autenticazione (Google Authenticator, Authy, ecc.).
+        </p>
+        <button class="btn btn-secondary btn-small" onclick="startMfaEnroll()">🔐 Attiva 2FA</button>
+        <div id="mfa-enroll-area" style="display:none;margin-top:16px;"></div>`;
+    }
+  } catch (e) {
+    container.innerHTML = '<p style="font-size:12px;color:var(--text2);">Impossibile caricare lo stato 2FA.</p>';
+  }
+}
+
+async function startMfaEnroll() {
+  const area = document.getElementById('mfa-enroll-area');
+  if (!area) return;
+  area.style.display = 'block';
+  area.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><div class="spinner"></div> Generazione QR code...</div>';
+
+  try {
+    const resp = await fetch('/auth/mfa/enroll', { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) { area.innerHTML = `<p style="color:var(--red);font-size:12px;">${data.error}</p>`; return; }
+
+    _mfaEnrollData = data;
+    const qrUrl = data.totp?.qr_code || data.qr_code || '';
+    const secret = data.totp?.secret || data.secret || '';
+    const factorId = data.id || data.factor_id || '';
+
+    area.innerHTML = `
+      <div style="background:var(--bg3);border-radius:12px;padding:16px;">
+        <p style="font-size:13px;margin-bottom:12px;font-weight:500;">1. Scansiona il QR code con la tua app:</p>
+        ${qrUrl ? `<div class="mfa-qr-wrap"><img src="${qrUrl}" alt="QR Code 2FA"></div>` : ''}
+        ${secret ? `<p style="font-size:12px;color:var(--text2);margin:8px 0 4px;">Oppure inserisci manualmente:</p><div class="mfa-secret-code">${secret}</div>` : ''}
+        <p style="font-size:13px;margin:16px 0 8px;font-weight:500;">2. Inserisci il codice generato:</p>
+        <input type="text" id="mfa-enroll-code" class="auth-input auth-input-code" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]*" style="max-width:200px;margin:0 auto 12px;display:block;">
+        <div id="mfa-enroll-error" style="color:var(--red);font-size:12px;display:none;margin-bottom:8px;"></div>
+        <button class="btn btn-primary btn-small" onclick="confirmMfaEnroll('${factorId}')" id="btn-mfa-enroll-confirm">Conferma e Attiva</button>
+        <button class="btn btn-secondary btn-small" onclick="cancelMfaEnroll()" style="margin-left:8px;">Annulla</button>
+      </div>`;
+  } catch (e) {
+    area.innerHTML = '<p style="color:var(--red);font-size:12px;">Errore di connessione. Riprova.</p>';
+  }
+}
+
+async function confirmMfaEnroll(factorId) {
+  const code = document.getElementById('mfa-enroll-code').value.trim();
+  const errEl = document.getElementById('mfa-enroll-error');
+  const btn = document.getElementById('btn-mfa-enroll-confirm');
+  if (errEl) errEl.style.display = 'none';
+
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+    if (errEl) { errEl.textContent = 'Inserisci un codice a 6 cifre'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Verifica...'; }
+  try {
+    const resp = await fetch('/auth/mfa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ factor_id: factorId, code }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      if (errEl) { errEl.textContent = data.error || 'Codice non valido'; errEl.style.display = 'block'; }
+      return;
+    }
+    showToast('2FA attivata con successo!', 'success');
+    _mfaEnrollData = null;
+    loadMfaStatus();
+  } catch (e) {
+    if (errEl) { errEl.textContent = 'Errore di connessione'; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Conferma e Attiva'; }
+  }
+}
+
+function cancelMfaEnroll() {
+  const area = document.getElementById('mfa-enroll-area');
+  if (area) { area.style.display = 'none'; area.innerHTML = ''; }
+  _mfaEnrollData = null;
+}
+
+async function disableMfa(factorId) {
+  if (!confirm('Sei sicuro di voler disattivare l\'autenticazione a due fattori?')) return;
+  try {
+    const resp = await fetch('/auth/mfa/unenroll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ factor_id: factorId }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      showToast(data.error || 'Errore nella disattivazione 2FA', 'error');
+      return;
+    }
+    showToast('2FA disattivata', 'success');
+    loadMfaStatus();
+  } catch (e) {
+    showToast('Errore di connessione', 'error');
   }
 }
 
@@ -3495,6 +4201,9 @@ function initAuth() {
     return;
   }
 
+  // Handle OAuth/password-reset callbacks
+  if (handleAuthCallback()) return;
+
   const data = getAuthData();
 
   // Handle ?login=1 or ?register=1 from landing.html links (only if not logged in)
@@ -3567,11 +4276,17 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Enter') {
     const overlay = document.getElementById('auth-overlay');
     if (overlay && !overlay.classList.contains('hidden') && overlay.style.display !== 'none') {
-      const loginForm = document.getElementById('auth-login-form');
-      if (loginForm && loginForm.style.display !== 'none') {
-        doLogin();
-      } else {
-        doRegister();
+      const forms = {
+        'auth-login-form': doLogin,
+        'auth-register-form': doRegister,
+        'auth-forgot-form': doForgotPassword,
+        'auth-magic-form': doMagicLink,
+        'auth-reset-form': doResetPassword,
+        'auth-mfa-form': doMfaVerify,
+      };
+      for (const [id, fn] of Object.entries(forms)) {
+        const el = document.getElementById(id);
+        if (el && el.style.display !== 'none') { fn(); break; }
       }
     }
   }
@@ -3705,6 +4420,7 @@ async function loadUsageBar() {
 
     const limit = usage.limit;
     const used = usage.used || 0;
+    currentUsage = { used, limit, limit_type: usage.limit_type || 'monthly' };
     const countEl = document.getElementById('usage-count');
     const labelEl = document.getElementById('usage-label');
 
@@ -3805,6 +4521,7 @@ let webSearchSelectedResults = [];  // selected web search results
 let _creaArticles = [];  // sources for Crea flow (used by regenerateSingle)
 let currentUserPlan = 'free';  // Track user plan for platform gating
 let allowedPlatforms = ['linkedin', 'newsletter'];  // Updated after login
+let currentUsage = { used: 0, limit: 10, limit_type: 'lifetime' };  // Track generation usage
 
 // Warn user before leaving during generation
 window.addEventListener('beforeunload', e => {
@@ -4079,7 +4796,7 @@ function showLibreriaSection(section, btn) {
   // Load data
   if (section === 'history') loadHistory();
   if (section === 'monitor') loadMonitor();
-  if (section === 'settings') loadSettings();
+  if (section === 'settings') { loadSettings(); loadMfaStatus(); }
 }
 
 // resetCreaFlow() defined below with full cleanup logic
@@ -6026,14 +6743,24 @@ async function autoFetchIfStale(force) {
   banner.style.display = 'flex';
   logBox.style.display = 'block';
   logBox.innerHTML = '';
+  let fetchOk = false;
   try {
-    await fetch('/api/feeds/fetch', { method: 'POST' });
-    // Stream progress
+    const fetchResp = await fetch('/api/feeds/fetch', { method: 'POST' });
+    if (fetchResp.status === 409) {
+      // Already running — connect to existing progress stream
+      logBox.innerHTML += '<div>⏳ Fetch già in corso, monitoraggio...</div>';
+    } else if (!fetchResp.ok) {
+      const errData = await fetchResp.json().catch(() => ({}));
+      throw new Error(errData.error || `Errore HTTP ${fetchResp.status}`);
+    }
+    // Stream progress via SSE
     const es = new EventSource('/api/feeds/progress');
+    let hasErrors = false;
     await new Promise((resolve) => {
       es.onmessage = (ev) => {
         const d = JSON.parse(ev.data);
         if (d.msg) {
+          if (d.msg.includes('Warning') || d.msg.includes('❌')) hasErrors = true;
           logBox.innerHTML += '<div>' + esc(d.msg) + '</div>';
           logBox.scrollTop = logBox.scrollHeight;
           document.getElementById('dash-fetch-msg').textContent = d.msg;
@@ -6042,9 +6769,11 @@ async function autoFetchIfStale(force) {
       };
       es.onerror = () => { es.close(); resolve(); };
     });
-    document.getElementById('dash-last-update').textContent = 'Aggiornato ora';
+    fetchOk = true;
+    document.getElementById('dash-last-update').textContent = hasErrors ? 'Aggiornato (con avvisi)' : 'Aggiornato ora';
   } catch(e) {
-    document.getElementById('dash-fetch-msg').textContent = 'Errore aggiornamento';
+    document.getElementById('dash-fetch-msg').textContent = 'Errore: ' + e.message;
+    toast('Errore aggiornamento feed: ' + e.message);
   }
   banner.style.display = 'none';
   logBox.style.display = 'none';
@@ -6112,6 +6841,7 @@ function updateGenSummary() {
   const total = Object.values(platformQty).reduce((a, b) => a + b, 0);
   const summaryEl = document.getElementById('crea-gen-total');
   const btn = document.getElementById('btn-crea-generate');
+  const remEl = document.getElementById('crea-gen-remaining');
   // Update platform count in toggle header
   const platCount = document.getElementById('crea-plat-count');
   if (platCount) platCount.textContent = total;
@@ -6123,6 +6853,19 @@ function updateGenSummary() {
     summaryEl.innerHTML = `<strong>${total}</strong> contenut${total === 1 ? 'o' : 'i'} da generare`;
     btn.disabled = false;
     btn.textContent = `✨ Genera ${total} contenut${total === 1 ? 'o' : 'i'}`;
+  }
+  // Show remaining generations
+  if (remEl) {
+    if (isAdmin || currentUsage.limit === -1) {
+      remEl.textContent = '∞ generazioni illimitate';
+    } else {
+      const remaining = Math.max(0, currentUsage.limit - currentUsage.used);
+      const label = currentUsage.limit_type === 'lifetime' ? 'totali' : 'questo mese';
+      remEl.textContent = `${remaining}/${currentUsage.limit} generazioni rimaste ${label}`;
+      if (remaining === 0) remEl.style.color = 'var(--red)';
+      else if (remaining <= 2) remEl.style.color = 'var(--orange)';
+      else remEl.style.color = 'var(--text3)';
+    }
   }
   // Check if we have source material
   const chatText = (document.getElementById('crea-chat-input') || {}).value || '';

@@ -740,8 +740,21 @@ def auth_signup():
 
     if not email or not password:
         return jsonify({"error": "Email e password sono obbligatori"}), 400
-    if len(password) < 6:
-        return jsonify({"error": "La password deve avere almeno 6 caratteri"}), 400
+    if len(password) < 8:
+        return jsonify({"error": "La password deve avere almeno 8 caratteri"}), 400
+
+    # Password strength validation
+    import re
+    if not re.search(r"[A-Z]", password):
+        return jsonify({"error": "La password deve contenere almeno una lettera maiuscola"}), 400
+    if not re.search(r"[a-z]", password):
+        return jsonify({"error": "La password deve contenere almeno una lettera minuscola"}), 400
+    if not re.search(r"\d", password):
+        return jsonify({"error": "La password deve contenere almeno un numero"}), 400
+
+    # Check for duplicate email before calling Supabase signup
+    if auth.check_user_exists(email):
+        return jsonify({"error": "Questo indirizzo email è già registrato. Prova ad accedere."}), 409
 
     try:
         result = auth.signup(email, password, full_name)
@@ -834,6 +847,257 @@ def auth_me():
             "status": (subscription or {}).get("status", "active"),
         },
     })
+
+
+# ---------------------------------------------------------------------------
+# Routes — Password Recovery
+# ---------------------------------------------------------------------------
+
+@app.route("/auth/forgot-password", methods=["POST"])
+def auth_forgot_password():
+    """Send a password reset email."""
+    body = request.json or {}
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"error": "Inserisci la tua email"}), 400
+
+    auth.send_password_reset(email)
+    # Always return success to prevent email enumeration
+    return jsonify({
+        "status": "ok",
+        "message": "Se l'email esiste nel nostro sistema, riceverai un link per reimpostare la password.",
+    })
+
+
+@app.route("/auth/update-password", methods=["POST"])
+@auth.require_auth
+def auth_update_password():
+    """Update user password (requires valid access token — from reset link or logged in)."""
+    body = request.json or {}
+    new_password = body.get("new_password", "")
+
+    if len(new_password) < 8:
+        return jsonify({"error": "La password deve avere almeno 8 caratteri"}), 400
+
+    import re
+    if not re.search(r"[A-Z]", new_password):
+        return jsonify({"error": "La password deve contenere almeno una lettera maiuscola"}), 400
+    if not re.search(r"[a-z]", new_password):
+        return jsonify({"error": "La password deve contenere almeno una lettera minuscola"}), 400
+    if not re.search(r"\d", new_password):
+        return jsonify({"error": "La password deve contenere almeno un numero"}), 400
+
+    try:
+        auth.update_user_password(g.access_token, new_password)
+        return jsonify({"status": "ok", "message": "Password aggiornata con successo."})
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Password update error: {e}")
+        return jsonify({"error": "Errore nell'aggiornamento della password."}), 500
+
+
+# ---------------------------------------------------------------------------
+# Routes — Magic Link
+# ---------------------------------------------------------------------------
+
+@app.route("/auth/magic-link", methods=["POST"])
+def auth_magic_link():
+    """Send a magic link for passwordless login."""
+    body = request.json or {}
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"error": "Inserisci la tua email"}), 400
+
+    auth.send_magic_link(email)
+    return jsonify({
+        "status": "ok",
+        "message": "Ti abbiamo inviato un link di accesso via email.",
+    })
+
+
+# ---------------------------------------------------------------------------
+# Routes — OAuth
+# ---------------------------------------------------------------------------
+
+@app.route("/auth/oauth/<provider>")
+def auth_oauth_redirect(provider):
+    """Redirect user to OAuth provider (Google, GitHub, etc.)."""
+    allowed_providers = ["google", "github", "apple"]
+    if provider not in allowed_providers:
+        return jsonify({"error": f"Provider '{provider}' non supportato"}), 400
+
+    # Build callback URL dynamically
+    redirect_to = request.host_url.rstrip("/") + "/auth/callback"
+    oauth_url = auth.get_oauth_url(provider, redirect_to)
+    return jsonify({"url": oauth_url})
+
+
+@app.route("/auth/callback")
+def auth_callback():
+    """Handle OAuth / magic link / email confirmation callback.
+
+    After Supabase redirects back, the URL contains a hash fragment with
+    access_token and refresh_token. Since hash fragments are not sent to the
+    server, we serve a minimal HTML page that extracts them client-side
+    and stores them in localStorage.
+    """
+    # Check for error in query params
+    error = request.args.get("error")
+    error_desc = request.args.get("error_description", "")
+    if error:
+        return f"""<!DOCTYPE html><html><body><script>
+            window.opener ? window.opener.postMessage({{type:'auth_error',error:'{error_desc}'}}, '*') : null;
+            localStorage.setItem('cd_auth_error', '{error_desc}');
+            window.location.href = '/';
+        </script></body></html>"""
+
+    # Serve a page that extracts tokens from hash fragment
+    return """<!DOCTYPE html>
+<html><head><title>Autenticazione...</title>
+<style>
+body { display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui;background:#f5f5f5;margin:0; }
+.card { background:#fff;padding:40px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center; }
+.spinner { width:32px;height:32px;border:3px solid #e0e0e0;border-top-color:#7c3aed;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px; }
+@keyframes spin { to { transform:rotate(360deg) } }
+</style></head>
+<body><div class="card"><div class="spinner"></div><p>Autenticazione in corso...</p></div>
+<script>
+(function() {
+    // Extract tokens from URL hash fragment
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const type = params.get('type'); // e.g. 'recovery' for password reset
+
+    if (type === 'recovery' && accessToken) {
+        // Password reset flow — store token and redirect to reset page
+        localStorage.setItem('cd_password_reset', JSON.stringify({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+        }));
+        localStorage.removeItem('cd_auth_error');
+        window.location.href = '/';
+        return;
+    }
+
+    if (accessToken) {
+        // Normal OAuth / magic link login — use oauth-specific keys
+        // so handleAuthCallback() picks them up
+        localStorage.setItem('cd_oauth_access_token', accessToken);
+        localStorage.setItem('cd_oauth_refresh_token', refreshToken || '');
+        localStorage.removeItem('cd_auth_error');
+        window.location.href = '/';
+    } else {
+        // Check query params for code-based flow
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        if (code) {
+            fetch('/auth/exchange-code', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({code: code}),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.access_token) {
+                    localStorage.setItem('cd_oauth_access_token', data.access_token);
+                    localStorage.setItem('cd_oauth_refresh_token', data.refresh_token || '');
+                    window.location.href = '/';
+                } else {
+                    localStorage.setItem('cd_auth_error', data.error || 'Errore di autenticazione');
+                    window.location.href = '/';
+                }
+            })
+            .catch(() => {
+                localStorage.setItem('cd_auth_error', 'Errore di connessione');
+                window.location.href = '/';
+            });
+        } else {
+            localStorage.setItem('cd_auth_error', 'Nessun token ricevuto');
+            window.location.href = '/';
+        }
+    }
+})();
+</script></body></html>"""
+
+
+@app.route("/auth/exchange-code", methods=["POST"])
+def auth_exchange_code():
+    """Exchange OAuth/magic-link code for session tokens."""
+    body = request.json or {}
+    code = body.get("code", "")
+    if not code:
+        return jsonify({"error": "Codice mancante"}), 400
+
+    try:
+        result = auth.exchange_code_for_session(code)
+        return jsonify(result)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Code exchange error: {e}")
+        return jsonify({"error": "Errore nello scambio del codice."}), 500
+
+
+# ---------------------------------------------------------------------------
+# Routes — MFA / 2FA
+# ---------------------------------------------------------------------------
+
+@app.route("/auth/mfa/enroll", methods=["POST"])
+@auth.require_auth
+def auth_mfa_enroll():
+    """Start MFA enrollment — generates TOTP QR code."""
+    try:
+        result = auth.mfa_enroll(g.access_token)
+        return jsonify(result)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/auth/mfa/verify", methods=["POST"])
+@auth.require_auth
+def auth_mfa_verify():
+    """Verify a TOTP code (used during enrollment confirmation and login)."""
+    body = request.json or {}
+    factor_id = body.get("factor_id", "")
+    code = body.get("code", "")
+
+    if not factor_id or not code:
+        return jsonify({"error": "factor_id e code sono obbligatori"}), 400
+
+    try:
+        # Create challenge and verify in one step
+        challenge = auth.mfa_challenge(g.access_token, factor_id)
+        result = auth.mfa_verify(g.access_token, factor_id, challenge["id"], code)
+        return jsonify(result)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/auth/mfa/unenroll", methods=["POST"])
+@auth.require_auth
+def auth_mfa_unenroll():
+    """Remove a TOTP factor (disable 2FA)."""
+    body = request.json or {}
+    factor_id = body.get("factor_id", "")
+    if not factor_id:
+        return jsonify({"error": "factor_id obbligatorio"}), 400
+
+    try:
+        auth.mfa_unenroll(g.access_token, factor_id)
+        return jsonify({"status": "ok", "message": "Autenticazione a due fattori disattivata."})
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/auth/mfa/factors")
+@auth.require_auth
+def auth_mfa_factors():
+    """List user's active MFA factors."""
+    factors = auth.mfa_list_factors(g.access_token)
+    return jsonify({"factors": factors})
 
 
 # ---------------------------------------------------------------------------
@@ -1235,11 +1499,22 @@ def fetch_feeds():
         state = {"progress": [], "running": True, "ts": time.time()}
         _fetch_state[user_id] = state
 
-    feeds_config = _load_feeds_config()
+    # Load config inside try — if it fails, release the state lock
+    try:
+        feeds_config = _load_feeds_config()
+    except Exception as e:
+        _log_pipeline("error", f"Failed to load feeds config: {e}")
+        with _fetch_lock:
+            state["running"] = False
+            state["ts"] = time.time()
+        return jsonify({"error": f"Errore nel caricamento configurazione feed: {e}"}), 500
 
     def run():
         try:
             _do_fetch(user_id, state, feeds_config)
+        except Exception as e:
+            state["progress"].append(f"❌ Errore critico: {e}")
+            _log_pipeline("error", f"Feed fetch critical error: {e}", user_id=user_id)
         finally:
             with _fetch_lock:
                 state["running"] = False
@@ -1835,9 +2110,13 @@ def generate_newsletter():
         }), 403
 
     usage = payments.check_generation_limit(user_id, user_plan)
-    if not usage["allowed"]:
+    if not _is_admin() and not usage["allowed"]:
+        if usage["limit_type"] == "lifetime":
+            limit_msg = f"Hai raggiunto il limite di {usage['limit']} generazioni totali per il piano {user_plan.upper()}. Effettua l'upgrade per continuare."
+        else:
+            limit_msg = f"Hai raggiunto il limite di {usage['limit']} generazioni/mese per il piano {user_plan.upper()}. Effettua l'upgrade per continuare."
         return jsonify({
-            "error": f"Hai raggiunto il limite di generazioni per il piano {user_plan.upper()}. Effettua l'upgrade per continuare.",
+            "error": limit_msg,
             "code": "GENERATION_LIMIT",
             "upgrade_required": True,
             "used": usage["used"],
@@ -2404,6 +2683,17 @@ def render_carousel_images():
         return jsonify({"error": "No carousel text provided"}), 400
 
     user_id = _get_user_id()
+
+    # Check platform access — Instagram carousel requires Pro+
+    if not _is_admin():
+        user_plan = _get_plan()
+        plan_details = payments.PLANS.get(user_plan, payments.PLANS["free"])
+        if "instagram" not in plan_details.get("platforms", []):
+            return jsonify({
+                "error": "Il rendering carousel richiede il piano Pro o superiore.",
+                "code": "PLAN_LIMIT",
+                "upgrade_required": True,
+            }), 403
 
     try:
         if template_id:
