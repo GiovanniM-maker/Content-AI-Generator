@@ -3561,6 +3561,9 @@ async function markAllNotifsRead(e) {
   try {
     await fetch('/api/notifications/read-all', { method: 'POST' });
     fetchNotifications();
+    // Close the dropdown
+    const dropdown = document.getElementById('notif-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
   } catch {}
 }
 

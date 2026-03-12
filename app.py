@@ -3052,10 +3052,16 @@ REGOLE:
 
     # Add current HTML context if exists
     if current_html.strip():
-        messages.append({
-            "role": "system",
-            "content": f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
-        })
+        # For IG templates, current_html is a JSON string of 4 slides — present clearly
+        if template_type == "instagram":
+            try:
+                slides = json.loads(current_html)
+                ctx = "JSON ATTUALE DEL TEMPLATE (4 tipi di slide):\n```json\n" + json.dumps(slides, indent=2) + "\n```"
+            except (json.JSONDecodeError, TypeError):
+                ctx = f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
+        else:
+            ctx = f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
+        messages.append({"role": "system", "content": ctx})
 
     # Add recent chat history (last 10 messages)
     recent_history = chat_history[-10:] if len(chat_history) > 10 else chat_history
@@ -3082,35 +3088,63 @@ REGOLE:
         # Parse JSON response from LLM
         reply_text = ""
         new_html = current_html
+        html_changed = False
 
-        # Try to extract JSON
-        cleaned = raw_response.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+        def _strip_code_fences(s):
+            s = s.strip()
+            if s.startswith("```json"):
+                s = s[7:]
+            elif s.startswith("```"):
+                s = s[3:]
+            if s.endswith("```"):
+                s = s[:-3]
+            return s.strip()
 
-        try:
-            parsed = json.loads(cleaned)
-            reply_text = parsed.get("reply", "")
-            raw_html = parsed.get("html", current_html)
-            # For IG: "html" is a dict with {cover, content, list, cta} — serialize to JSON string
+        def _try_parse_response(text):
+            """Try multiple strategies to extract JSON from the LLM response."""
+            cleaned = _strip_code_fences(text)
+            # Strategy 1: Direct JSON parse
+            try:
+                parsed = json.loads(cleaned)
+                return parsed
+            except json.JSONDecodeError:
+                pass
+            # Strategy 2: Find JSON object in text (between first { and last })
+            first_brace = cleaned.find("{")
+            last_brace = cleaned.rfind("}")
+            if first_brace != -1 and last_brace > first_brace:
+                try:
+                    parsed = json.loads(cleaned[first_brace:last_brace + 1])
+                    return parsed
+                except json.JSONDecodeError:
+                    pass
+            return None
+
+        parsed = _try_parse_response(raw_response)
+
+        if parsed and "html" in parsed:
+            reply_text = parsed.get("reply", "Template aggiornato!")
+            raw_html = parsed["html"]
             if isinstance(raw_html, dict):
                 new_html = json.dumps(raw_html)
             else:
                 new_html = raw_html
-        except json.JSONDecodeError:
-            # Fallback: try to find HTML in the response
+            html_changed = True
+        elif parsed and "reply" in parsed:
+            # Got JSON but no html field — model responded conversationally
+            reply_text = parsed["reply"]
+            _log_pipeline("warn", "Template chat: model returned JSON without 'html' field")
+        else:
+            # No valid JSON — try to find raw HTML
+            cleaned = _strip_code_fences(raw_response)
             html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
             if html_match:
                 new_html = html_match.group(1)
                 reply_text = cleaned[:cleaned.find("<!DOCTYPE")].strip() or "Ecco il template aggiornato."
+                html_changed = True
             else:
-                reply_text = cleaned
-                new_html = current_html
+                reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
+                _log_pipeline("warn", f"Template chat: failed to parse JSON response")
 
         # Update chat history (store text only — images referenced by URL in message)
         history_user_content = user_message
@@ -3119,24 +3153,25 @@ REGOLE:
         chat_history.append({"role": "user", "content": history_user_content})
         chat_history.append({"role": "assistant", "content": reply_text})
 
-        # Save updated template
+        # Save updated template (only update html if actually changed)
         db.update_user_template(
             template_id=template_id,
             user_id=user_id,
-            html_content=new_html,
+            html_content=new_html if html_changed else None,
             chat_history=chat_history,
             name=None,
         )
 
-        # Invalidate in-memory preview cache (HTML changed → old previews stale)
-        stale_keys = [k for k in _preview_cache if k.startswith(template_id)]
-        for k in stale_keys:
-            del _preview_cache[k]
+        # Invalidate in-memory preview cache if HTML changed
+        if html_changed:
+            stale_keys = [k for k in _preview_cache if k.startswith(template_id)]
+            for k in stale_keys:
+                del _preview_cache[k]
 
-        _log_pipeline("info", f"Template chat: updated {template_id}")
+        _log_pipeline("info", f"Template chat: updated {template_id} (html_changed={html_changed})")
         return jsonify({
             "reply": reply_text,
-            "html_content": new_html,
+            "html_content": new_html if html_changed else None,
         })
 
     except Exception as e:
