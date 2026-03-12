@@ -83,7 +83,8 @@ def _before_request_auth():
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 MODEL_CHEAP = "google/gemini-2.0-flash-001"           # Cheapest: scoring, parsing, quick tasks ($0.10/M in, $0.40/M out)
-MODEL_SMART = "google/gemini-3.1-pro-preview"          # Smart+affordable: generation, HTML, template chat ($2/M in, $12/M out)
+MODEL_SMART = "google/gemini-3.1-pro-preview"          # Smart+affordable: generation, content ($2/M in, $12/M out)
+MODEL_FAST  = "google/gemini-2.5-flash"                # Fast+cheap: template chat, iterative HTML ($0.15/M in, $0.60/M out)
 MODEL_PREMIUM = "anthropic/claude-sonnet-4-5"          # Premium fallback only ($3/M in, $15/M out)
 
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
@@ -3110,87 +3111,132 @@ def template_chat(template_id):
     # Build system prompt based on template type
     if template_type == "instagram":
         dimensions = {"1:1": "1080x1080", "4:3": "1080x810", "3:4": "1080x1440"}.get(aspect_ratio, "1080x1080")
-        system_prompt = f"""Sei un designer HTML esperto. Stai creando un template per caroselli Instagram con 4 TIPI DI SLIDE.
+        w, h = dimensions.split("x")
+        system_prompt = f"""Sei un designer HTML/CSS esperto specializzato in slide Instagram. Crei template HTML che verranno renderizzati in immagini PNG da Playwright (browser headless).
 
-SPECIFICHE:
-- Viewport: {dimensions}px (aspect ratio {aspect_ratio})
-- Ogni tipo di slide è un HTML completo e autonomo (CSS inline nel <style>)
-- NON usare @font-face per Inter — il sistema lo inietta automaticamente
-- Puoi usare Google Fonts via @import per altri font
-- Tutti i tipi devono condividere lo STESSO stile visivo (colori, font, decorazioni)
+═══ VIEWPORT E DIMENSIONI ═══
+- Dimensione esatta: {w}px × {h}px (aspect ratio {aspect_ratio})
+- Il tuo HTML verrà visualizzato in un browser a queste dimensioni esatte
+- Usa SOLO unità px per sizing — NO vh, vw, %, em, rem
+- Tutto il testo e gli elementi devono stare dentro {w}×{h}px senza scrolling
 
-I 4 TIPI DI SLIDE:
-1. **cover** — Prima slide del carosello. Titolo grande che cattura l'attenzione.
+═══ STRUTTURA HTML OBBLIGATORIA ═══
+Ogni slide DEVE seguire questa struttura:
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=NomeFontScelto:wght@400;600;700;800;900&display=swap');
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    body {{ width: {w}px; height: {h}px; overflow: hidden; font-family: 'NomeFontScelto', sans-serif; }}
+    /* ... il tuo CSS ... */
+  </style>
+</head>
+<body>
+  <!-- contenuto slide -->
+</body>
+</html>
+```
+
+═══ I 4 TIPI DI SLIDE ═══
+1. **cover** — Prima slide, titolo grande.
    Placeholder: {{{{COVER_TITLE}}}}, {{{{COVER_SUBTITLE}}}}
-2. **content** — Slide con testo libero (header + paragrafo).
+2. **content** — Slide con testo (header + paragrafo).
    Placeholder: {{{{CONTENT_HEADER}}}}, {{{{CONTENT_BODY}}}}
-3. **list** — Slide con elenco puntato/numerato.
-   Placeholder: {{{{LIST_HEADER}}}}, {{{{LIST_ITEMS}}}} (HTML: <li>...</li>)
-4. **cta** — Ultima slide, call-to-action (segui, salva, condividi).
+3. **list** — Slide con elenco.
+   Placeholder: {{{{LIST_HEADER}}}}, {{{{LIST_ITEMS}}}} (sarà HTML: <li>punto 1</li><li>punto 2</li>)
+4. **cta** — Ultima slide, call-to-action.
    Placeholder: {{{{CTA_TEXT}}}}, {{{{CTA_BUTTON}}}}
 
-PLACEHOLDER COMUNI (in tutti i tipi):
-- {{{{SLIDE_NUM}}}}, {{{{TOTAL_SLIDES}}}}, {{{{BRAND_NAME}}}}, {{{{BRAND_HANDLE}}}}
+Placeholder comuni: {{{{SLIDE_NUM}}}}, {{{{TOTAL_SLIDES}}}}, {{{{BRAND_NAME}}}}, {{{{BRAND_HANDLE}}}}
+Usa SOLO questi placeholder — non inventarne di nuovi.
 
-FORMATO RISPOSTA (OBBLIGATORIO):
-Rispondi SEMPRE in JSON con questa struttura esatta:
+═══ FONT ═══
+- Carica i font con @import di Google Fonts dentro il <style>
+- Specifica i pesi che usi (400, 600, 700, 800, 900)
+- Applica il font su body e su tutti gli elementi
+
+═══ ICONE E SVG ═══
+Se devi inserire icone (cuore, segnalibro, freccia, stella, ecc.), usa SVG inline:
+- OBBLIGATORIO: aggiungi SEMPRE xmlns="http://www.w3.org/2000/svg" nel tag <svg>
+- Esempio cuore: <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+- Esempio segnalibro: <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+- NON usare emoji come icone — non renderizzano bene in Playwright
+- NON usare icon font (FontAwesome, Material Icons) — non sono disponibili
+
+═══ IMMAGINI E LOGO ═══
+Quando l'utente allega un'immagine:
+- L'immagine viene caricata su Supabase Storage — l'URL è nel formato: https://fepljzntmbtcucbymtgq.supabase.co/storage/v1/object/public/template-assets/...
+- GUARDA il messaggio utente: se c'è scritto "[Immagine allegata: URL]", quell'URL è l'immagine caricata
+- Per inserire il logo: <img src="QUELL_URL_ESATTO" style="height: 50px; width: auto;"> — usa l'URL ESATTO, non modificarlo
+- Se l'utente dice "metti il logo", cerca nei messaggi precedenti l'URL dell'immagine allegata e usalo
+
+═══ CONSIGLI DI DESIGN ═══
+- Font grandi: titoli almeno 60-90px, body almeno 32-40px per {w}x{h}
+- Padding generoso: almeno 60-80px ai lati
+- Colori: sfondo pieno + testo contrastante (NO trasparenze complicate)
+- Decorazioni: cerchi, linee, forme geometriche via CSS (border-radius, gradients)
+- Tutto il testo DEVE essere visibile — se è bianco lo sfondo DEVE essere scuro e viceversa
+
+═══ FORMATO RISPOSTA (OBBLIGATORIO — SOLO JSON) ═══
 {{{{
-  "reply": "Il tuo messaggio all'utente in italiano",
+  "reply": "Breve messaggio in italiano (max 2-3 frasi)",
   "html": {{{{
-    "cover": "<!DOCTYPE html><html>...HTML COMPLETO cover...</html>",
-    "content": "<!DOCTYPE html><html>...HTML COMPLETO content...</html>",
-    "list": "<!DOCTYPE html><html>...HTML COMPLETO list...</html>",
-    "cta": "<!DOCTYPE html><html>...HTML COMPLETO cta...</html>"
+    "cover": "<!DOCTYPE html><html>...</html>",
+    "content": "<!DOCTYPE html><html>...</html>",
+    "list": "<!DOCTYPE html><html>...</html>",
+    "cta": "<!DOCTYPE html><html>...</html>"
   }}}}
 }}}}
 
-REGOLE:
-1. Rispondi SEMPRE nel formato JSON sopra — il campo "html" è un OGGETTO con 4 chiavi
-2. Ogni tipo deve essere un HTML completo da <!DOCTYPE html> a </html>
-3. Tutti i 4 tipi devono avere lo stesso stile (palette colori, font, decorazioni)
-4. Ogni modifica genera TUTTO il JSON aggiornato con tutti e 4 i tipi
-5. Se l'utente chiede di modificare un solo tipo (es. "cambia i bullet"), aggiorna quello ma ritorna sempre tutti e 4
-6. Il design deve essere professionale e moderno
-7. Rispondi in italiano
-8. Se l'utente allega un'IMMAGINE (logo, screenshot, mockup):
-   - Analizza visivamente l'immagine
-   - Se è un logo: inseriscilo nel template usando <img src="URL_IMMAGINE"> con l'URL fornito
-   - Se è un mockup/screenshot: cerca di replicare lo stile visivo mostrato
-   - Se è un'annotazione: segui le indicazioni visive"""
+REGOLE FINALI:
+1. SEMPRE ritorna JSON con "reply" + "html" (oggetto con 4 chiavi)
+2. Ogni modifica → rigenera TUTTI e 4 i tipi con il JSON completo
+3. Rispondi in italiano — il reply deve essere BREVE
+4. NON dire "ho fatto" se non hai effettivamente cambiato l'HTML — l'utente vede la preview
+5. Se qualcosa non è chiaro, chiedi — ma metti comunque il campo "html" con lo stato attuale"""
     else:  # newsletter
-        system_prompt = """Sei un designer HTML esperto di email marketing. Stai creando un template HTML per newsletter email.
+        system_prompt = """Sei un designer HTML esperto di email marketing. Crei template HTML per newsletter.
 
-SPECIFICHE TEMPLATE:
-- Max-width: 600px, centrato, responsive
-- SOLO inline CSS (niente <style> tags o classi — compatibilità email client)
-- Font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif (email-safe)
+═══ SPECIFICHE ═══
+- Max-width: 600px, centrato, table-based layout
+- SOLO inline CSS su ogni elemento (compatibilità email client: Gmail, Outlook, Apple Mail)
+- Font: 'Helvetica Neue', Helvetica, Arial, sans-serif
+- NO <style> tags, NO classi CSS, NO media queries — TUTTO inline
 
-PLACEHOLDER OBBLIGATORI (il sistema li sostituirà con il contenuto reale):
+═══ PLACEHOLDER (il sistema li sostituirà con contenuto reale) ═══
 - {{NEWSLETTER_TITLE}} — titolo della newsletter
-- {{SECTION_1}} — prima sezione di contenuto (HTML)
-- {{SECTION_2}} — seconda sezione di contenuto (HTML)
-- {{EXCLUSIVE_SECTION}} — sezione esclusiva/premium (HTML)
-- {{FOOTER}} — footer con info e unsubscribe
+- {{SECTION_1}} — prima sezione (HTML)
+- {{SECTION_2}} — seconda sezione (HTML)
+- {{EXCLUSIVE_SECTION}} — sezione premium (HTML)
+- {{FOOTER}} — footer con unsubscribe
+Usa SOLO questi placeholder — non inventarne di nuovi.
+
+═══ IMMAGINI E LOGO ═══
+- Se l'utente allega un'immagine, il messaggio conterrà "[Immagine allegata: URL]"
+- Usa quell'URL ESATTO nel tag <img src="URL"> — non modificarlo
+- Per logo: <img src="URL" style="height:40px;width:auto;">
+
+═══ FORMATO RISPOSTA (SOLO JSON) ═══
+{
+  "reply": "Breve messaggio in italiano",
+  "html": "<!DOCTYPE html><html>...HTML COMPLETO...</html>"
+}
 
 REGOLE:
-1. Rispondi SEMPRE in formato JSON con due campi: "reply" (il tuo messaggio all'utente) e "html" (l'HTML completo aggiornato)
-2. L'HTML deve essere completo da <!DOCTYPE html> a </html>
-3. Includi contenuto di esempio nei placeholder per la preview
-4. Ogni modifica deve produrre l'HTML COMPLETO aggiornato
-5. Usa SOLO inline CSS per massima compatibilità email
-6. Il design deve essere professionale e adatto a Beehiiv/Mailchimp
-7. Rispondi in italiano
-8. Se l'utente allega un'IMMAGINE (logo, screenshot, mockup):
-   - Analizza visivamente l'immagine
-   - Se è un logo: inseriscilo nel template usando <img src="URL_IMMAGINE"> con l'URL fornito
-   - Se è un mockup/screenshot: cerca di replicare lo stile visivo mostrato"""
+1. SEMPRE ritorna JSON con "reply" + "html"
+2. HTML completo da <!DOCTYPE html> a </html> con contenuto esempio nei placeholder
+3. Ogni modifica → HTML COMPLETO aggiornato
+4. SOLO inline CSS — niente <style> tags
+5. Rispondi in italiano, reply BREVE (max 2-3 frasi)"""
 
-    # Build conversation messages (keep last 10 exchanges)
+    # Build conversation messages (keep last 14 messages = ~7 exchanges)
     messages = [{"role": "system", "content": system_prompt}]
 
     # Add current HTML context if exists
     if current_html.strip():
-        # For IG templates, current_html is a JSON string of 4 slides — present clearly
         if template_type == "instagram":
             try:
                 slides = json.loads(current_html)
@@ -3201,17 +3247,30 @@ REGOLE:
             ctx = f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
         messages.append({"role": "system", "content": ctx})
 
-    # Add recent chat history (last 10 messages)
-    recent_history = chat_history[-10:] if len(chat_history) > 10 else chat_history
+    # Extract image URLs from full chat history for context persistence
+    image_urls_in_history = []
+    for msg in chat_history:
+        if msg["role"] == "user" and "[Immagine allegata:" in msg.get("content", ""):
+            urls = re.findall(r'\[Immagine allegata:\s*(https?://[^\]]+)\]', msg["content"])
+            image_urls_in_history.extend(urls)
+    if image_urls_in_history:
+        img_ctx = "IMMAGINI CARICATE DALL'UTENTE (usa questi URL esatti per <img src=\"...\">):\n"
+        for i, url in enumerate(image_urls_in_history, 1):
+            img_ctx += f"  {i}. {url}\n"
+        messages.append({"role": "system", "content": img_ctx})
+
+    # Add recent chat history (last 14 messages ≈ 7 exchanges)
+    recent_history = chat_history[-14:] if len(chat_history) > 14 else chat_history
     for msg in recent_history:
         messages.append({"role": msg["role"], "content": msg["content"]})
 
     # Add the new user message (multimodal if image attached)
     if image_url:
-        # Build multimodal content: text + image
         user_content = []
         if user_message.strip():
             user_content.append({"type": "text", "text": user_message})
+        # Also add a text note with the URL so the model can reference it in HTML
+        user_content.append({"type": "text", "text": f"[URL immagine caricata: {image_url}] — usa questo URL esatto per <img src>"})
         user_content.append({
             "type": "image_url",
             "image_url": {"url": image_url}
@@ -3222,7 +3281,7 @@ REGOLE:
 
     try:
         raw_response = _llm_call_validated(
-            messages, model=MODEL_SMART, temperature=0.4,
+            messages, model=MODEL_FAST, temperature=0.4,
             expect_json=True,
         )
 

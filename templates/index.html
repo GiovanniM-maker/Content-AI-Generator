@@ -2169,10 +2169,20 @@ body::after {
 .pers-preview-gallery-item { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #f5f5f5; cursor: pointer; transition: all 0.2s; }
 .pers-preview-gallery-item:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 .pers-preview-gallery-item img { width: 100%; display: block; }
+/* Aspect-ratio-aware iframe wrappers (default 1:1) */
 .pers-preview-iframe-wrap { width: 100%; padding-top: 100%; overflow: hidden; position: relative; background: #fff; }
-.pers-preview-iframe-wrap iframe { width: 1080px; height: 1080px; border: none; transform: scale(0.22); transform-origin: top left; pointer-events: none; position: absolute; top: 0; left: 0; }
-.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap { padding-top: 0; height: 400px; }
-.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: scale(0.37); }
+.pers-preview-iframe-wrap iframe { width: 1080px; height: 1080px; border: none; transform-origin: top left; pointer-events: none; position: absolute; top: 0; left: 0; }
+/* 4:3 landscape */
+.pers-preview-iframe-wrap.ratio-4-3 { padding-top: 75%; }
+.pers-preview-iframe-wrap.ratio-4-3 iframe { height: 810px; }
+/* 3:4 portrait */
+.pers-preview-iframe-wrap.ratio-3-4 { padding-top: 133.33%; }
+.pers-preview-iframe-wrap.ratio-3-4 iframe { height: 1440px; }
+/* Scale factor: dynamically set via JS based on container width */
+.pers-preview-iframe-wrap iframe { transform: var(--iframe-scale, scale(0.22)); }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap { padding-top: 0; height: 450px; }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap.ratio-3-4 { height: 550px; }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: var(--iframe-scale-expanded, scale(0.37)); }
 .pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .pers-preview-gallery-item.expanded { grid-column: 1 / -1; }
 
@@ -8992,17 +9002,35 @@ async function updateTemplatePreview() {
     return;
   }
 
+  // Determine ratio CSS class from _persCurrentRatio
+  const ratioCls = _persCurrentRatio === '4:3' ? 'ratio-4-3' : _persCurrentRatio === '3:4' ? 'ratio-3-4' : '';
+
   container.innerHTML = `<div class="pers-preview-gallery">
     ${types.map(t => templates[t] ? `
       <div class="pers-preview-gallery-item" onclick="_expandPreviewSlide('${t}', this)">
         <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
-        <div class="pers-preview-iframe-wrap"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
+        <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
       </div>` : '').join('')}
   </div>`;
   // Set srcdoc via JS to avoid HTML attribute escaping issues
   container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]').forEach(iframe => {
     const st = iframe.dataset.slideType;
     if (templates[st]) iframe.srcdoc = templates[st];
+  });
+  // Calculate dynamic scale based on container width
+  _recalcPreviewScale();
+}
+
+function _recalcPreviewScale() {
+  // Dynamically compute CSS scale for iframe wrappers based on their rendered width
+  document.querySelectorAll('.pers-preview-iframe-wrap').forEach(wrap => {
+    const w = wrap.clientWidth;
+    if (!w) return;
+    const scale = w / 1080;
+    wrap.style.setProperty('--iframe-scale', `scale(${scale.toFixed(4)})`);
+    // Expanded scale: use a bigger container reference
+    const expandedScale = Math.min((w * 2.2) / 1080, 0.5);
+    wrap.style.setProperty('--iframe-scale-expanded', `scale(${expandedScale.toFixed(4)})`);
   });
 }
 
@@ -9012,9 +9040,6 @@ function _expandPreviewSlide(type, el) {
   const gallery = container.querySelector('.pers-preview-gallery');
   if (!gallery) return;
 
-  const img = el.querySelector('img');
-  if (!img) return;
-
   // If already expanded, collapse back
   if (el.classList.contains('expanded')) {
     gallery.style.gridTemplateColumns = '1fr 1fr';
@@ -9022,6 +9047,7 @@ function _expandPreviewSlide(type, el) {
       item.style.display = '';
       item.classList.remove('expanded');
     });
+    setTimeout(_recalcPreviewScale, 50);
     return;
   }
 
@@ -9035,6 +9061,7 @@ function _expandPreviewSlide(type, el) {
     }
   });
   gallery.style.gridTemplateColumns = '1fr';
+  setTimeout(_recalcPreviewScale, 50);
 }
 
 function persPreviewMode(mode, btn) {
