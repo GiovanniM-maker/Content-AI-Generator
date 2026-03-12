@@ -420,9 +420,9 @@ def _llm_call_validated(messages: list, model: str = MODEL_SMART,
 
     if expect_html:
         cleaned = _strip_fences(raw)
-        # Basic HTML validation: must contain <html or <!DOCTYPE or at minimum a <div
-        if "<html" in cleaned.lower() or "<!doctype" in cleaned.lower() or "<div" in cleaned.lower():
-            return cleaned
+        extracted = _extract_html(cleaned)
+        if extracted:
+            return extracted
         _log_pipeline("warn", f"HTML validation failed, retrying", {"model": model})
         retry_msgs = messages + [
             {"role": "assistant", "content": raw},
@@ -431,9 +431,42 @@ def _llm_call_validated(messages: list, model: str = MODEL_SMART,
         retry_model = fallback_model or model
         raw2 = _llm_call(retry_msgs, model=retry_model, temperature=max(0.1, temperature - 0.2))
         cleaned2 = _strip_fences(raw2)
-        return cleaned2
+        extracted2 = _extract_html(cleaned2)
+        return extracted2 or cleaned2
 
     return raw
+
+
+def _extract_html(text: str) -> str | None:
+    """Extract ONLY the HTML portion from text, removing surrounding prose.
+
+    Handles:
+    - Full documents: <!DOCTYPE html>...</html>
+    - Partial fragments: <div>...</div>, <table>...</table>, etc.
+    - Surrounding text like 'Ecco il template:' or 'Fammi sapere!'
+    Returns None if no HTML found.
+    """
+    lower = text.lower()
+    # Strategy 1: Full HTML document (<!DOCTYPE...> to </html>)
+    doctype_pos = lower.find("<!doctype")
+    html_end = lower.rfind("</html>")
+    if doctype_pos != -1 and html_end != -1 and html_end > doctype_pos:
+        return text[doctype_pos:html_end + 7].strip()
+    # Strategy 2: <html> to </html>
+    html_start = lower.find("<html")
+    if html_start != -1 and html_end != -1 and html_end > html_start:
+        return text[html_start:html_end + 7].strip()
+    # Strategy 3: First opening tag to last closing tag (for fragments)
+    first_tag = re.search(r'<(div|table|section|header|body|main|article)\b', lower)
+    if first_tag:
+        tag_name = first_tag.group(1)
+        last_close = lower.rfind(f"</{tag_name}>")
+        if last_close > first_tag.start():
+            return text[first_tag.start():last_close + len(f"</{tag_name}>")].strip()
+    # Strategy 4: Any substantial HTML content (contains tags)
+    if re.search(r'<\w+[^>]*>', text) and ("<div" in lower or "<table" in lower or "<p" in lower):
+        return text.strip()
+    return None
 
 
 def _strip_fences(s: str) -> str:
