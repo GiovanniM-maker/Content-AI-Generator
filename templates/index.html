@@ -1346,7 +1346,7 @@ body.is-admin .admin-only { display: flex; }
 .nl-loading .spinner { width: 24px; height: 24px; }
 /* Inline newsletter auto-preview iframe */
 .nl-auto-iframe {
-  width: 100%; border: none; min-height: 400px; max-height: 600px;
+  width: 100%; border: none; min-height: 400px;
   display: block; background: #fff;
 }
 
@@ -6927,6 +6927,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chatInput.addEventListener('input', () => {
       const cnt = document.getElementById('crea-chat-count');
       if (cnt) cnt.textContent = chatInput.value.length + ' caratteri';
+      updateGenSummary();   // re-evaluate generate button state on every keystroke
     });
   }
 });
@@ -7446,6 +7447,7 @@ function renderCreaResults(results) {
             </div>
           </div>
           <div class="col-actions" style="margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+            <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
             <button class="btn btn-secondary btn-small" onclick="copyNlHtmlCrea(${idx})">📋 Copia HTML</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">📄 Copia testo</button>
             <button class="btn btn-secondary btn-small" onclick="toggleNlSource(${idx})">🔧 Mostra sorgente</button>
@@ -8376,7 +8378,17 @@ async function autoRenderNlPreviewsCrea(nlItems) {
       iframe.onload = () => {
         try {
           const h = iframe.contentDocument.body.scrollHeight;
-          if (h > 100) iframe.style.height = Math.min(h + 40, 800) + 'px';
+          if (h > 100) {
+            iframe.style.height = (h + 40) + 'px';
+            iframe.style.maxHeight = 'none';
+          }
+          // Re-adjust .main scroll area after iframe resize
+          const mainEl = document.querySelector('.main');
+          if (mainEl) {
+            // Force scroll recalculation by briefly toggling overflow
+            mainEl.style.overflow = 'hidden';
+            requestAnimationFrame(() => { mainEl.style.overflow = ''; mainEl.style.overflowY = 'auto'; });
+          }
         } catch(e) {}
       };
       console.log('[NL preview] rendered successfully for idx', idx);
