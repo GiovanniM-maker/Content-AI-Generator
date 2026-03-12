@@ -534,6 +534,154 @@ body { margin: 0; padding: 0; background: #fff5f5; font-family: Georgia, 'Times 
 
 
 # =====================================================================
+# NEWSLETTER V2 — Component-based layouts ({{CONTENT}} placeholder)
+# =====================================================================
+
+NL_V2_MINIMAL_LAYOUT = """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:#ffffff;">
+    <div style="padding:40px 32px 24px;border-bottom:1px solid #e5e7eb;">
+        <h1 style="margin:0;font-size:28px;font-weight:700;color:#111827;line-height:1.3;">{{NEWSLETTER_TITLE}}</h1>
+    </div>
+    <div style="padding:28px 32px;">
+        {{CONTENT}}
+    </div>
+    <div style="padding:24px 32px;text-align:center;font-size:13px;color:#9ca3af;border-top:1px solid #e5e7eb;">
+        {{FOOTER}}
+    </div>
+</div>
+</body></html>"""
+
+NL_V2_MINIMAL_COMPONENTS = {
+    "h1": "font-size:28px;font-weight:700;color:#111827;margin:0 0 16px 0;line-height:1.3;",
+    "h2": "font-size:20px;font-weight:600;color:#1f2937;margin:28px 0 12px 0;line-height:1.3;",
+    "h3": "font-size:17px;font-weight:600;color:#374151;margin:20px 0 8px 0;",
+    "p": "font-size:16px;color:#4b5563;margin:0 0 16px 0;line-height:1.7;",
+    "strong": "font-weight:700;color:#1f2937;",
+    "em": "font-style:italic;",
+    "a": "color:#6c5ce7;text-decoration:underline;",
+    "blockquote": "border-left:4px solid #e5e7eb;padding:12px 20px;margin:16px 0;background:#f9fafb;font-style:italic;color:#6b7280;",
+    "ul": "margin:0 0 16px 0;padding-left:24px;",
+    "ol": "margin:0 0 16px 0;padding-left:24px;",
+    "li": "font-size:16px;color:#4b5563;margin:0 0 8px 0;line-height:1.6;",
+    "hr": "border:none;border-top:1px solid #e5e7eb;margin:28px 0;",
+    "callout": "background:#f0f9ff;border-left:4px solid #3b82f6;padding:16px 20px;margin:20px 0;border-radius:0 8px 8px 0;",
+    "callout_title": "font-size:16px;font-weight:700;color:#1d4ed8;margin:0 0 8px 0;",
+    "callout_body": "font-size:15px;color:#374151;margin:0;line-height:1.6;",
+    "img": "max-width:100%;height:auto;border-radius:8px;margin:16px 0;display:block;",
+}
+
+NL_V2_MAGAZINE_LAYOUT = """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body style="margin:0;padding:0;background:#1a1a2e;font-family:Georgia,'Times New Roman',Times,serif;">
+<div style="max-width:600px;margin:0 auto;background:#ffffff;">
+    <div style="padding:48px 32px 36px;text-align:center;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#ffffff;">
+        <p style="font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#a0aec0;margin:0 0 12px;">La tua newsletter settimanale</p>
+        <h1 style="font-size:32px;font-weight:700;color:#ffffff;margin:0;line-height:1.2;">{{NEWSLETTER_TITLE}}</h1>
+    </div>
+    <div style="padding:32px;">
+        {{CONTENT}}
+    </div>
+    <div style="padding:28px 32px;text-align:center;font-size:12px;color:#999;border-top:1px solid #eee;background:#fafafa;">
+        {{FOOTER}}
+    </div>
+</div>
+</body></html>"""
+
+NL_V2_MAGAZINE_COMPONENTS = {
+    "h1": "font-size:28px;font-weight:700;color:#1a1a2e;margin:0 0 16px 0;line-height:1.3;font-family:Georgia,'Times New Roman',serif;",
+    "h2": "font-size:22px;font-weight:700;color:#16213e;margin:28px 0 14px 0;line-height:1.3;font-family:Georgia,'Times New Roman',serif;border-bottom:2px solid #6c5ce7;padding-bottom:8px;",
+    "h3": "font-size:18px;font-weight:600;color:#2d3748;margin:20px 0 8px 0;font-family:Georgia,'Times New Roman',serif;",
+    "p": "font-size:16px;color:#4a5568;margin:0 0 16px 0;line-height:1.8;",
+    "strong": "font-weight:700;color:#1a1a2e;",
+    "em": "font-style:italic;color:#6c5ce7;",
+    "a": "color:#6c5ce7;text-decoration:none;border-bottom:1px solid #6c5ce7;",
+    "blockquote": "border-left:3px solid #6c5ce7;padding:16px 24px;margin:20px 0;background:#f7f6ff;color:#4a5568;font-style:italic;",
+    "ul": "margin:0 0 16px 0;padding-left:20px;",
+    "ol": "margin:0 0 16px 0;padding-left:20px;",
+    "li": "font-size:16px;color:#4a5568;margin:0 0 10px 0;line-height:1.7;",
+    "hr": "border:none;height:3px;background:linear-gradient(90deg,#6c5ce7,#a29bfe);margin:32px 0;border-radius:2px;",
+    "callout": "background:#f0f0ff;border:1px solid #d4d0fb;padding:20px 24px;margin:24px 0;border-radius:12px;",
+    "callout_title": "font-size:16px;font-weight:700;color:#6c5ce7;margin:0 0 8px 0;",
+    "callout_body": "font-size:15px;color:#4a5568;margin:0;line-height:1.7;",
+    "img": "max-width:100%;height:auto;border-radius:12px;margin:20px 0;display:block;box-shadow:0 2px 8px rgba(0,0,0,0.1);",
+}
+
+NL_V2_CORPORATE_LAYOUT = """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:#ffffff;">
+    <div style="padding:32px;background:#0f172a;text-align:center;">
+        <h1 style="font-size:26px;font-weight:700;color:#ffffff;margin:0;">{{NEWSLETTER_TITLE}}</h1>
+        <p style="font-size:13px;color:#94a3b8;margin:8px 0 0;">Insights settimanali per professionisti</p>
+    </div>
+    <div style="padding:32px;">
+        {{CONTENT}}
+    </div>
+    <div style="padding:24px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;font-size:12px;color:#94a3b8;">
+        {{FOOTER}}
+    </div>
+</div>
+</body></html>"""
+
+NL_V2_CORPORATE_COMPONENTS = {
+    "h1": "font-size:26px;font-weight:700;color:#0f172a;margin:0 0 16px 0;line-height:1.3;",
+    "h2": "font-size:20px;font-weight:700;color:#1e293b;margin:28px 0 12px 0;line-height:1.3;text-transform:uppercase;font-size:14px;letter-spacing:1px;color:#0f172a;",
+    "h3": "font-size:17px;font-weight:600;color:#334155;margin:20px 0 8px 0;",
+    "p": "font-size:15px;color:#475569;margin:0 0 16px 0;line-height:1.7;",
+    "strong": "font-weight:700;color:#0f172a;",
+    "em": "font-style:italic;",
+    "a": "color:#2563eb;text-decoration:none;font-weight:600;",
+    "blockquote": "border-left:4px solid #2563eb;padding:12px 20px;margin:16px 0;background:#f8fafc;color:#475569;",
+    "ul": "margin:0 0 16px 0;padding-left:20px;",
+    "ol": "margin:0 0 16px 0;padding-left:20px;",
+    "li": "font-size:15px;color:#475569;margin:0 0 8px 0;line-height:1.6;",
+    "hr": "border:none;border-top:2px solid #e2e8f0;margin:28px 0;",
+    "callout": "background:#eff6ff;border-left:4px solid #2563eb;padding:16px 20px;margin:20px 0;",
+    "callout_title": "font-size:14px;font-weight:700;color:#1e40af;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:0.5px;",
+    "callout_body": "font-size:15px;color:#334155;margin:0;line-height:1.6;",
+    "img": "max-width:100%;height:auto;margin:16px 0;display:block;",
+}
+
+NL_V2_PERSONAL_LAYOUT = """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body style="margin:0;padding:0;background:#fef7ed;font-family:'Georgia','Times New Roman',serif;">
+<div style="max-width:560px;margin:0 auto;background:#fffdf8;border:1px solid #fed7aa;border-radius:0;">
+    <div style="padding:36px 32px 20px;">
+        <p style="font-size:14px;color:#c2410c;margin:0 0 8px;font-weight:600;">Ciao! 👋</p>
+        <h1 style="font-size:26px;font-weight:700;color:#431407;margin:0;line-height:1.3;">{{NEWSLETTER_TITLE}}</h1>
+    </div>
+    <div style="padding:8px 32px 32px;">
+        {{CONTENT}}
+    </div>
+    <div style="padding:20px 32px;border-top:1px solid #fed7aa;font-size:13px;color:#a8a29e;text-align:center;">
+        {{FOOTER}}
+    </div>
+</div>
+</body></html>"""
+
+NL_V2_PERSONAL_COMPONENTS = {
+    "h1": "font-size:24px;font-weight:700;color:#431407;margin:0 0 14px 0;line-height:1.3;font-family:Georgia,serif;",
+    "h2": "font-size:20px;font-weight:700;color:#7c2d12;margin:24px 0 10px 0;line-height:1.3;font-family:Georgia,serif;",
+    "h3": "font-size:17px;font-weight:600;color:#9a3412;margin:18px 0 8px 0;font-family:Georgia,serif;",
+    "p": "font-size:16px;color:#57534e;margin:0 0 16px 0;line-height:1.8;",
+    "strong": "font-weight:700;color:#431407;",
+    "em": "font-style:italic;color:#c2410c;",
+    "a": "color:#c2410c;text-decoration:underline;",
+    "blockquote": "border-left:3px solid #fb923c;padding:12px 20px;margin:16px 0;background:#fff7ed;color:#78716c;font-style:italic;",
+    "ul": "margin:0 0 16px 0;padding-left:20px;",
+    "ol": "margin:0 0 16px 0;padding-left:20px;",
+    "li": "font-size:16px;color:#57534e;margin:0 0 8px 0;line-height:1.7;",
+    "hr": "border:none;border-top:1px dashed #d6d3d1;margin:24px 0;",
+    "callout": "background:#fff7ed;border:1px solid #fed7aa;padding:16px 20px;margin:20px 0;border-radius:12px;",
+    "callout_title": "font-size:16px;font-weight:700;color:#c2410c;margin:0 0 8px 0;",
+    "callout_body": "font-size:15px;color:#57534e;margin:0;line-height:1.7;",
+    "img": "max-width:100%;height:auto;border-radius:12px;margin:16px 0;display:block;border:1px solid #fed7aa;",
+}
+
+
+# =====================================================================
 # SEED DATA
 # =====================================================================
 
@@ -544,11 +692,11 @@ PRESETS = [
     {"template_type": "instagram", "name": "Bold Gradient",  "html_content": IG_BOLD_GRADIENT,  "aspect_ratio": "1:1"},
     {"template_type": "instagram", "name": "Professional",   "html_content": IG_PROFESSIONAL,   "aspect_ratio": "1:1"},
     {"template_type": "instagram", "name": "Creative Pop",   "html_content": IG_CREATIVE_POP,   "aspect_ratio": "1:1"},
-    # NL — html_content is still plain HTML string
-    {"template_type": "newsletter", "name": "Minimal",    "html_content": NL_MINIMAL,    "aspect_ratio": "1:1"},
-    {"template_type": "newsletter", "name": "Magazine",   "html_content": NL_MAGAZINE,   "aspect_ratio": "1:1"},
-    {"template_type": "newsletter", "name": "Corporate",  "html_content": NL_CORPORATE,  "aspect_ratio": "1:1"},
-    {"template_type": "newsletter", "name": "Personal",   "html_content": NL_PERSONAL,   "aspect_ratio": "1:1"},
+    # NL v2 — component-based (layout + components JSON)
+    {"template_type": "newsletter", "name": "Minimal",    "html_content": NL_V2_MINIMAL_LAYOUT,    "aspect_ratio": "1:1", "components": NL_V2_MINIMAL_COMPONENTS},
+    {"template_type": "newsletter", "name": "Magazine",   "html_content": NL_V2_MAGAZINE_LAYOUT,   "aspect_ratio": "1:1", "components": NL_V2_MAGAZINE_COMPONENTS},
+    {"template_type": "newsletter", "name": "Corporate",  "html_content": NL_V2_CORPORATE_LAYOUT,  "aspect_ratio": "1:1", "components": NL_V2_CORPORATE_COMPONENTS},
+    {"template_type": "newsletter", "name": "Personal",   "html_content": NL_V2_PERSONAL_LAYOUT,   "aspect_ratio": "1:1", "components": NL_V2_PERSONAL_COMPONENTS},
 ]
 
 
@@ -561,20 +709,26 @@ def seed():
 
     for preset in PRESETS:
         key = (preset["name"], preset["template_type"])
+        update_data = {
+            "html_content": preset["html_content"],
+            "aspect_ratio": preset["aspect_ratio"],
+        }
+        insert_data = {
+            "template_type": preset["template_type"],
+            "name": preset["name"],
+            "html_content": preset["html_content"],
+            "aspect_ratio": preset["aspect_ratio"],
+        }
+        # Include components if present (newsletter v2)
+        if "components" in preset:
+            update_data["components"] = preset["components"]
+            insert_data["components"] = preset["components"]
         if key in existing_map:
-            sb.table("preset_templates").update({
-                "html_content": preset["html_content"],
-                "aspect_ratio": preset["aspect_ratio"],
-            }).eq("id", existing_map[key]).execute()
+            sb.table("preset_templates").update(update_data).eq("id", existing_map[key]).execute()
             updated += 1
             print(f"  Updated: {preset['template_type']}/{preset['name']}")
         else:
-            sb.table("preset_templates").insert({
-                "template_type": preset["template_type"],
-                "name": preset["name"],
-                "html_content": preset["html_content"],
-                "aspect_ratio": preset["aspect_ratio"],
-            }).execute()
+            sb.table("preset_templates").insert(insert_data).execute()
             created += 1
             print(f"  Created: {preset['template_type']}/{preset['name']}")
 

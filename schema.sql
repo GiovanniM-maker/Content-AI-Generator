@@ -219,6 +219,7 @@ CREATE TABLE IF NOT EXISTS public.user_templates (
     html_content TEXT NOT NULL DEFAULT '',
     aspect_ratio TEXT DEFAULT '1:1' CHECK (aspect_ratio IN ('1:1', '4:3', '3:4')),
     chat_history JSONB DEFAULT '[]'::jsonb,
+    components JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -233,6 +234,7 @@ CREATE TABLE IF NOT EXISTS public.preset_templates (
     html_content TEXT NOT NULL,
     aspect_ratio TEXT DEFAULT '1:1' CHECK (aspect_ratio IN ('1:1', '4:3', '3:4')),
     thumbnail_url TEXT DEFAULT '',
+    components JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -434,5 +436,19 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'generation_count_monthly') THEN
         ALTER TABLE public.profiles ADD COLUMN generation_count_monthly INTEGER NOT NULL DEFAULT 0;
+    END IF;
+END $$;
+
+-- =====================================================
+-- MIGRATION: Add components JSONB column to templates
+-- (safe to run on existing databases)
+-- =====================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_templates' AND column_name = 'components') THEN
+        ALTER TABLE public.user_templates ADD COLUMN components JSONB DEFAULT '{}'::jsonb;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'preset_templates' AND column_name = 'components') THEN
+        ALTER TABLE public.preset_templates ADD COLUMN components JSONB DEFAULT '{}'::jsonb;
     END IF;
 END $$;

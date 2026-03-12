@@ -1084,6 +1084,7 @@ def create_user_template(
     html_content: str = "",
     aspect_ratio: str = "1:1",
     chat_history: list = None,
+    components: dict = None,
 ) -> dict:
     """Create a new user template."""
     row = {
@@ -1093,6 +1094,7 @@ def create_user_template(
         "html_content": html_content,
         "aspect_ratio": aspect_ratio,
         "chat_history": chat_history or [],
+        "components": components or {},
     }
     result = _sb().table("user_templates").insert(row).execute()
     return result.data[0] if result.data else {}
@@ -1104,6 +1106,7 @@ def update_user_template(
     html_content: str = None,
     chat_history: list = None,
     name: str = None,
+    components: dict = None,
 ) -> dict:
     """Update an existing user template (with ownership check)."""
     updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
@@ -1113,6 +1116,8 @@ def update_user_template(
         updates["chat_history"] = chat_history
     if name is not None:
         updates["name"] = name
+    if components is not None:
+        updates["components"] = components
     result = (
         _sb().table("user_templates")
         .update(updates)

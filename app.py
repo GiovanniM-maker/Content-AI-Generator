@@ -1953,7 +1953,20 @@ BASE_FORMAT_NEWSLETTER = """Formato Newsletter settimanale (Beehiiv):
     (es. un workflow che ha testato, un tool nascosto, una riflessione controcorrente)
   * Chiusura: takeaway pratico in 1-2 righe + invito a rispondere alla mail
 - Stile conversazionale, come una lettera a un amico imprenditore
-- Niente formattazione pesante, max un grassetto per concetto chiave"""
+- Niente formattazione pesante, max un grassetto per concetto chiave
+
+FORMATTAZIONE MARKDOWN OBBLIGATORIA:
+Il testo DEVE usare markdown standard. Questo è FONDAMENTALE per il rendering nel template:
+- # Titolo newsletter (una sola riga con #)
+- ## Titolo sezione (per ogni sezione/topic)
+- **testo grassetto** per concetti chiave (max 1-2 per paragrafo)
+- *testo corsivo* per enfasi leggera
+- > citazione (per quote rilevanti o dati importanti)
+- - punto elenco (per liste)
+- --- (tre trattini su riga singola) come separatore tra sezioni
+- [testo link](url) per i link
+
+NON usare HTML. Solo markdown puro. La prima riga DEVE essere il titolo con # singolo."""
 
 BASE_FORMAT_TWITTER = """Formato Twitter/X — POST O THREAD
 - Se il contenuto si presta: singolo tweet (max 280 caratteri), potente e shareable
@@ -2237,6 +2250,214 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
         return jsonify({"error": "Errore nella generazione del contenuto. Riprova tra poco."}), 500
 
 
+# ---------------------------------------------------------------------------
+# Newsletter assembler — deterministic markdown → styled HTML
+# ---------------------------------------------------------------------------
+
+def _nl_escape(text: str) -> str:
+    """Escape HTML entities in text (but preserve already-valid HTML tags from assembler)."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def assemble_newsletter_html(markdown_text: str, layout_html: str, components: dict) -> str:
+    """Convert markdown text into fully styled HTML using the template's layout and component styles.
+
+    Architecture:
+    - layout_html: the template shell with {{CONTENT}}, {{NEWSLETTER_TITLE}}, {{FOOTER}} placeholders
+    - components: a dict mapping element types to inline CSS style strings
+      e.g. {"h1": "font-size:28px;color:#111;", "p": "font-size:16px;color:#4b5563;", ...}
+    - markdown_text: the raw newsletter text with markdown formatting
+
+    The assembler parses the markdown deterministically (no LLM) and wraps each element
+    in the appropriate HTML tag with the component's inline style.
+    """
+    import re as _re
+
+    # Default component styles (fallback if component key missing)
+    defaults = {
+        "h1": "font-size:28px;font-weight:700;color:#111827;margin:0 0 16px 0;line-height:1.3;",
+        "h2": "font-size:22px;font-weight:600;color:#1f2937;margin:24px 0 12px 0;line-height:1.3;",
+        "h3": "font-size:18px;font-weight:600;color:#374151;margin:20px 0 8px 0;line-height:1.4;",
+        "p": "font-size:16px;color:#4b5563;margin:0 0 16px 0;line-height:1.7;",
+        "strong": "font-weight:700;color:#1f2937;",
+        "em": "font-style:italic;",
+        "a": "color:#6c5ce7;text-decoration:underline;",
+        "blockquote": "border-left:4px solid #6c5ce7;padding:12px 20px;margin:16px 0;background:#f8f7ff;font-style:italic;color:#4b5563;",
+        "ul": "margin:0 0 16px 0;padding-left:24px;",
+        "ol": "margin:0 0 16px 0;padding-left:24px;",
+        "li": "font-size:16px;color:#4b5563;margin:0 0 8px 0;line-height:1.6;",
+        "hr": "border:none;border-top:1px solid #e5e7eb;margin:24px 0;",
+        "callout": "background:#f0f9ff;border-left:4px solid #3b82f6;padding:16px 20px;margin:16px 0;border-radius:0 8px 8px 0;",
+        "callout_title": "font-size:16px;font-weight:700;color:#1d4ed8;margin:0 0 8px 0;",
+        "callout_body": "font-size:15px;color:#374151;margin:0;line-height:1.6;",
+        "img": "max-width:100%;height:auto;border-radius:8px;margin:16px 0;display:block;",
+    }
+
+    def _style(tag: str) -> str:
+        """Get the inline style for a tag, preferring components over defaults."""
+        return components.get(tag, defaults.get(tag, ""))
+
+    def _inline_format(text: str) -> str:
+        """Process inline markdown: **bold**, *italic*, [links](url), `code`."""
+        # Bold: **text** or __text__
+        text = _re.sub(
+            r'\*\*(.+?)\*\*',
+            lambda m: f'<strong style="{_style("strong")}">{m.group(1)}</strong>',
+            text
+        )
+        text = _re.sub(
+            r'__(.+?)__',
+            lambda m: f'<strong style="{_style("strong")}">{m.group(1)}</strong>',
+            text
+        )
+        # Italic: *text* or _text_ (but not inside already-processed strong tags)
+        text = _re.sub(
+            r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)',
+            lambda m: f'<em style="{_style("em")}">{m.group(1)}</em>',
+            text
+        )
+        # Links: [text](url)
+        text = _re.sub(
+            r'\[([^\]]+)\]\(([^)]+)\)',
+            lambda m: f'<a href="{m.group(2)}" style="{_style("a")}">{m.group(1)}</a>',
+            text
+        )
+        # Inline code: `code`
+        text = _re.sub(
+            r'`([^`]+)`',
+            r'<code style="background:#f3f4f6;padding:2px 6px;border-radius:3px;font-size:14px;">\1</code>',
+            text
+        )
+        return text
+
+    # Split into lines and parse block-level elements
+    lines = markdown_text.strip().split("\n")
+    html_blocks = []
+    i = 0
+    title_text = ""
+
+    while i < len(lines):
+        line = lines[i].rstrip()
+
+        # Skip empty lines
+        if not line.strip():
+            i += 1
+            continue
+
+        # --- Horizontal rule ---
+        if _re.match(r'^-{3,}$|^\*{3,}$|^_{3,}$', line.strip()):
+            html_blocks.append(f'<hr style="{_style("hr")}">')
+            i += 1
+            continue
+
+        # --- Headings ---
+        heading_match = _re.match(r'^(#{1,3})\s+(.+)$', line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = _inline_format(heading_match.group(2).strip())
+            tag = f"h{level}"
+            # Capture first h1 as the newsletter title
+            if level == 1 and not title_text:
+                title_text = heading_match.group(2).strip()
+            html_blocks.append(f'<{tag} style="{_style(tag)}">{text}</{tag}>')
+            i += 1
+            continue
+
+        # --- Blockquote ---
+        if line.startswith(">"):
+            quote_lines = []
+            while i < len(lines) and lines[i].strip().startswith(">"):
+                quote_lines.append(_re.sub(r'^>\s?', '', lines[i].strip()))
+                i += 1
+            quote_text = _inline_format(" ".join(quote_lines))
+            html_blocks.append(f'<blockquote style="{_style("blockquote")}"><p style="margin:0;{_style("p")}">{quote_text}</p></blockquote>')
+            continue
+
+        # --- Callout block (:::callout or > 💡 or > ⚡ pattern) ---
+        callout_match = _re.match(r'^>\s*[💡⚡🔥✨🎯📌]\s*\*\*(.+?)\*\*\s*(.*)', line)
+        if callout_match:
+            c_title = callout_match.group(1)
+            c_body_parts = [callout_match.group(2)] if callout_match.group(2) else []
+            i += 1
+            while i < len(lines) and lines[i].strip().startswith(">"):
+                c_body_parts.append(_re.sub(r'^>\s?', '', lines[i].strip()))
+                i += 1
+            c_body = _inline_format(" ".join(c_body_parts))
+            html_blocks.append(
+                f'<div style="{_style("callout")}">'
+                f'<p style="{_style("callout_title")}">{c_title}</p>'
+                f'<p style="{_style("callout_body")}">{c_body}</p>'
+                f'</div>'
+            )
+            continue
+
+        # --- Unordered list ---
+        if _re.match(r'^[\-\*]\s+', line):
+            items = []
+            while i < len(lines) and _re.match(r'^[\-\*]\s+', lines[i].strip()):
+                item_text = _re.sub(r'^[\-\*]\s+', '', lines[i].strip())
+                items.append(f'<li style="{_style("li")}">{_inline_format(item_text)}</li>')
+                i += 1
+            html_blocks.append(f'<ul style="{_style("ul")}">{"".join(items)}</ul>')
+            continue
+
+        # --- Ordered list ---
+        if _re.match(r'^\d+\.\s+', line):
+            items = []
+            while i < len(lines) and _re.match(r'^\d+\.\s+', lines[i].strip()):
+                item_text = _re.sub(r'^\d+\.\s+', '', lines[i].strip())
+                items.append(f'<li style="{_style("li")}">{_inline_format(item_text)}</li>')
+                i += 1
+            html_blocks.append(f'<ol style="{_style("ol")}">{"".join(items)}</ol>')
+            continue
+
+        # --- Image ---
+        img_match = _re.match(r'^!\[([^\]]*)\]\(([^)]+)\)', line)
+        if img_match:
+            alt = img_match.group(1)
+            src = img_match.group(2)
+            html_blocks.append(f'<img src="{src}" alt="{alt}" style="{_style("img")}">')
+            i += 1
+            continue
+
+        # --- Regular paragraph (collect consecutive non-empty, non-special lines) ---
+        para_lines = []
+        while i < len(lines):
+            l = lines[i].rstrip()
+            if not l.strip():
+                i += 1
+                break
+            if _re.match(r'^#{1,3}\s|^-{3,}$|^\*{3,}$|^_{3,}$|^[\-\*]\s|^\d+\.\s|^>|^!\[', l):
+                break
+            para_lines.append(l.strip())
+            i += 1
+        if para_lines:
+            para_text = _inline_format(" ".join(para_lines))
+            html_blocks.append(f'<p style="{_style("p")}">{para_text}</p>')
+        continue
+
+    # Assemble the content HTML
+    content_html = "\n".join(html_blocks)
+
+    # Check if layout uses new {{CONTENT}} placeholder or old {{SECTION_*}} placeholders
+    if "{{CONTENT}}" in layout_html:
+        # New component-based layout: single content placeholder
+        result = layout_html
+        result = result.replace("{{NEWSLETTER_TITLE}}", _inline_format(title_text) if title_text else "Newsletter")
+        result = result.replace("{{CONTENT}}", content_html)
+        result = result.replace("{{FOOTER}}", '<p style="font-size:13px;color:#9ca3af;text-align:center;">Se non vuoi pi&ugrave; ricevere questa newsletter, <a href="{{unsubscribe_url}}" style="color:#6b7280;">clicca qui</a>.</p>')
+        return result
+    else:
+        # Backwards compatibility: old placeholder system — inject full content into SECTION_1
+        result = layout_html
+        result = result.replace("{{NEWSLETTER_TITLE}}", _inline_format(title_text) if title_text else "Newsletter")
+        result = result.replace("{{SECTION_1}}", content_html)
+        result = result.replace("{{SECTION_2}}", "")
+        result = result.replace("{{EXCLUSIVE_SECTION}}", "")
+        result = result.replace("{{FOOTER}}", '<p style="font-size:13px;color:#9ca3af;text-align:center;">Se non vuoi pi&ugrave; ricevere questa newsletter, <a href="{{unsubscribe_url}}" style="color:#6b7280;">clicca qui</a>.</p>')
+        return result
+
+
 @app.route("/api/generate-newsletter", methods=["POST"])
 def generate_newsletter():
     body = request.json
@@ -2343,7 +2564,7 @@ def newsletter_to_html():
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
-    # If a custom template is provided, inject text into its placeholders
+    # If a custom template is provided, inject text into its layout
     if template_id:
         try:
             user_id = _get_user_id()
@@ -2351,8 +2572,15 @@ def newsletter_to_html():
             if not tpl:
                 return jsonify({"error": "Template non trovato"}), 404
             html_template = tpl["html_content"]
+            components = tpl.get("components", {}) or {}
 
-            # Parse the newsletter text into sections for injection
+            # ── New path: component-based assembler (deterministic, no LLM) ──
+            if components and "{{CONTENT}}" in html_template:
+                html_result = assemble_newsletter_html(text, html_template, components)
+                _log_pipeline("info", f"Newsletter HTML assembled from template {template_id} (component-based)")
+                return jsonify({"html": html_result})
+
+            # ── Legacy path: LLM parses text into sections for old placeholder templates ──
             inject_prompt = f"""Analizza il seguente testo di newsletter e restituisci un JSON con queste chiavi:
 - "title": il titolo della newsletter
 - "section_1": prima sezione in HTML (con <h2>, <p>, <strong> etc.)
@@ -2387,7 +2615,7 @@ TESTO:
             html_result = html_result.replace("{{EXCLUSIVE_SECTION}}", sections.get("exclusive_section", ""))
             html_result = html_result.replace("{{FOOTER}}", sections.get("footer", ""))
 
-            _log_pipeline("info", f"Newsletter HTML from template {template_id}")
+            _log_pipeline("info", f"Newsletter HTML from template {template_id} (legacy placeholders)")
             return jsonify({"html": html_result})
         except json.JSONDecodeError:
             _log_pipeline("error", "Failed to parse newsletter sections JSON")
@@ -3107,6 +3335,7 @@ def template_chat(template_id):
     current_html = tpl.get("html_content", "")
     chat_history = tpl.get("chat_history", []) or []
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
+    current_components = tpl.get("components", {}) or {}
 
     # Build system prompt based on template type
     if template_type == "instagram":
@@ -3198,39 +3427,82 @@ REGOLE FINALI:
 4. NON dire "ho fatto" se non hai effettivamente cambiato l'HTML — l'utente vede la preview
 5. Se qualcosa non è chiaro, chiedi — ma metti comunque il campo "html" con lo stato attuale"""
     else:  # newsletter
-        system_prompt = """Sei un designer HTML esperto di email marketing. Crei template HTML per newsletter.
+        components_json = json.dumps(current_components, indent=2) if current_components else "{}"
 
-═══ SPECIFICHE ═══
-- Max-width: 600px, centrato, table-based layout
-- SOLO inline CSS su ogni elemento (compatibilità email client: Gmail, Outlook, Apple Mail)
-- Font: 'Helvetica Neue', Helvetica, Arial, sans-serif
-- NO <style> tags, NO classi CSS, NO media queries — TUTTO inline
+        system_prompt = """Sei un designer HTML esperto di email marketing. Crei template newsletter con un sistema a 2 livelli: LAYOUT + COMPONENTI.
 
-═══ PLACEHOLDER (il sistema li sostituirà con contenuto reale) ═══
-- {{NEWSLETTER_TITLE}} — titolo della newsletter
-- {{SECTION_1}} — prima sezione (HTML)
-- {{SECTION_2}} — seconda sezione (HTML)
-- {{EXCLUSIVE_SECTION}} — sezione premium (HTML)
-- {{FOOTER}} — footer con unsubscribe
-Usa SOLO questi placeholder — non inventarne di nuovi.
+═══ COME FUNZIONA ═══
+Il template ha 2 parti separate:
+1. **html** = il LAYOUT della newsletter (struttura, header, footer, wrapper) con il placeholder {{CONTENT}} dove verrà iniettato il testo.
+2. **components** = una mappa di stili inline CSS per ogni tipo di elemento testuale (h1, h2, p, strong, ecc.)
+
+Quando l'utente genera una newsletter, il testo markdown viene convertito in HTML usando i tuoi stili componenti e iniettato nel layout al posto di {{CONTENT}}.
+
+═══ LAYOUT HTML ═══
+- Max-width: 600px, centrato
+- SOLO inline CSS su ogni elemento (compatibilità email: Gmail, Outlook, Apple Mail)
+- Font base: 'Helvetica Neue', Helvetica, Arial, sans-serif (sovrascrivibile)
+- Il layout DEVE contenere il placeholder {{CONTENT}} — è dove finisce il testo assemblato
+- Placeholder opzionali: {{NEWSLETTER_TITLE}}, {{FOOTER}}
+- Il layout definisce: wrapper/sfondo, header con logo, container centrale, footer
+- NO <style> tags, NO classi CSS — TUTTO inline
+
+═══ COMPONENTI (mappa stili) ═══
+Ogni chiave è un tipo di elemento HTML. Il valore è una stringa di CSS inline.
+Chiavi supportate:
+- "h1" — titolo principale newsletter (font-size, color, font-weight, margin...)
+- "h2" — sottotitoli sezioni
+- "h3" — sotto-sottotitoli
+- "p" — paragrafi normali
+- "strong" — testo in grassetto (solo font-weight e color)
+- "em" — testo in corsivo
+- "a" — link (color, text-decoration)
+- "blockquote" — citazioni (border-left, padding, background...)
+- "ul" / "ol" — liste
+- "li" — elementi lista
+- "hr" — separatore orizzontale
+- "callout" — box evidenziato (background, border-left, padding...)
+- "callout_title" — titolo del callout
+- "callout_body" — corpo del callout
+- "img" — immagini inline
 
 ═══ IMMAGINI E LOGO ═══
 - Se l'utente allega un'immagine, il messaggio conterrà "[Immagine allegata: URL]"
 - Usa quell'URL ESATTO nel tag <img src="URL"> — non modificarlo
-- Per logo: <img src="URL" style="height:40px;width:auto;">
+- Per logo nel layout: <img src="URL" style="height:40px;width:auto;">
 
-═══ FORMATO RISPOSTA (SOLO JSON) ═══
+═══ FORMATO RISPOSTA (SOLO JSON, OBBLIGATORIO) ═══
 {
-  "reply": "Breve messaggio in italiano",
-  "html": "<!DOCTYPE html><html>...HTML COMPLETO...</html>"
+  "reply": "Breve messaggio in italiano (max 2-3 frasi)",
+  "html": "<!DOCTYPE html><html>...LAYOUT COMPLETO con {{CONTENT}}...</html>",
+  "components": {
+    "h1": "font-size:28px;font-weight:700;color:#111827;margin:0 0 16px 0;line-height:1.3;",
+    "h2": "font-size:22px;font-weight:600;color:#1f2937;margin:24px 0 12px 0;",
+    "p": "font-size:16px;color:#4b5563;margin:0 0 16px 0;line-height:1.7;",
+    "strong": "font-weight:700;color:#1f2937;",
+    "em": "font-style:italic;",
+    "a": "color:#6c5ce7;text-decoration:underline;",
+    "blockquote": "border-left:4px solid #6c5ce7;padding:12px 20px;margin:16px 0;background:#f8f7ff;",
+    "ul": "margin:0 0 16px 0;padding-left:24px;",
+    "li": "font-size:16px;color:#4b5563;margin:0 0 8px 0;line-height:1.6;",
+    "hr": "border:none;border-top:1px solid #e5e7eb;margin:24px 0;",
+    "callout": "background:#f0f9ff;border-left:4px solid #3b82f6;padding:16px 20px;margin:16px 0;",
+    "callout_title": "font-size:16px;font-weight:700;color:#1d4ed8;margin:0 0 8px 0;",
+    "callout_body": "font-size:15px;color:#374151;margin:0;line-height:1.6;",
+    "img": "max-width:100%;height:auto;border-radius:8px;margin:16px 0;"
+  }
 }
 
 REGOLE:
-1. SEMPRE ritorna JSON con "reply" + "html"
-2. HTML completo da <!DOCTYPE html> a </html> con contenuto esempio nei placeholder
-3. Ogni modifica → HTML COMPLETO aggiornato
-4. SOLO inline CSS — niente <style> tags
-5. Rispondi in italiano, reply BREVE (max 2-3 frasi)"""
+1. SEMPRE ritorna JSON con "reply" + "html" + "components" (tutte e 3 le chiavi)
+2. L'HTML è il LAYOUT (con {{CONTENT}}), NON il contenuto finale — metti testo d'esempio dove serve per la preview
+3. I components sono gli stili inline per ogni tipo di elemento — cambiali quando l'utente chiede modifiche di stile
+4. Ogni modifica dell'utente → rigenera HTML e components COMPLETI
+5. Quando l'utente dice "colore più caldo", "font più grande", "stile più moderno" → modifica i components
+6. Quando l'utente dice "aggiungi logo", "cambia header", "metti sfondo diverso" → modifica l'HTML layout
+7. SOLO inline CSS nel layout — niente <style> tags
+8. Rispondi in italiano, reply BREVE (max 2-3 frasi)
+9. NON dire "ho fatto" se non hai effettivamente cambiato HTML o components"""
 
     # Build conversation messages (keep last 14 messages = ~7 exchanges)
     messages = [{"role": "system", "content": system_prompt}]
@@ -3244,7 +3516,10 @@ REGOLE:
             except (json.JSONDecodeError, TypeError):
                 ctx = f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
         else:
-            ctx = f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
+            # Newsletter: include both layout HTML and components
+            ctx = f"LAYOUT HTML ATTUALE:\n```html\n{current_html}\n```"
+            if current_components:
+                ctx += f"\n\nCOMPONENTI ATTUALI:\n```json\n{components_json}\n```"
         messages.append({"role": "system", "content": ctx})
 
     # Extract image URLs from full chat history for context persistence
@@ -3288,7 +3563,9 @@ REGOLE:
         # Parse JSON response from LLM
         reply_text = ""
         new_html = current_html
+        new_components = current_components if template_type == "newsletter" else None
         html_changed = False
+        components_changed = False
 
         def _try_parse_response(text):
             """Try multiple strategies to extract JSON from the LLM response."""
@@ -3320,6 +3597,10 @@ REGOLE:
             else:
                 new_html = raw_html
             html_changed = True
+            # Extract components for newsletter templates
+            if template_type == "newsletter" and "components" in parsed and isinstance(parsed["components"], dict):
+                new_components = parsed["components"]
+                components_changed = True
         elif parsed and "reply" in parsed:
             # Got JSON but no html field — model responded conversationally
             reply_text = parsed["reply"]
@@ -3343,13 +3624,14 @@ REGOLE:
         chat_history.append({"role": "user", "content": history_user_content})
         chat_history.append({"role": "assistant", "content": reply_text})
 
-        # Save updated template (only update html if actually changed)
+        # Save updated template (only update html/components if actually changed)
         db.update_user_template(
             template_id=template_id,
             user_id=user_id,
             html_content=new_html if html_changed else None,
             chat_history=chat_history,
             name=None,
+            components=new_components if components_changed else None,
         )
 
         # Invalidate in-memory preview cache if HTML changed
@@ -3388,7 +3670,35 @@ def template_preview(template_id):
         return jsonify({"error": "Template vuoto — inizia a chattare per crearlo"}), 400
 
     if template_type == "newsletter":
-        return jsonify({"type": "html", "html": html_content})
+        components = tpl.get("components", {}) or {}
+        if components and "{{CONTENT}}" in html_content:
+            # New component-based template: assemble with sample content for preview
+            sample_md = """# La Tua Newsletter Settimanale
+
+Bentornato alla tua newsletter! Ecco le novità più interessanti della settimana.
+
+## Prima Sezione
+
+Questo è un **paragrafo di esempio** con del testo formattato. Contiene [un link](https://example.com) per mostrare lo stile dei collegamenti.
+
+> Questa è una citazione di esempio per mostrare lo stile dei blockquote nel tuo template.
+
+## Seconda Sezione
+
+- Primo punto elenco di esempio
+- Secondo punto con **testo in grassetto**
+- Terzo punto con *testo in corsivo*
+
+---
+
+## Sezione Esclusiva
+
+Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la differenza."""
+            assembled = assemble_newsletter_html(sample_md, html_content, components)
+            return jsonify({"type": "html", "html": assembled})
+        else:
+            # Legacy template or no components: return raw HTML
+            return jsonify({"type": "html", "html": html_content})
 
     # For Instagram — render all 4 slide types as mini-gallery
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
@@ -3560,6 +3870,7 @@ def clone_preset(preset_id):
         html_content=preset["html_content"],
         aspect_ratio=preset.get("aspect_ratio", "1:1"),
         chat_history=[],
+        components=preset.get("components", {}),
     )
     _log_pipeline("info", f"Cloned preset '{preset['name']}' as '{custom_name}'")
     return jsonify(tpl), 201
