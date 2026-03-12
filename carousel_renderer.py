@@ -154,7 +154,8 @@ def _base_css(palette: dict) -> str:
     """
 
 
-def _cover_html(title: str, palette: dict, total_slides: int) -> str:
+def _cover_html(title: str, palette: dict, total_slides: int,
+                brand_name: str = "", brand_handle: str = "") -> str:
     """Slide 1: Big bold title — maximum visual impact."""
     title_len = len(title)
     font_size = 80 if title_len < 25 else 68 if title_len < 40 else 56 if title_len < 60 else 46
@@ -203,13 +204,14 @@ def _cover_html(title: str, palette: dict, total_slides: int) -> str:
     </div>
     <div class="swipe">Scorri <span class="swipe-arrow">&#8250;</span></div>
     <div class="brand">
-        <span class="brand-name">Juan | AI Automation</span>
-        <span class="brand-handle">@juan.ai</span>
+        <span class="brand-name">{_html_esc(brand_name)}</span>
+        <span class="brand-handle">{_html_esc(brand_handle)}</span>
     </div>
     </body></html>"""
 
 
-def _content_html(text: str, slide_num: int, total_slides: int, palette: dict) -> str:
+def _content_html(text: str, slide_num: int, total_slides: int, palette: dict,
+                   brand_name: str = "", brand_handle: str = "") -> str:
     """Slides 2-N: Content slide with text."""
     lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
 
@@ -227,25 +229,40 @@ def _content_html(text: str, slide_num: int, total_slides: int, palette: dict) -
 
     header_html = f'<h2 class="slide-header">{_html_esc(header)}</h2>' if header else ''
 
+    # Balanced font sizing — never too small
     total_chars = sum(len(l) for l in body_lines)
-    font_size = 34 if total_chars < 120 else 30 if total_chars < 200 else 26 if total_chars < 300 else 22
+    n_lines = len(body_lines)
+    if total_chars < 80:
+        font_size = 36
+    elif total_chars < 150:
+        font_size = 32
+    elif total_chars < 250:
+        font_size = 28
+    elif total_chars < 400:
+        font_size = 26
+    else:
+        font_size = 24  # minimum readable
+
+    # Scale header relative to body (not too disproportionate)
+    header_size = min(46, font_size + 14)
+    line_gap = max(12, 20 - n_lines)
 
     return f"""<!DOCTYPE html><html><head><style>
     {_base_css(palette)}
     .slide-header {{
-        font-size: 42px;
+        font-size: {header_size}px;
         font-weight: 800;
         color: {palette['accent2']};
-        margin-bottom: 28px;
-        line-height: 1.15;
+        margin-bottom: 24px;
+        line-height: 1.18;
         letter-spacing: -0.5px;
     }}
     .body-line {{
         font-size: {font_size}px;
         font-weight: 400;
-        line-height: 1.65;
+        line-height: 1.55;
         color: {palette['text']};
-        margin-bottom: 14px;
+        margin-bottom: {line_gap}px;
     }}
     .body-line strong {{
         font-weight: 700;
@@ -261,16 +278,33 @@ def _content_html(text: str, slide_num: int, total_slides: int, palette: dict) -
         {body_html}
     </div>
     <div class="brand">
-        <span class="brand-name">Juan | AI Automation</span>
-        <span class="brand-handle">@juan.ai</span>
+        <span class="brand-name">{_html_esc(brand_name)}</span>
+        <span class="brand-handle">{_html_esc(brand_handle)}</span>
     </div>
     </body></html>"""
 
 
-def _cta_html(text: str, slide_num: int, total_slides: int, palette: dict) -> str:
+def _cta_html(text: str, slide_num: int, total_slides: int, palette: dict,
+              brand_name: str = "", brand_handle: str = "") -> str:
     """Final slide: CTA — engagement + follow."""
     lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
-    body = '<br>'.join(_html_esc(l) for l in lines)
+
+    # Split into CTA message and action items
+    cta_lines = []
+    action_line = ""
+    for line in lines:
+        lower = line.lower()
+        if any(kw in lower for kw in ["segui", "follow", "iscriviti", "subscribe"]):
+            action_line = line
+        else:
+            cta_lines.append(line)
+
+    body = '<br>'.join(_html_esc(l) for l in (cta_lines or lines))
+    btn_text = _html_esc(action_line) if action_line else "Segui per altri tips"
+
+    # Adaptive font size based on text length
+    total_len = sum(len(l) for l in lines)
+    cta_font = 34 if total_len < 100 else 30 if total_len < 180 else 26 if total_len < 280 else 22
 
     return f"""<!DOCTYPE html><html><head><style>
     {_base_css(palette)}
@@ -282,28 +316,28 @@ def _cta_html(text: str, slide_num: int, total_slides: int, palette: dict) -> st
         margin: 0 auto 36px;
     }}
     .cta-text {{
-        font-size: 36px;
+        font-size: {cta_font}px;
         font-weight: 600;
-        line-height: 1.45;
+        line-height: 1.4;
         max-width: 780px;
     }}
     .cta-action {{
-        margin-top: 48px;
+        margin-top: 40px;
     }}
     .cta-btn {{
         display: inline-block;
-        padding: 22px 56px;
+        padding: 20px 52px;
         background: linear-gradient(135deg, {palette['accent']}, {palette['accent2']});
         color: white;
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 700;
         border-radius: 60px;
         letter-spacing: 0.5px;
         box-shadow: 0 8px 32px {palette['accent']}44;
     }}
     .cta-follow {{
-        margin-top: 28px;
-        font-size: 18px;
+        margin-top: 24px;
+        font-size: 16px;
         color: {palette['text2']};
     }}
     </style></head><body>
@@ -314,13 +348,13 @@ def _cta_html(text: str, slide_num: int, total_slides: int, palette: dict) -> st
         <div class="accent-line"></div>
         <div class="cta-text">{body}</div>
         <div class="cta-action">
-            <span class="cta-btn">Segui per altri tips</span>
+            <span class="cta-btn">{btn_text}</span>
         </div>
         <div class="cta-follow">Salva questo post &bull; Condividi con un collega</div>
     </div>
     <div class="brand">
-        <span class="brand-name">Juan | AI Automation</span>
-        <span class="brand-handle">@juan.ai</span>
+        <span class="brand-name">{_html_esc(brand_name)}</span>
+        <span class="brand-handle">{_html_esc(brand_handle)}</span>
     </div>
     </body></html>"""
 
@@ -349,7 +383,8 @@ def parse_carousel_text(text: str) -> tuple[list[str], str]:
     return slides, caption
 
 
-def render_carousel(text: str, palette_idx: int = 0) -> dict:
+def render_carousel(text: str, palette_idx: int = 0,
+                    brand_name: str = "", brand_handle: str = "") -> dict:
     """
     Render carousel text into PNG byte arrays (no disk writes).
     Returns: { 'slides_bytes': [bytes, ...], 'caption': '...' }
@@ -373,11 +408,14 @@ def render_carousel(text: str, palette_idx: int = 0) -> dict:
         for i, slide in enumerate(slides_text):
             # Choose template based on position
             if i == 0:
-                html = _cover_html(slide, palette, total)
+                html = _cover_html(slide, palette, total,
+                                   brand_name=brand_name, brand_handle=brand_handle)
             elif i == total - 1 and total > 2:
-                html = _cta_html(slide, i + 1, total, palette)
+                html = _cta_html(slide, i + 1, total, palette,
+                                 brand_name=brand_name, brand_handle=brand_handle)
             else:
-                html = _content_html(slide, i + 1, total, palette)
+                html = _content_html(slide, i + 1, total, palette,
+                                     brand_name=brand_name, brand_handle=brand_handle)
 
             page.set_content(html, wait_until="networkidle")
             # Small wait for fonts to load
@@ -391,9 +429,10 @@ def render_carousel(text: str, palette_idx: int = 0) -> dict:
     return {"slides_bytes": slides_bytes, "caption": caption}
 
 
-def render_carousel_async(text: str, palette_idx: int = 0) -> dict:
+def render_carousel_async(text: str, palette_idx: int = 0,
+                          brand_name: str = "", brand_handle: str = "") -> dict:
     """Wrapper that can be called from Flask thread."""
-    return render_carousel(text, palette_idx)
+    return render_carousel(text, palette_idx, brand_name=brand_name, brand_handle=brand_handle)
 
 
 # ---------------------------------------------------------------------------

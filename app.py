@@ -2728,8 +2728,21 @@ def render_carousel_images():
             )
         else:
             # Default rendering (original palette-based)
+            # Get user brand info for slide branding
+            brand_name = body.get("brand_name", "")
+            brand_handle = body.get("brand_handle", "")
+            if not brand_name:
+                try:
+                    profile = db.get_profile(user_id)
+                    if profile:
+                        brand_name = profile.get("full_name") or ""
+                except Exception:
+                    pass
             from carousel_renderer import render_carousel_async
-            result = render_carousel_async(text, palette_idx=palette_idx)
+            result = render_carousel_async(
+                text, palette_idx=palette_idx,
+                brand_name=brand_name, brand_handle=brand_handle,
+            )
 
         slides_bytes = result.get("slides_bytes", [])
         caption = result.get("caption", "")
