@@ -630,12 +630,116 @@ def _prepare_slide_html(
     return html
 
 
+def _truncate_to_constraints(text: str, zone: str, style_rules: dict) -> str:
+    """Smart truncation based on extracted style_rules.
+
+    Trims text to fit the template constraints instead of relying on
+    CSS overflow:hidden which silently cuts off content.
+
+    zone: 'cover_title', 'content_header', 'content_body', 'list_items', 'cta_text'
+    """
+    if not style_rules or not text:
+        return text
+
+    typo = style_rules.get("typography", {})
+    rules = typo.get(zone, {})
+
+    if zone == "cover_title":
+        max_chars = rules.get("max_chars", 80)
+        if len(text) > max_chars:
+            text = text[:max_chars - 1].rstrip() + "…"
+
+    elif zone == "content_header":
+        max_chars = rules.get("max_chars", 60)
+        if len(text) > max_chars:
+            text = text[:max_chars - 1].rstrip() + "…"
+
+    elif zone == "content_body":
+        max_per_line = rules.get("max_chars_per_line", 55)
+        max_lines = rules.get("max_lines", 8)
+        lines = text.split('\n')
+        truncated_lines = []
+        for line in lines[:max_lines]:
+            if len(line) > max_per_line * 2:
+                line = line[:max_per_line * 2 - 1].rstrip() + "…"
+            truncated_lines.append(line)
+        text = '\n'.join(truncated_lines)
+
+    elif zone == "list_items":
+        max_items = rules.get("max_items", 6)
+        max_per_item = rules.get("max_chars_per_item", 50)
+        lines = text.split('\n')
+        truncated = []
+        for line in lines[:max_items]:
+            if len(line) > max_per_item:
+                line = line[:max_per_item - 1].rstrip() + "…"
+            truncated.append(line)
+        text = '\n'.join(truncated)
+
+    elif zone == "cta_text":
+        max_chars = rules.get("max_chars", 150)
+        if len(text) > max_chars:
+            text = text[:max_chars - 1].rstrip() + "…"
+
+    return text
+
+
+def _inject_slide_image(html: str, image_url: str) -> str:
+    """Inject a background/accent AI-generated image into slide HTML.
+
+    Adds an absolutely-positioned, semi-transparent image layer behind
+    the content for a subtle visual enhancement without interfering
+    with text readability.
+    """
+    if not image_url or not html:
+        return html
+
+    overlay_css = f"""<style>
+    .ai-bg-image {{
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url('{image_url}');
+        background-size: cover;
+        background-position: center;
+        opacity: 0.18;
+        filter: blur(2px);
+        z-index: 0;
+        pointer-events: none;
+    }}
+    body > *:not(.ai-bg-image) {{
+        position: relative;
+        z-index: 1;
+    }}
+    </style>"""
+
+    overlay_div = '<div class="ai-bg-image"></div>'
+
+    # Inject CSS before </head> and div after <body>
+    if "</head>" in html:
+        html = html.replace("</head>", f"{overlay_css}</head>", 1)
+    else:
+        html = overlay_css + html
+
+    if "<body" in html:
+        # Find closing > of body tag
+        body_match = re.search(r'<body[^>]*>', html)
+        if body_match:
+            insert_pos = body_match.end()
+            html = html[:insert_pos] + overlay_div + html[insert_pos:]
+    else:
+        html = overlay_div + html
+
+    return html
+
+
 def render_carousel_from_template(
     text: str,
     template_html: str,
     aspect_ratio: str = "1:1",
     brand_name: str = "",
     brand_handle: str = "",
+    style_rules: dict = None,
+    slide_images: dict = None,
 ) -> dict:
     """
     Render carousel text into PNG byte arrays using a custom user template.
@@ -644,6 +748,9 @@ def render_carousel_from_template(
     - Legacy: a single HTML string with {{SLIDE_CONTENT}} placeholder
     - Multi-type: a JSON string {"cover": "...", "content": "...", "list": "...", "cta": "..."}
       Each type uses its own placeholders (see _prepare_slide_html).
+
+    style_rules: dict with extracted constraints (typography, layout, etc.)
+    slide_images: dict mapping slide index (str) → image URL for background injection
 
     Returns: { 'slides_bytes': [bytes, ...], 'caption': '...' }
     """
@@ -654,6 +761,37 @@ def render_carousel_from_template(
     total = len(slides_text)
     width, height = ASPECT_DIMENSIONS.get(aspect_ratio, (1080, 1080))
     templates = _parse_template_html(template_html)
+
+    # Apply smart truncation per slide before rendering
+    if style_rules:
+        truncated_slides = []
+        for i, st in enumerate(slides_text):
+            slide_type = _detect_slide_type(st, i, total)
+            if slide_type == "cover":
+                st = _truncate_to_constraints(st, "cover_title", style_rules)
+            elif slide_type == "list":
+                # Truncate list body (skip header line)
+                lines = st.split('\n')
+                if len(lines) > 1 and len(lines[0]) < 60:
+                    header = lines[0]
+                    body = '\n'.join(lines[1:])
+                    body = _truncate_to_constraints(body, "list_items", style_rules)
+                    st = header + '\n' + body
+                else:
+                    st = _truncate_to_constraints(st, "list_items", style_rules)
+            elif slide_type == "cta":
+                st = _truncate_to_constraints(st, "cta_text", style_rules)
+            else:  # content
+                lines = st.split('\n')
+                if len(lines) > 1 and len(lines[0]) < 60:
+                    header = _truncate_to_constraints(lines[0], "content_header", style_rules)
+                    body = '\n'.join(lines[1:])
+                    body = _truncate_to_constraints(body, "content_body", style_rules)
+                    st = header + '\n' + body
+                else:
+                    st = _truncate_to_constraints(st, "content_body", style_rules)
+            truncated_slides.append(st)
+        slides_text = truncated_slides
 
     slides_bytes = []
 
@@ -672,6 +810,10 @@ def render_carousel_from_template(
                 template, slide_text, slide_type, i, total, brand_name, brand_handle
             )
 
+            # Inject AI-generated background image if available for this slide
+            if slide_images and str(i) in slide_images:
+                html = _inject_slide_image(html, slide_images[str(i)])
+
             page.set_content(html, wait_until="networkidle")
             page.wait_for_timeout(500)
 
@@ -689,9 +831,14 @@ def render_carousel_from_template_async(
     aspect_ratio: str = "1:1",
     brand_name: str = "",
     brand_handle: str = "",
+    style_rules: dict = None,
+    slide_images: dict = None,
 ) -> dict:
     """Wrapper that can be called from Flask thread."""
-    return render_carousel_from_template(text, template_html, aspect_ratio, brand_name, brand_handle)
+    return render_carousel_from_template(
+        text, template_html, aspect_ratio, brand_name, brand_handle,
+        style_rules=style_rules, slide_images=slide_images,
+    )
 
 
 def render_template_preview(

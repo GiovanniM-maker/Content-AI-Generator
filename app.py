@@ -2278,6 +2278,37 @@ def generate_content():
     else:
         opinion_section = "\nNOTA: Questa è una prima bozza. L'utente non ha ancora aggiunto la sua prospettiva personale. Genera il contenuto basandoti sull'articolo, mantenendo il tono dell'utente. L'opinione verrà integrata nella prossima iterazione."
 
+    # --- Template style constraints (inject into prompt if template selected) ---
+    template_id = body.get("template_id", "")
+    style_constraints = ""
+    if format_type == "instagram" and template_id:
+        try:
+            tpl = db.get_user_template_by_id(user_id, template_id)
+            if tpl and tpl.get("style_rules"):
+                rules = tpl["style_rules"]
+                typo = rules.get("typography", {})
+                ct = typo.get("cover_title", {})
+                ch = typo.get("content_header", {})
+                cb = typo.get("content_body", {})
+                li = typo.get("list_items", {})
+                cta = typo.get("cta_text", {})
+                cr = rules.get("content_rules", {})
+                emph = cb.get("emphasis_tag", "strong")
+                body_total = cb.get("max_chars_per_line", 55) * cb.get("max_lines", 8)
+                style_constraints = f"""
+
+VINCOLI TEMPLATE (il testo verrà renderizzato in un template con queste regole — RISPETTALE):
+- Titolo cover: max {ct.get('max_chars', 80)} caratteri
+- Header slide: max {ch.get('max_chars', 60)} caratteri
+- Body slide: max ~{body_total} caratteri totali ({cb.get('max_lines', 8)} righe x ~{cb.get('max_chars_per_line', 55)} car/riga)
+- Liste: max {li.get('max_items', 6)} punti, max {li.get('max_chars_per_item', 50)} car/punto
+- CTA: max {cta.get('max_chars', 150)} caratteri
+- Slide totali consigliate: {cr.get('recommended_slides', '4-7')}
+- Usa <{emph}> per enfasi (il template lo renderizza con stile accento)
+- NON superare MAI i limiti di caratteri — il testo viene troncato se troppo lungo!"""
+        except Exception as e:
+            _log_pipeline("warn", f"Failed to load style constraints for template {template_id}: {e}")
+
     source_mode = article.get("source_mode", "rss")
     if source_mode == "custom_text":
         custom_text = _sanitize_user_input(body.get("custom_text", "") or article.get("custom_text", ""), max_length=5000)
@@ -2286,7 +2317,7 @@ def generate_content():
 {opinion_section}
 
 FORMATO RICHIESTO:
-{fmt}{regen_instruction}
+{fmt}{regen_instruction}{style_constraints}
 
 Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza commenti aggiuntivi."""
     else:
@@ -2303,7 +2334,7 @@ Descrizione: {art_desc}
 {opinion_section}
 
 FORMATO RICHIESTO:
-{fmt}{regen_instruction}
+{fmt}{regen_instruction}{style_constraints}
 
 Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza commenti aggiuntivi."""
 
@@ -2602,12 +2633,37 @@ Descrizione: {art_desc}
     if feedback:
         regen_instruction = f"\n\nISTRUZIONE DI RISCRITTURA (priorità alta, segui questa indicazione):\n{feedback}"
 
+    # --- Template style constraints for newsletter ---
+    template_id = body.get("template_id", "")
+    nl_style_constraints = ""
+    if template_id:
+        try:
+            tpl = db.get_user_template_by_id(user_id, template_id)
+            if tpl and tpl.get("style_rules"):
+                rules = tpl["style_rules"]
+                typo = rules.get("typography", {})
+                h1 = typo.get("h1", {})
+                h2 = typo.get("h2", {})
+                p = typo.get("p", {})
+                cr = rules.get("content_rules", {})
+                nl_style_constraints = f"""
+
+VINCOLI TEMPLATE NEWSLETTER (il testo verrà renderizzato nel template scelto — RISPETTA questi limiti):
+- Titoli H1 (# ): max {h1.get('max_chars', 80)} caratteri
+- Sottotitoli H2 (## ): max {h2.get('max_chars', 60)} caratteri
+- Paragrafi: max ~{p.get('max_chars_per_paragraph', 400)} caratteri ciascuno
+- Il template supporta: callout={'sì' if cr.get('supports_callouts') else 'no'}, blockquote={'sì' if cr.get('supports_blockquotes') else 'no'}, immagini={'sì' if cr.get('supports_images') else 'no'}
+- Sezioni tipiche: {cr.get('max_sections', 5)}
+- Usa markdown standard: # ## ### **bold** *italic* > blockquote - liste"""
+        except Exception as e:
+            _log_pipeline("warn", f"Failed to load NL style constraints for template {template_id}: {e}")
+
     nl_format = _get_prompt("format_newsletter")
     user_msg = f"""Questa settimana l'utente ha selezionato questi topic per la sua newsletter:
 {topics_text}
 
 FORMATO RICHIESTO:
-{nl_format}{regen_instruction}
+{nl_format}{regen_instruction}{nl_style_constraints}
 
 IMPORTANTE: La sezione esclusiva deve essere un valore aggiunto reale.
 
@@ -2754,6 +2810,149 @@ Se il testo non beneficia di immagini, ritorna un array vuoto: []"""
         _log_pipeline("error", f"Newsletter image enrichment error: {e}")
         # Non-fatal: return original text without images
         return jsonify({"text": text, "images_generated": 0})
+
+
+@app.route("/api/carousel/enrich-images", methods=["POST"])
+def carousel_enrich_images():
+    """AI Node: Analyze carousel text and generate style-matching AI images.
+
+    Two-phase pipeline:
+    1. Decision phase (MODEL_CHEAP): analyzes slides, picks which ones (max 2) get images
+    2. Generation phase (MODEL_IMAGE / FLUX.2 Pro): generates images matching template style
+
+    Body: { "text": "---SLIDE--- separated carousel text", "template_id": "uuid" }
+    Returns: { "images": {"0": "url", "2": "url"}, "count": 2 }
+    """
+    user_id = _get_user_id()
+    body = request.json or {}
+    text = body.get("text", "").strip()
+    template_id = body.get("template_id", "")
+    if not text:
+        return jsonify({"error": "Nessun testo fornito"}), 400
+
+    try:
+        # Parse slides from text
+        import re as _re
+        parts = _re.split(r"---CAPTION---", text, flags=_re.IGNORECASE)
+        slide_text = parts[0]
+        raw_slides = [s.strip() for s in _re.split(r"---SLIDE---", slide_text, flags=_re.IGNORECASE) if s.strip()]
+        if not raw_slides:
+            return jsonify({"images": {}, "count": 0})
+
+        # Load template style rules for image style guidance
+        image_style_desc = "Professional, clean, modern style"
+        image_style_avoid = ""
+        if template_id:
+            tpl = db.get_user_template_by_id(user_id, template_id)
+            if tpl and tpl.get("style_rules"):
+                rules = tpl["style_rules"]
+                img_style = rules.get("image_style", {})
+                if img_style.get("description"):
+                    image_style_desc = img_style["description"]
+                avoid_list = img_style.get("avoid", [])
+                if avoid_list:
+                    image_style_avoid = f" Avoid: {', '.join(avoid_list)}."
+
+        # Build slide summary for the AI
+        slide_summaries = []
+        for i, s in enumerate(raw_slides):
+            # Identify slide type from content structure
+            lines = s.strip().split("\n")
+            has_list = any(ln.strip().startswith(("- ", "• ", "✅", "📌", "🔹", "1.", "2.", "3.")) for ln in lines)
+            is_short = len(s) < 100
+            slide_type = "cover" if i == 0 else ("list" if has_list else ("cta" if i == len(raw_slides) - 1 and is_short else "content"))
+            preview = s[:200].replace("\n", " | ")
+            slide_summaries.append(f"Slide {i} [{slide_type}]: {preview}")
+
+        slides_text = "\n".join(slide_summaries)
+
+        # Phase 1: AI decides which slides get images (MODEL_CHEAP, ~$0.001)
+        decision_prompt = f"""Analizza queste slide di un carousel Instagram e decidi quali beneficerebbero di un'immagine di sfondo.
+
+SLIDE:
+{slides_text}
+
+REGOLE:
+- Massimo 2 immagini totali
+- La cover (slide 0) spesso beneficia di un'immagine
+- Slide con contenuto descrittivo/narrativo: sì
+- Slide con liste di punti: raramente (l'immagine distrae)
+- Slide CTA (call to action, ultima): quasi mai
+- Se il carousel ha poche slide (≤3), massimo 1 immagine
+
+Per ogni immagine, fornisci:
+1. "slide_index": indice della slide (0-based)
+2. "prompt": descrizione dettagliata dell'immagine da generare (in inglese, per FLUX.2 Pro)
+
+L'immagine verrà usata come sfondo semi-trasparente dietro il testo, quindi:
+- Deve funzionare come sfondo (non troppo dettagliata, no testo)
+- Deve evocare il tema della slide
+- Stile desiderato: {image_style_desc}
+
+Rispondi SOLO con un JSON array:
+[{{"slide_index": 0, "prompt": "abstract dark gradient with purple light rays, minimal tech aesthetic"}}]
+
+Se nessuna slide beneficia di immagini, ritorna: []"""
+
+        raw = _llm_call(
+            [{"role": "user", "content": decision_prompt}],
+            model=MODEL_CHEAP, temperature=0.3,
+        )
+
+        # Parse the AI's decision
+        cleaned = _strip_fences(raw).strip()
+        try:
+            image_plan = json.loads(cleaned)
+        except json.JSONDecodeError:
+            first = cleaned.find("[")
+            last = cleaned.rfind("]")
+            if first != -1 and last > first:
+                image_plan = json.loads(cleaned[first:last + 1])
+            else:
+                image_plan = []
+
+        if not image_plan or not isinstance(image_plan, list):
+            return jsonify({"images": {}, "count": 0})
+
+        # Limit to 2 images max
+        image_plan = image_plan[:2]
+
+        # Phase 2: Generate images (MODEL_IMAGE / FLUX.2 Pro, ~$0.03/img)
+        images_map = {}
+        storage_tpl_id = template_id if template_id else f"ig_{uuid.uuid4().hex[:8]}"
+
+        for plan in image_plan:
+            slide_idx = plan.get("slide_index", 0)
+            prompt = plan.get("prompt", "")
+            if not prompt or slide_idx < 0 or slide_idx >= len(raw_slides):
+                continue
+
+            # Prefix with template style + suffix for background use
+            full_prompt = (
+                f"{image_style_desc}, {prompt}. "
+                f"High quality, suitable as background image behind text.{image_style_avoid} "
+                f"No text, no watermarks, no logos."
+            )
+
+            url = _generate_and_upload_image(
+                prompt=full_prompt,
+                user_id=user_id,
+                template_id=storage_tpl_id,
+                aspect_ratio="1:1",
+            )
+
+            if url:
+                images_map[str(slide_idx)] = url
+
+        _log_pipeline("info", f"Carousel enriched with {len(images_map)} AI images for {len(raw_slides)} slides")
+        return jsonify({
+            "images": images_map,
+            "count": len(images_map),
+        })
+
+    except Exception as e:
+        _log_pipeline("error", f"Carousel image enrichment error: {e}")
+        return jsonify({"images": {}, "count": 0})
 
 
 @app.route("/api/newsletter/html", methods=["POST"])
@@ -3264,6 +3463,9 @@ def render_carousel_images():
                 "upgrade_required": True,
             }), 403
 
+    # Optional: slide images from AI enrichment
+    slide_images = body.get("slide_images")  # dict: {"0": "url", "2": "url"}
+
     try:
         if template_id:
             # Use custom user template for rendering
@@ -3275,6 +3477,8 @@ def render_carousel_images():
                 text,
                 template_html=tpl["html_content"],
                 aspect_ratio=tpl.get("aspect_ratio", "1:1"),
+                style_rules=tpl.get("style_rules"),
+                slide_images=slide_images,
             )
         else:
             # Default rendering (original palette-based)
@@ -3437,6 +3641,180 @@ def _get_user_plan() -> str:
     user_id = _get_user_id()
     sub = db.get_subscription(user_id)
     return (sub or {}).get("plan", "free")
+
+
+def _extract_style_rules(template_html: str, template_type: str,
+                          aspect_ratio: str = "1:1",
+                          components: dict = None) -> dict:
+    """Analyze template HTML and extract structured style rules via AI.
+
+    Returns a JSON dict with:
+      - visual_style (mood, color_palette, aesthetic)
+      - typography (per-zone: max_chars, font sizes, weights)
+      - layout (viewport, padding, safe zones)
+      - image_style (description for AI image generation matching)
+      - content_rules (recommended slide count, format guidance)
+
+    Uses MODEL_FAST (Gemini 2.5 Flash) — cost: ~$0.002 per extraction.
+    """
+    if not template_html or not template_html.strip():
+        return {}
+
+    # Build context about the template
+    if template_type == "instagram":
+        # Determine viewport from aspect_ratio
+        ar_map = {"1:1": (1080, 1080), "4:3": (1080, 810), "3:4": (1080, 1440)}
+        vw, vh = ar_map.get(aspect_ratio, (1080, 1080))
+
+        system_msg = f"""Sei un analista di template HTML per carousel Instagram.
+Analizza il template e estrai regole di stile strutturate come JSON.
+
+Il template ha viewport {vw}x{vh}px (aspect ratio {aspect_ratio}).
+Il template contiene 4 tipi di slide: cover, content, list, cta.
+
+ANALIZZA:
+1. Stile visivo: colori usati (hex), mood, estetica generale
+2. Tipografia: per ogni zona di testo (cover_title, content_header, content_body, list_items, cta_text):
+   - font-weight usato
+   - font-size range (max e min in px)
+   - max caratteri stimati per riga (basato su font-size e larghezza contenuto)
+   - max righe visibili nell'area disponibile
+   - tag enfasi usato (strong, em, span con classe, etc.)
+3. Layout: padding, margini, larghezza/altezza area sicura per contenuto
+4. Stile immagini: che tipo di immagini AI si abbinerebbero a questo stile
+5. Regole contenuto: quante slide consigliate, formato cover/content/list/cta
+
+RITORNA SOLO un JSON valido con questa struttura esatta:
+{{
+  "visual_style": {{
+    "mood": "descrizione breve del mood visivo",
+    "color_palette": ["#hex1", "#hex2", ...],
+    "aesthetic": "descrizione estetica"
+  }},
+  "typography": {{
+    "cover_title": {{
+      "font_weight": 900, "max_font_size_px": 80, "min_font_size_px": 46,
+      "max_chars": 80, "max_lines": 3, "line_height": 1.12
+    }},
+    "content_header": {{
+      "font_weight": 800, "max_font_size_px": 46, "max_chars": 60, "max_lines": 2
+    }},
+    "content_body": {{
+      "font_weight": 400, "max_font_size_px": 36, "min_font_size_px": 24,
+      "max_chars_per_line": 55, "max_lines": 8, "line_height": 1.55,
+      "emphasis_tag": "strong"
+    }},
+    "list_items": {{ "max_items": 6, "max_chars_per_item": 50 }},
+    "cta_text": {{ "max_chars": 150 }}
+  }},
+  "layout": {{
+    "viewport_width": {vw}, "viewport_height": {vh},
+    "padding_px": 90, "safe_content_width": 900
+  }},
+  "image_style": {{
+    "description": "english description of matching AI image style",
+    "keywords": ["keyword1", "keyword2"],
+    "preferred_aspect_ratio": "{aspect_ratio}",
+    "avoid": ["thing to avoid 1", "thing to avoid 2"]
+  }},
+  "content_rules": {{
+    "recommended_slides": "4-7",
+    "cover_format": "description",
+    "content_format": "description",
+    "list_format": "description",
+    "cta_format": "description"
+  }}
+}}"""
+    else:
+        # Newsletter template
+        components_info = ""
+        if components:
+            components_info = f"\n\nCOMPONENTI CSS DEL TEMPLATE:\n{json.dumps(components, indent=2)}"
+
+        system_msg = f"""Sei un analista di template HTML per newsletter email.
+Analizza il template e estrai regole di stile strutturate come JSON.
+
+Il template ha larghezza massima tipica di 600px per email.{components_info}
+
+ANALIZZA:
+1. Stile visivo: colori principali, mood, estetica
+2. Tipografia: per ogni tipo di elemento (h1, h2, p, li, strong):
+   - font-size usato
+   - max caratteri consigliati
+3. Layout: larghezza max, sezioni tipiche, struttura header/footer
+4. Stile immagini: che tipo di immagini AI si abbinerebbero
+5. Regole contenuto: formati supportati (callout, blockquote, immagini), max sezioni
+
+RITORNA SOLO un JSON valido con questa struttura esatta:
+{{
+  "visual_style": {{
+    "mood": "descrizione breve",
+    "color_palette": ["#hex1", "#hex2", ...],
+    "aesthetic": "descrizione estetica"
+  }},
+  "typography": {{
+    "h1": {{ "max_chars": 80, "font_size": "28px" }},
+    "h2": {{ "max_chars": 60, "font_size": "22px" }},
+    "p": {{ "max_chars_per_paragraph": 400, "font_size": "16px" }},
+    "li": {{ "max_chars": 120 }}
+  }},
+  "layout": {{
+    "max_width": 600, "has_header": true, "has_footer": true,
+    "sections_typical": 3
+  }},
+  "image_style": {{
+    "description": "english description of matching AI image style",
+    "keywords": ["keyword1", "keyword2"],
+    "preferred_aspect_ratio": "16:9",
+    "avoid": ["thing to avoid"]
+  }},
+  "content_rules": {{
+    "supports_callouts": true,
+    "supports_blockquotes": true,
+    "supports_images": true,
+    "max_sections": 5,
+    "format": "markdown"
+  }}
+}}"""
+
+    user_msg = f"TEMPLATE HTML:\n```html\n{template_html[:8000]}\n```"
+
+    try:
+        raw = _llm_call(
+            [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            model=MODEL_FAST,
+            temperature=0.2,
+        )
+
+        # Parse the JSON response
+        cleaned = _strip_fences(raw)
+        # Try direct parse
+        try:
+            rules = json.loads(cleaned)
+        except json.JSONDecodeError:
+            # Find JSON object between first { and last }
+            first = cleaned.find("{")
+            last = cleaned.rfind("}")
+            if first != -1 and last > first:
+                rules = json.loads(cleaned[first:last + 1])
+            else:
+                _log_pipeline("warn", "Style rules extraction: failed to parse JSON")
+                return {}
+
+        # Add metadata
+        from datetime import datetime as dt, timezone as tz
+        rules["extracted_at"] = dt.now(tz.utc).isoformat()
+        rules["extraction_model"] = MODEL_FAST
+
+        _log_pipeline("info", f"Style rules extracted for {template_type} template")
+        return rules
+
+    except Exception as e:
+        _log_pipeline("warn", f"Style rules extraction failed: {e}")
+        return {}
 
 
 @app.route("/api/templates", methods=["GET"])
@@ -3856,10 +4234,30 @@ REGOLE:
             for k in stale_keys:
                 del _preview_cache[k]
 
+        # Extract style rules when HTML changes (async-safe, non-blocking on error)
+        extracted_rules = None
+        if html_changed and new_html.strip():
+            try:
+                extracted_rules = _extract_style_rules(
+                    template_html=new_html,
+                    template_type=template_type,
+                    aspect_ratio=aspect_ratio,
+                    components=new_components if template_type == "newsletter" else None,
+                )
+                if extracted_rules:
+                    db.update_user_template(
+                        template_id=template_id,
+                        user_id=user_id,
+                        style_rules=extracted_rules,
+                    )
+            except Exception as e:
+                _log_pipeline("warn", f"Style rules extraction skipped: {e}")
+
         _log_pipeline("info", f"Template chat: updated {template_id} (html_changed={html_changed})")
         return jsonify({
             "reply": reply_text,
             "html_content": new_html if html_changed else None,
+            "style_rules": extracted_rules,
         })
 
     except Exception as e:
@@ -4121,6 +4519,9 @@ def clone_preset(preset_id):
     body = request.json or {}
     custom_name = body.get("name", f"{preset['name']} (personalizzato)")
 
+    # Copy style_rules from preset if available, otherwise extract
+    preset_rules = preset.get("style_rules") or {}
+
     tpl = db.create_user_template(
         user_id=user_id,
         template_type=preset["template_type"],
@@ -4129,7 +4530,24 @@ def clone_preset(preset_id):
         aspect_ratio=preset.get("aspect_ratio", "1:1"),
         chat_history=[],
         components=preset.get("components", {}),
+        style_rules=preset_rules,
     )
+
+    # If preset had no style_rules, extract them now
+    if not preset_rules and tpl.get("id") and preset["html_content"].strip():
+        try:
+            extracted = _extract_style_rules(
+                template_html=preset["html_content"],
+                template_type=preset["template_type"],
+                aspect_ratio=preset.get("aspect_ratio", "1:1"),
+                components=preset.get("components"),
+            )
+            if extracted:
+                db.update_user_template(tpl["id"], user_id, style_rules=extracted)
+                tpl["style_rules"] = extracted
+        except Exception:
+            pass
+
     _log_pipeline("info", f"Cloned preset '{preset['name']}' as '{custom_name}'")
     return jsonify(tpl), 201
 
@@ -4146,6 +4564,38 @@ def rename_template(template_id):
     if not tpl:
         return jsonify({"error": "Template non trovato"}), 404
     return jsonify(tpl)
+
+
+@app.route("/api/templates/<template_id>/extract-rules", methods=["POST"])
+def extract_template_rules(template_id):
+    """Re-extract style rules from a template's current HTML.
+
+    Useful after manual edits or to refresh outdated rules.
+    """
+    user_id = _get_user_id()
+    tpl = db.get_user_template_by_id(user_id, template_id)
+    if not tpl:
+        return jsonify({"error": "Template non trovato"}), 404
+
+    html_content = tpl.get("html_content", "")
+    if not html_content.strip():
+        return jsonify({"error": "Template vuoto — nessun HTML da analizzare"}), 400
+
+    try:
+        rules = _extract_style_rules(
+            template_html=html_content,
+            template_type=tpl["template_type"],
+            aspect_ratio=tpl.get("aspect_ratio", "1:1"),
+            components=tpl.get("components"),
+        )
+        if rules:
+            db.update_user_template(template_id, user_id, style_rules=rules)
+            return jsonify({"style_rules": rules})
+        else:
+            return jsonify({"error": "Estrazione regole fallita. Riprova."}), 500
+    except Exception as e:
+        _log_pipeline("error", f"Style rules extraction endpoint error: {e}")
+        return jsonify({"error": "Errore nell'estrazione delle regole di stile."}), 500
 
 
 # ---------------------------------------------------------------------------
