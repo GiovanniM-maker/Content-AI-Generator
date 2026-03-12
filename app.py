@@ -3327,8 +3327,15 @@ def template_chat(template_id):
 
     body = request.json or {}
     user_message = _sanitize_user_input(body.get("message", ""), max_length=3000)
-    image_url = body.get("image_url", "")  # Optional: URL of uploaded image
-    if not user_message.strip() and not image_url:
+    # Support both single image_url (legacy) and multiple image_urls
+    image_urls = body.get("image_urls", [])
+    if not image_urls:
+        legacy_url = body.get("image_url", "")
+        if legacy_url:
+            image_urls = [legacy_url]
+    # Limit to 5 images max
+    image_urls = [u for u in image_urls if isinstance(u, str) and u.strip()][:5]
+    if not user_message.strip() and not image_urls:
         return jsonify({"error": "Messaggio vuoto"}), 400
 
     template_type = tpl["template_type"]
@@ -3396,10 +3403,11 @@ Se devi inserire icone (cuore, segnalibro, freccia, stella, ecc.), usa SVG inlin
 - NON usare icon font (FontAwesome, Material Icons) — non sono disponibili
 
 ═══ IMMAGINI E LOGO ═══
-Quando l'utente allega un'immagine:
-- L'immagine viene caricata su Supabase Storage — l'URL è nel formato: https://fepljzntmbtcucbymtgq.supabase.co/storage/v1/object/public/template-assets/...
+L'utente può allegare fino a 5 immagini per messaggio:
+- Le immagini vengono caricate su Supabase Storage — URL nel formato: https://fepljzntmbtcucbymtgq.supabase.co/storage/v1/object/public/template-assets/...
 - GUARDA il messaggio utente: se c'è scritto "[Immagine allegata: URL]", quell'URL è l'immagine caricata
 - Per inserire il logo: <img src="QUELL_URL_ESATTO" style="height: 50px; width: auto;"> — usa l'URL ESATTO, non modificarlo
+- Se l'utente allega più immagini, potrebbe volerle usare per cose diverse (logo, sfondo, icone) — chiedi o deduci dal contesto
 - Se l'utente dice "metti il logo", cerca nei messaggi precedenti l'URL dell'immagine allegata e usalo
 
 ═══ CONSIGLI DI DESIGN ═══
@@ -3467,9 +3475,11 @@ Chiavi supportate:
 - "img" — immagini inline
 
 ═══ IMMAGINI E LOGO ═══
-- Se l'utente allega un'immagine, il messaggio conterrà "[Immagine allegata: URL]"
-- Usa quell'URL ESATTO nel tag <img src="URL"> — non modificarlo
+- L'utente può allegare fino a 5 immagini per messaggio
+- Se l'utente allega immagini, il messaggio conterrà "[Immagine allegata: URL]" per ciascuna
+- Usa quegli URL ESATTI nei tag <img src="URL"> — non modificarli
 - Per logo nel layout: <img src="URL" style="height:40px;width:auto;">
+- Se più immagini, deduci dal contesto quale usare per cosa (logo, banner, sfondo, ecc.)
 
 ═══ FORMATO RISPOSTA (SOLO JSON, OBBLIGATORIO) ═══
 {
@@ -3539,17 +3549,20 @@ REGOLE:
     for msg in recent_history:
         messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # Add the new user message (multimodal if image attached)
-    if image_url:
+    # Add the new user message (multimodal if images attached)
+    if image_urls:
         user_content = []
         if user_message.strip():
             user_content.append({"type": "text", "text": user_message})
-        # Also add a text note with the URL so the model can reference it in HTML
-        user_content.append({"type": "text", "text": f"[URL immagine caricata: {image_url}] — usa questo URL esatto per <img src>"})
-        user_content.append({
-            "type": "image_url",
-            "image_url": {"url": image_url}
-        })
+        # Add text notes with all URLs so the model can reference them in HTML
+        urls_text = "\n".join(f"  {i+1}. {url}" for i, url in enumerate(image_urls))
+        user_content.append({"type": "text", "text": f"[Immagini caricate ({len(image_urls)}):\n{urls_text}\n] — usa questi URL esatti per <img src>"})
+        # Add each image as a visual attachment for the multimodal model
+        for url in image_urls:
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": url}
+            })
         messages.append({"role": "user", "content": user_content})
     else:
         messages.append({"role": "user", "content": user_message})
@@ -3619,8 +3632,9 @@ REGOLE:
 
         # Update chat history (store text only — images referenced by URL in message)
         history_user_content = user_message
-        if image_url:
-            history_user_content = f"{user_message}\n[Immagine allegata: {image_url}]" if user_message.strip() else f"[Immagine allegata: {image_url}]"
+        if image_urls:
+            img_tags = "\n".join(f"[Immagine allegata: {url}]" for url in image_urls)
+            history_user_content = f"{user_message}\n{img_tags}" if user_message.strip() else img_tags
         chat_history.append({"role": "user", "content": history_user_content})
         chat_history.append({"role": "assistant", "content": reply_text})
 

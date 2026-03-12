@@ -2166,6 +2166,11 @@ body::after {
 .tpl-select-card .pers-card-nl-preview { height: 100px; }
 .tpl-select-card .pers-card-nl-preview iframe { transform: scale(0.166); }
 
+/* Multi-image thumbnails in chat bubble */
+.bubble-imgs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.bubble-imgs .bubble-img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); }
+.pers-chat-bubble.user .bubble-img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; }
+
 /* Gallery preview in chat (all 4 slide types) */
 .pers-preview-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; width: 100%; height: 100%; overflow-y: auto; align-content: start; }
 .pers-preview-gallery-item { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #f5f5f5; cursor: pointer; transition: all 0.2s; }
@@ -2182,11 +2187,13 @@ body::after {
 .pers-preview-iframe-wrap.ratio-3-4 iframe { height: 1440px; }
 /* Scale factor: dynamically set via JS based on container width */
 .pers-preview-iframe-wrap iframe { transform: var(--iframe-scale, scale(0.22)); }
-.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap { padding-top: 0; height: 450px; }
-.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap.ratio-3-4 { height: 550px; }
-.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: var(--iframe-scale-expanded, scale(0.37)); }
-.pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+/* Expanded slide: fills full gallery width, preserves aspect ratio */
 .pers-preview-gallery-item.expanded { grid-column: 1 / -1; }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap { padding-top: 100%; } /* 1:1 default */
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap.ratio-4-3 { padding-top: 75%; }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap.ratio-3-4 { padding-top: 133.33%; }
+.pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: var(--iframe-scale-expanded, scale(0.5)); }
+.pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; z-index: 2; }
 
 /* Gallery in template-select modal */
 .tpl-select-card .pers-card-gallery { height: 100px; }
@@ -3147,13 +3154,13 @@ body::after {
           </div>
           <!-- Uploaded image preview (hidden until image selected) -->
           <div id="pers-upload-preview" class="pers-upload-preview" style="display:none;">
-            <img id="pers-upload-thumb" src="" alt="Preview">
+            <div id="pers-upload-thumbs" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
             <span id="pers-upload-name"></span>
             <button class="pers-upload-remove" onclick="removeTemplateUpload()">✕</button>
           </div>
           <div class="pers-chat-input-row">
-            <input type="file" id="pers-file-input" accept="image/*" style="display:none" onchange="handleTemplateFileSelect(this)">
-            <button class="btn btn-secondary pers-upload-btn" onclick="document.getElementById('pers-file-input').click()" title="Allega immagine (logo, screenshot, mockup)">📎</button>
+            <input type="file" id="pers-file-input" accept="image/*" multiple style="display:none" onchange="handleTemplateFileSelect(this)">
+            <button class="btn btn-secondary pers-upload-btn" onclick="document.getElementById('pers-file-input').click()" title="Allega immagini (logo, screenshot, mockup)">📎</button>
             <textarea id="pers-chat-input" class="pers-chat-input" placeholder="Descrivi il design che vuoi..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTemplateMessage();}"></textarea>
             <button id="pers-send-btn" class="btn btn-primary pers-send-btn" onclick="sendTemplateMessage()">Invia</button>
           </div>
@@ -8844,62 +8851,88 @@ async function openTemplateChat(templateId) {
 }
 
 // ---- Image upload state ----
-let _persUploadedImageUrl = null;
-let _persUploadedFile = null;
+let _persUploadedFiles = [];  // Array of File objects
 
 function handleTemplateFileSelect(inputEl) {
-  const file = inputEl.files[0];
-  if (!file) return;
-  if (file.size > 2 * 1024 * 1024) {
-    toast('Immagine troppo grande. Massimo 2MB.');
-    inputEl.value = '';
+  const files = Array.from(inputEl.files);
+  if (!files.length) return;
+  // Validate each file
+  const maxSize = 2 * 1024 * 1024;
+  const valid = [];
+  for (const f of files) {
+    if (f.size > maxSize) { toast(`${f.name}: troppo grande. Max 2MB.`); continue; }
+    valid.push(f);
+  }
+  if (!valid.length) { inputEl.value = ''; return; }
+  // Append to existing selection (max 5 total)
+  _persUploadedFiles = _persUploadedFiles.concat(valid).slice(0, 5);
+  if (_persUploadedFiles.length + valid.length > 5) toast('Massimo 5 immagini alla volta.');
+  _renderUploadThumbs();
+}
+
+function _renderUploadThumbs() {
+  const container = document.getElementById('pers-upload-thumbs');
+  const preview = document.getElementById('pers-upload-preview');
+  const nameEl = document.getElementById('pers-upload-name');
+  if (!_persUploadedFiles.length) {
+    if (preview) preview.style.display = 'none';
     return;
   }
-  _persUploadedFile = file;
-  // Show preview
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('pers-upload-thumb').src = e.target.result;
-    document.getElementById('pers-upload-name').textContent = file.name;
-    document.getElementById('pers-upload-preview').style.display = 'flex';
-  };
-  reader.readAsDataURL(file);
+  preview.style.display = 'flex';
+  nameEl.textContent = _persUploadedFiles.length === 1 ? _persUploadedFiles[0].name : `${_persUploadedFiles.length} immagini`;
+  container.innerHTML = '';
+  _persUploadedFiles.forEach((f, i) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.alt = f.name;
+      img.style.cssText = 'width:36px;height:36px;object-fit:cover;border-radius:4px;cursor:pointer;';
+      img.title = `${f.name} — clicca per rimuovere`;
+      img.onclick = () => { _persUploadedFiles.splice(i, 1); _renderUploadThumbs(); };
+      container.appendChild(img);
+    };
+    reader.readAsDataURL(f);
+  });
 }
 
 function removeTemplateUpload() {
-  _persUploadedFile = null;
-  _persUploadedImageUrl = null;
+  _persUploadedFiles = [];
   const preview = document.getElementById('pers-upload-preview');
   if (preview) preview.style.display = 'none';
   const fileInput = document.getElementById('pers-file-input');
   if (fileInput) fileInput.value = '';
+  const thumbs = document.getElementById('pers-upload-thumbs');
+  if (thumbs) thumbs.innerHTML = '';
 }
 
-async function _uploadTemplateFile() {
-  // Upload the pending file to Supabase Storage, return public URL
-  if (!_persUploadedFile || !_persCurrentId) return null;
-  const formData = new FormData();
-  formData.append('file', _persUploadedFile);
-  try {
-    const res = await fetch(`/api/templates/${_persCurrentId}/upload`, {
-      method: 'POST', body: formData
-    });
-    const data = await res.json();
-    if (res.ok && data.url) return data.url;
-    toast(data.error || 'Errore upload immagine');
-    return null;
-  } catch(e) {
-    toast('Errore upload immagine');
-    return null;
+async function _uploadTemplateFiles() {
+  // Upload all pending files to Supabase Storage, return array of public URLs
+  if (!_persUploadedFiles.length || !_persCurrentId) return [];
+  const urls = [];
+  for (const file of _persUploadedFiles) {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch(`/api/templates/${_persCurrentId}/upload`, {
+        method: 'POST', body: formData
+      });
+      const data = await res.json();
+      if (res.ok && data.url) urls.push(data.url);
+      else toast(data.error || `Errore upload ${file.name}`);
+    } catch(e) {
+      toast(`Errore upload ${file.name}`);
+    }
   }
+  return urls;
 }
 
 async function sendTemplateMessage() {
   if (_persSending) return; // prevent double-send
   const input = document.getElementById('pers-chat-input');
   const message = input.value.trim();
-  const hasImage = !!_persUploadedFile;
-  if (!message && !hasImage) return;
+  const hasImages = _persUploadedFiles.length > 0;
+  if (!message && !hasImages) return;
   if (!_persCurrentId) return;
   _persSending = true;
 
@@ -8907,22 +8940,25 @@ async function sendTemplateMessage() {
   sendBtn.disabled = true;
   input.value = '';
 
-  // Add user bubble (with optional image thumbnail)
+  // Add user bubble (with optional image thumbnails)
   const msgContainer = document.getElementById('pers-chat-messages');
   const userBubble = document.createElement('div');
   userBubble.className = 'pers-chat-bubble user';
-  if (hasImage) {
-    const thumbSrc = document.getElementById('pers-upload-thumb').src;
-    userBubble.innerHTML = `${message ? esc(message) + '<br>' : ''}<img class="bubble-img" src="${thumbSrc}" alt="Immagine allegata">`;
-  } else {
-    userBubble.textContent = message;
+  let bubbleHtml = message ? esc(message) : '';
+  if (hasImages) {
+    const thumbs = _persUploadedFiles.map(f => URL.createObjectURL(f));
+    bubbleHtml += (bubbleHtml ? '<br>' : '') + '<div class="bubble-imgs">' +
+      thumbs.map(src => `<img class="bubble-img" src="${src}" alt="Immagine allegata">`).join('') + '</div>';
   }
+  userBubble.innerHTML = bubbleHtml || '';
+  if (!hasImages && message) userBubble.textContent = message;
   msgContainer.appendChild(userBubble);
 
   // Add loading bubble with animated dots
   const loadBubble = document.createElement('div');
   loadBubble.className = 'pers-chat-bubble bot loading';
-  const loadText = hasImage ? 'Upload immagine e analisi' : 'Sto lavorando al template';
+  const imgCount = _persUploadedFiles.length;
+  const loadText = hasImages ? `Upload ${imgCount} immagin${imgCount === 1 ? 'e' : 'i'} e analisi` : 'Sto lavorando al template';
   loadBubble.innerHTML = loadText + ' <span class="typing-dots"><span></span><span></span><span></span></span>';
   msgContainer.appendChild(loadBubble);
   msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -8937,15 +8973,16 @@ async function sendTemplateMessage() {
     previewCol.appendChild(previewOverlay);
   }
 
-  // Upload image first if present
-  let imageUrl = null;
-  if (hasImage) {
-    imageUrl = await _uploadTemplateFile();
+  // Upload images first if present
+  let imageUrls = [];
+  if (hasImages) {
+    imageUrls = await _uploadTemplateFiles();
     removeTemplateUpload();
-    if (!imageUrl && !message) {
+    if (!imageUrls.length && !message) {
       loadBubble.remove();
       if (previewOverlay) previewOverlay.remove();
       sendBtn.disabled = false;
+      _persSending = false;
       return;
     }
     loadBubble.innerHTML = 'Sto lavorando al template <span class="typing-dots"><span></span><span></span><span></span></span>';
@@ -8953,7 +8990,7 @@ async function sendTemplateMessage() {
 
   try {
     const payload = { message };
-    if (imageUrl) payload.image_url = imageUrl;
+    if (imageUrls.length) payload.image_urls = imageUrls;
 
     const res = await fetch(`/api/templates/${_persCurrentId}/chat`, {
       method: 'POST',
@@ -8995,6 +9032,33 @@ async function sendTemplateMessage() {
   input.focus();
 }
 
+// Example content for IG preview placeholders (matches backend's render_template_preview)
+const _previewSampleContent = {
+  cover: { COVER_TITLE: '5 Strategie di Marketing', COVER_SUBTITLE: 'che Cambieranno il Tuo Business nel 2026' },
+  content: { CONTENT_HEADER: 'Conosci il tuo pubblico', CONTENT_BODY: '<p>Prima di qualsiasi strategia, devi capire chi sono i tuoi clienti. <strong>Analizza i dati</strong>, studia i competitor e crea delle buyer personas dettagliate.</p>' },
+  list: { LIST_HEADER: 'Strumenti essenziali', LIST_ITEMS: '<li><strong>Google Analytics</strong> per il traffico</li><li><strong>Canva</strong> per la grafica</li><li><strong>Buffer</strong> per la programmazione</li><li><strong>ChatGPT</strong> per i copy</li><li><strong>Notion</strong> per l\'organizzazione</li>' },
+  cta: { CTA_TEXT: 'Ti è stato utile questo contenuto?<br>Salva per dopo e condividi', CTA_BUTTON: 'Segui per altri tips' },
+};
+
+function _fillPreviewPlaceholders(html, slideType) {
+  if (!html) return html;
+  const sample = _previewSampleContent[slideType] || {};
+  // Type-specific placeholders
+  Object.entries(sample).forEach(([key, val]) => {
+    html = html.split('{{' + key + '}}').join(val);
+  });
+  // Common placeholders
+  const total = 4;
+  const idx = { cover: 0, content: 1, list: 2, cta: 3 }[slideType] || 0;
+  html = html.split('{{SLIDE_NUM}}').join(String(idx + 1));
+  html = html.split('{{TOTAL_SLIDES}}').join(String(total));
+  html = html.split('{{BRAND_NAME}}').join('Il Tuo Brand');
+  html = html.split('{{BRAND_HANDLE}}').join('@tuobrand');
+  // Legacy fallback
+  html = html.split('{{SLIDE_CONTENT}}').join(Object.values(sample).join('<br>'));
+  return html;
+}
+
 async function updateTemplatePreview() {
   const container = document.getElementById('pers-preview-container');
   if (!container || !_persCurrentId) return;
@@ -9017,13 +9081,12 @@ async function updateTemplatePreview() {
     return;
   }
 
-  // For IG: render all 4 slide types as client-side iframes (no Playwright needed)
+  // For IG: render all 4 slide types as client-side iframes
   let templates = {};
   try {
     const parsed = JSON.parse(_persCurrentHtml);
     if (parsed && typeof parsed === 'object') templates = parsed;
   } catch(e) {
-    // Legacy single HTML — show as single iframe
     templates = { cover: _persCurrentHtml, content: _persCurrentHtml, list: _persCurrentHtml, cta: _persCurrentHtml };
   }
 
@@ -9038,20 +9101,24 @@ async function updateTemplatePreview() {
   // Determine ratio CSS class from _persCurrentRatio
   const ratioCls = _persCurrentRatio === '4:3' ? 'ratio-4-3' : _persCurrentRatio === '3:4' ? 'ratio-3-4' : '';
 
-  container.innerHTML = `<div class="pers-preview-gallery">
+  container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
     ${types.map(t => templates[t] ? `
-      <div class="pers-preview-gallery-item" onclick="_expandPreviewSlide('${t}', this)">
+      <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
         <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
         <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
       </div>` : '').join('')}
   </div>`;
-  // Set srcdoc via JS to avoid HTML attribute escaping issues
+
+  // Fill placeholders with sample content and set srcdoc
   container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]').forEach(iframe => {
     const st = iframe.dataset.slideType;
-    if (templates[st]) iframe.srcdoc = templates[st];
+    if (templates[st]) {
+      iframe.srcdoc = _fillPreviewPlaceholders(templates[st], st);
+    }
   });
+
   // Calculate dynamic scale based on container width
-  _recalcPreviewScale();
+  setTimeout(_recalcPreviewScale, 50);
 }
 
 function _recalcPreviewScale() {
@@ -9061,8 +9128,10 @@ function _recalcPreviewScale() {
     if (!w) return;
     const scale = w / 1080;
     wrap.style.setProperty('--iframe-scale', `scale(${scale.toFixed(4)})`);
-    // Expanded scale: use a bigger container reference
-    const expandedScale = Math.min((w * 2.2) / 1080, 0.5);
+    // Expanded scale: item takes full gallery width so use the gallery container width
+    const gallery = wrap.closest('.pers-preview-gallery');
+    const expandedW = gallery ? (gallery.clientWidth - 24) : w * 2; // subtract padding
+    const expandedScale = expandedW / 1080;
     wrap.style.setProperty('--iframe-scale-expanded', `scale(${expandedScale.toFixed(4)})`);
   });
 }
