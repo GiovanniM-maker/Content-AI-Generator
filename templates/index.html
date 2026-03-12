@@ -551,6 +551,20 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Global micro-loading overlay — used for short async operations */
+.global-loader {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(255,255,255,0.6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+.global-loader.active { display: flex; }
+.global-loader .gl-spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+.global-loader .gl-text { font-size: 13px; font-weight: 500; color: var(--text); }
+
 /* Generation overlay */
 .gen-overlay {
   display: none; position: fixed; inset: 0;
@@ -1309,6 +1323,11 @@ body.is-admin .admin-only { display: flex; }
 .nl-view-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .nl-loading { display: flex; align-items: center; justify-content: center; padding: 60px; gap: 12px; }
 .nl-loading .spinner { width: 24px; height: 24px; }
+/* Inline newsletter auto-preview iframe */
+.nl-auto-iframe {
+  width: 100%; border: none; min-height: 400px; max-height: 600px;
+  display: block; background: #fff;
+}
 
 /* ====== AMBIENT BACKGROUND BLOBS ====== */
 body::before {
@@ -3402,9 +3421,11 @@ async function doRegister() {
 }
 
 async function doLogout() {
+  showLoading('Disconnessione...');
   try {
     await fetch('/auth/logout', { method: 'POST' });
   } catch {}
+  hideLoading();
   stopNotifPolling();
   clearAuthData();
   isAdmin = false;
@@ -3571,6 +3592,8 @@ function closePricing() {
 }
 
 async function loadPlans() {
+  const grid = document.getElementById('pricing-grid');
+  if (grid) grid.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento piani...</div>';
   try {
     const resp = await fetch('/api/plans');
     if (!resp.ok) return;
@@ -3620,6 +3643,7 @@ function renderPricingGrid(plans, currentPlan) {
 }
 
 async function startCheckout(plan) {
+  showLoading('Preparazione pagamento...');
   try {
     const resp = await fetch('/api/checkout', {
       method: 'POST',
@@ -3627,22 +3651,26 @@ async function startCheckout(plan) {
       body: JSON.stringify({ plan: plan }),
     });
     const data = await resp.json();
+    hideLoading();
     if (data.url) {
       window.location.href = data.url;
     } else if (data.error) {
       alert(data.error);
     }
   } catch (e) {
+    hideLoading();
     alert('Errore nella creazione della sessione di pagamento');
   }
 }
 
 async function openBillingPortal() {
+  showLoading('Apertura portale...');
   try {
     const resp = await fetch('/api/billing/portal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
+    hideLoading();
     const data = await resp.json();
     if (data.url) {
       window.open(data.url, '_blank');
@@ -4061,6 +4089,25 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ---- Global loading helpers ----
+function showLoading(msg) {
+  const el = document.getElementById('global-loader');
+  document.getElementById('gl-text').textContent = msg || '';
+  el.classList.add('active');
+}
+function hideLoading() {
+  document.getElementById('global-loader').classList.remove('active');
+}
+/** Set a button into loading state; returns a restore function */
+function btnLoading(btn, loadingText) {
+  if (!btn) return () => {};
+  const orig = btn.innerHTML;
+  const wasDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px;border-top-color:currentColor;"></span>${loadingText || ''}`;
+  return () => { btn.innerHTML = orig; btn.disabled = wasDisabled; };
 }
 
 // ---- Weekly Status Banner ----
@@ -4690,11 +4737,17 @@ function renderGeneratedContent() {
       <div class="content-col newsletter ${nlApproved ? 'approved' : ''}" data-format="newsletter" data-idx="0">
         <h3>Newsletter</h3>
         <div class="col-meta">${nlWords} parole &middot; ${nlText.length} caratteri</div>
-        <textarea id="content-newsletter" oninput="updateCount('newsletter')">${esc(nlText)}</textarea>
+        <div id="nl-auto-preview" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;">
+          <div class="loading" style="justify-content:center;padding:30px;"><div class="spinner"></div>Rendering newsletter con template...</div>
+        </div>
+        <details style="margin-bottom:8px;">
+          <summary style="cursor:pointer;font-size:12px;color:var(--text2);user-select:none;">📝 Mostra/modifica testo originale</summary>
+          <textarea id="content-newsletter" oninput="updateCount('newsletter')" style="margin-top:8px;">${esc(nlText)}</textarea>
+        </details>
         <div class="col-actions">
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-          <button class="btn btn-primary btn-small" onclick="copyC('newsletter')">Copia</button>
-          <button class="btn btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="openNlPreview()">👁 Anteprima HTML</button>
+          <button class="btn btn-primary btn-small" onclick="copyNlHtml()">Copia HTML</button>
+          <button class="btn btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="openNlPreview()">👁 Anteprima completa</button>
           <button class="btn btn-approve btn-small ${nlApproved ? 'approved' : ''}" onclick="approveContent('newsletter', this)">${nlApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
         <div class="feedback-row" id="fb-newsletter">
@@ -4726,6 +4779,11 @@ function renderGeneratedContent() {
   // Trigger image rendering for IG carousels
   if (platforms.includes('instagram')) {
     renderAllCarouselImages();
+  }
+
+  // Auto-render newsletter HTML with template
+  if (platforms.includes('newsletter') && currentContent['newsletter']) {
+    autoRenderNlPreview();
   }
 }
 
@@ -4823,7 +4881,9 @@ async function reRenderCarousel(key, artIdx) {
 async function downloadCarousel(key) {
   const images = carouselImages[key];
   if (!images || !images.length) { toast('Nessuna immagine da scaricare'); return; }
+  showLoading(`Scaricando ${images.length} slide...`);
   for (let i = 0; i < images.length; i++) {
+    document.getElementById('gl-text').textContent = `Scaricando slide ${i+1}/${images.length}...`;
     const resp = await fetch(images[i]);
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
@@ -4834,6 +4894,7 @@ async function downloadCarousel(key) {
     URL.revokeObjectURL(url);
     await new Promise(r => setTimeout(r, 200));
   }
+  hideLoading();
   toast(`${images.length} slide scaricate!`);
 }
 
@@ -4981,6 +5042,8 @@ function regenerateNewsletter() {
       }).catch(() => {});
     }
     saveSessionContent();
+    // Re-render preview with new content
+    autoRenderNlPreview();
   })
   .catch(err => {
     toast('Errore: ' + err.message);
@@ -5010,6 +5073,8 @@ function scheduleContent(platform, idx) {
     (selectedArticles[idx] ? selectedArticles[idx].article.title : 'Contenuto');
   const contentPreview = (currentContent[key] || '').substring(0, 200);
 
+  const schedBtn = document.querySelector(`#sched-${key}`)?.closest('.schedule-row')?.querySelector('button');
+  const restoreBtn = btnLoading(schedBtn, 'Programmando...');
   fetch('/api/schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -5024,6 +5089,7 @@ function scheduleContent(platform, idx) {
   })
   .then(safeJson)
   .then(data => {
+    restoreBtn();
     // datetime-local gives "YYYY-MM-DDTHH:MM" — parse manually if needed
     let dateStr;
     try {
@@ -5039,7 +5105,7 @@ function scheduleContent(platform, idx) {
     dtInput.value = '';
     loadWeeklyBanner();
   })
-  .catch(err => toast('Errore: ' + err.message));
+  .catch(err => { restoreBtn(); toast('Errore: ' + err.message); });
 }
 
 // ---- Bulk Scheduling ----
@@ -5071,6 +5137,7 @@ async function bulkSchedule() {
     return;
   }
 
+  showLoading(`Programmando ${items.length} contenuti...`);
   try {
     const resp = await fetch('/api/schedule/bulk', {
       method: 'POST',
@@ -5088,10 +5155,12 @@ async function bulkSchedule() {
       dateStr = dt.toLocaleString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     } catch(e) { dateStr = scheduledAt; }
 
+    hideLoading();
     toast(`📅 ${resp.count || items.length} contenuti programmati per ${dateStr}!`);
     dtInput.value = '';
     loadWeeklyBanner();
   } catch(err) {
+    hideLoading();
     toast('Errore: ' + err.message);
   }
 }
@@ -5131,6 +5200,9 @@ function getWeekDays(offset) {
 }
 
 async function loadSchedule() {
+  const cal = document.getElementById('schedule-calendar');
+  const list = document.getElementById('schedule-list');
+  if (cal) cal.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento calendario...</div>';
   try {
     scheduleData = await fetch('/api/schedule').then(r => r.json());
     renderScheduleView();
@@ -5245,14 +5317,18 @@ function renderScheduleList() {
 
 async function deleteSchedule(id) {
   if (!confirm('Sei sicuro di voler eliminare questa programmazione?\n\nQuesta azione è irreversibile.')) return;
+  showLoading('Eliminazione...');
   await fetch('/api/schedule/' + id, { method: 'DELETE' });
+  hideLoading();
   toast('Programmazione rimossa');
   loadSchedule();
   loadWeeklyBanner();
 }
 
 async function markPublished(id) {
+  showLoading('Aggiornamento...');
   await fetch('/api/schedule/' + id + '/publish', { method: 'POST' });
+  hideLoading();
   toast('Segnato come pubblicato!');
   loadSchedule();
   loadWeeklyBanner();
@@ -5260,8 +5336,10 @@ async function markPublished(id) {
 
 // ---- Calendar detail modal ----
 async function openCalDetail(itemId) {
+  showLoading('Caricamento dettagli...');
   try {
     const data = await fetch('/api/schedule/' + itemId + '/content').then(r => r.json());
+    hideLoading();
     if (data.error) { toast('Errore: ' + data.error); return; }
 
     const platNames = { linkedin: '💼 LinkedIn', instagram: '📸 Instagram', twitter: '🐦 Twitter/X', video_script: '🎬 Video Script', newsletter: '📧 Newsletter' };
@@ -5292,6 +5370,7 @@ async function openCalDetail(itemId) {
 
     document.getElementById('cal-detail-modal').classList.add('active');
   } catch (err) {
+    hideLoading();
     toast('Errore: ' + err.message);
   }
 }
@@ -5504,9 +5583,11 @@ function toggleHistoryStatus(chip) {
 }
 
 function openSession(sessionId) {
+  showLoading('Caricamento sessione...');
   fetch('/api/sessions')
     .then(r => r.json())
     .then(sessions => {
+      hideLoading();
       const s = sessions.find(x => x.id === sessionId);
       if (!s) return;
       currentSession = s;
@@ -5665,14 +5746,17 @@ async function _downloadAllSlides(btn, key) {
 // ---- Delete session ----
 async function deleteSession(sessionId, title) {
   if (!confirm(`Eliminare la sessione "${title}"?\n\nQuesta azione è irreversibile.`)) return;
+  showLoading('Eliminazione sessione...');
   try {
     const resp = await fetch('/api/sessions/' + sessionId, { method: 'DELETE' });
     const data = await resp.json();
+    hideLoading();
     if (data.error) { toast('Errore: ' + data.error); return; }
     toast('Sessione eliminata!');
     loadHistory();
     loadWeeklyBanner();
   } catch (err) {
+    hideLoading();
     toast('Errore: ' + err.message);
   }
 }
@@ -5780,6 +5864,8 @@ async function loadNewspaperView() {
     } catch(e) { /* proceed anyway */ }
   }
   // Load articles
+  const dashArt = document.getElementById('dash-articles');
+  if (dashArt && !dashLoaded) dashArt.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento articoli...</div>';
   try {
     dashArticles = await fetch('/api/articles?min_score=0').then(r => r.json());
     renderNewspaper();
@@ -6629,30 +6715,34 @@ async function addFeed(category) {
 
   if (!url) { toast('Inserisci URL del feed!'); return; }
 
+  showLoading('Aggiungendo feed...');
   try {
     const resp = await fetch('/api/feeds/config/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category, url, name }),
     }).then(safeJson);
+    hideLoading();
     if (resp.error) { toast(resp.error); return; }
     feedsConfig = resp.config;
     renderFeedsSettings();
     toast('Feed aggiunto!');
-  } catch(err) { toast('Errore: ' + err.message); }
+  } catch(err) { hideLoading(); toast('Errore: ' + err.message); }
 }
 
 async function removeFeed(category, url) {
+  showLoading('Rimuovendo feed...');
   try {
     const resp = await fetch('/api/feeds/config/remove', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category, url }),
     }).then(safeJson);
+    hideLoading();
     feedsConfig = resp.config;
     renderFeedsSettings();
     toast('Feed rimosso');
-  } catch(err) { toast('Errore: ' + err.message); }
+  } catch(err) { hideLoading(); toast('Errore: ' + err.message); }
 }
 
 async function addCategory() {
@@ -6660,31 +6750,35 @@ async function addCategory() {
   const name = input.value.trim();
   if (!name) { toast('Inserisci nome categoria!'); return; }
 
+  showLoading('Aggiungendo categoria...');
   try {
     const resp = await fetch('/api/feeds/config/add-category', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category: name }),
     }).then(safeJson);
+    hideLoading();
     feedsConfig = resp.config;
     renderFeedsSettings();
     input.value = '';
     toast('Categoria aggiunta!');
-  } catch(err) { toast('Errore: ' + err.message); }
+  } catch(err) { hideLoading(); toast('Errore: ' + err.message); }
 }
 
 async function removeCategory(name) {
   if (!confirm(`Eliminare la categoria "${name}" e tutti i suoi feed?`)) return;
+  showLoading('Eliminando categoria...');
   try {
     const resp = await fetch('/api/feeds/config/remove-category', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category: name }),
     }).then(safeJson);
+    hideLoading();
     feedsConfig = resp.config;
     renderFeedsSettings();
     toast('Categoria eliminata');
-  } catch(err) { toast('Errore: ' + err.message); }
+  } catch(err) { hideLoading(); toast('Errore: ' + err.message); }
 }
 
 // ---- Feed Catalog ----
@@ -6765,27 +6859,31 @@ async function importSelectedCatalog() {
   // Group by category
   const catSet = new Set();
   cbs.forEach(cb => catSet.add(cb.dataset.cat));
+  showLoading('Importazione feed...');
   try {
     const resp = await fetch('/api/feeds/catalog/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ categories: Array.from(catSet) }),
     }).then(safeJson);
+    hideLoading();
     if (resp.error) { toast(resp.error); return; }
     feedsConfig = resp.config || feedsConfig;
     renderFeedsSettings();
     catalogData = null;
     await loadFeedsCatalog();
     toast(`✅ ${resp.added} feed importati!`);
-  } catch(err) { toast('Errore importazione: ' + err.message); }
+  } catch(err) { hideLoading(); toast('Errore importazione: ' + err.message); }
 }
 
 async function testNtfy() {
+  showLoading('Invio notifica di test...');
   try {
     const resp = await fetch('/api/ntfy/test', { method: 'POST' }).then(safeJson);
+    hideLoading();
     if (resp.error) { toast('Errore: ' + resp.error); return; }
     toast('🔔 Notifica di test inviata!');
-  } catch(err) { toast('Errore: ' + err.message); }
+  } catch(err) { hideLoading(); toast('Errore: ' + err.message); }
 }
 
 // ---- Screen 7: Monitor ----
@@ -7285,6 +7383,42 @@ function closeNlPreview() {
   document.getElementById('nl-preview-modal').classList.remove('active');
 }
 
+// Auto-render newsletter preview inline (called after generation)
+async function autoRenderNlPreview() {
+  const container = document.getElementById('nl-auto-preview');
+  if (!container) return;
+  const ta = document.getElementById('content-newsletter');
+  if (!ta || !ta.value.trim()) {
+    container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text2);font-size:13px;">Nessun contenuto newsletter da visualizzare.</p>';
+    cachedNlHtml = '';
+    return;
+  }
+  // Show loading
+  container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:30px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">Rendering newsletter con template...</span></div>';
+  try {
+    const nlPayload = { text: ta.value };
+    const nlTplId = (window._selectedGenTemplates || {}).newsletter;
+    if (nlTplId) nlPayload.template_id = nlTplId;
+    const resp = await fetch('/api/newsletter/html', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nlPayload),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    cachedNlHtml = data.html;
+    const iframe = document.createElement('iframe');
+    iframe.className = 'nl-auto-iframe';
+    iframe.sandbox = 'allow-same-origin';
+    container.innerHTML = '';
+    container.appendChild(iframe);
+    iframe.srcdoc = cachedNlHtml;
+  } catch (err) {
+    container.innerHTML = `<p style="padding:20px;text-align:center;color:#e74c3c;font-size:13px;">Errore rendering: ${err.message}</p>`;
+    cachedNlHtml = '';
+  }
+}
+
 function nlSwitchView(view, btn) {
   const frame = document.getElementById('nl-preview-frame');
   const srcView = document.getElementById('nl-source-view');
@@ -7365,6 +7499,8 @@ const _cachedPreviewUrls = {};
 let _templateSelectCallback = null;
 
 async function loadPersonalizzazione() {
+  const grid = document.getElementById('pers-templates-grid');
+  if (grid) grid.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento template...</div>';
   try {
     const res = await fetch('/api/templates');
     if (!res.ok) return;
@@ -7605,6 +7741,7 @@ function selectAspectRatio(ratio) {
 async function createNewTemplateFromWizard() {
   if (_persNavigating) return;
   _persNavigating = true;
+  showLoading('Creazione template...');
   const name = document.getElementById('pers-template-name').value.trim() || 'Senza nome';
   try {
     const res = await fetch('/api/templates', {
@@ -7613,18 +7750,21 @@ async function createNewTemplateFromWizard() {
       body: JSON.stringify({ template_type: _persCurrentType, name, aspect_ratio: _persCurrentRatio })
     });
     const data = await res.json();
+    hideLoading();
     if (!res.ok) { toast(data.error || 'Errore'); _persNavigating = false; return; }
     toast('Template creato!');
-    _persNavigating = false; // release before openTemplateChat re-acquires
+    _persNavigating = false;
     openTemplateChat(data.id);
-  } catch(e) { toast('Errore nella creazione'); _persNavigating = false; }
+  } catch(e) { hideLoading(); toast('Errore nella creazione'); _persNavigating = false; }
 }
 
 async function openTemplateChat(templateId) {
   if (_persNavigating) return; // prevent double-click
   _persNavigating = true;
+  showLoading('Apertura template...');
   try {
     const res = await fetch(`/api/templates/${templateId}`);
+    hideLoading();
     if (!res.ok) { toast('Template non trovato'); _persNavigating = false; return; }
     const tpl = await res.json();
     _persCurrentId = tpl.id;
@@ -7661,7 +7801,7 @@ async function openTemplateChat(templateId) {
     updateTemplatePreview();
 
     showPersScreen('pers-chat');
-  } catch(e) { toast('Errore nel caricamento'); }
+  } catch(e) { hideLoading(); toast('Errore nel caricamento'); }
   finally { _persNavigating = false; }
 }
 
@@ -7897,11 +8037,13 @@ function persPreviewMode(mode, btn) {
 
 async function deleteTemplate(id, name) {
   if (!confirm(`Eliminare il template "${name}"?`)) return;
+  showLoading('Eliminazione template...');
   try {
     const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+    hideLoading();
     if (res.ok) { toast('Template eliminato'); loadPersonalizzazione(); }
     else toast('Errore nell\'eliminazione');
-  } catch(e) { toast('Errore'); }
+  } catch(e) { hideLoading(); toast('Errore'); }
 }
 
 function deleteCurrentTemplate() {
@@ -7914,6 +8056,7 @@ function deleteCurrentTemplate() {
 async function clonePreset(presetId, name) {
   if (_persNavigating) return; // prevent double-click
   _persNavigating = true;
+  showLoading('Clonazione template...');
   try {
     const res = await fetch(`/api/templates/clone/${presetId}`, {
       method: 'POST',
@@ -7921,11 +8064,12 @@ async function clonePreset(presetId, name) {
       body: JSON.stringify({ name: `${name} (personalizzato)` })
     });
     const data = await res.json();
+    hideLoading();
     if (!res.ok) { toast(data.error || 'Errore'); _persNavigating = false; return; }
     toast('Template clonato!');
-    _persNavigating = false; // release before openTemplateChat re-acquires
+    _persNavigating = false;
     openTemplateChat(data.id);
-  } catch(e) { toast('Errore nella clonazione'); _persNavigating = false; }
+  } catch(e) { hideLoading(); toast('Errore nella clonazione'); _persNavigating = false; }
 }
 
 // ---- Template selection for Crea flow ----
@@ -8044,6 +8188,12 @@ function skipTemplateSelection() {
 initAuth();
 checkPaymentStatus();
 </script>
+
+<!-- Global micro-loader -->
+<div id="global-loader" class="global-loader">
+  <div class="gl-spinner"></div>
+  <div class="gl-text" id="gl-text"></div>
+</div>
 
 <!-- Generation overlay -->
 <div id="gen-overlay" class="gen-overlay">
