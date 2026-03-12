@@ -2126,17 +2126,9 @@ body::after {
 .pers-upload-preview span { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pers-upload-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 4px; }
 .pers-upload-remove:hover { color: #e74c3c; }
-/* AI Image generation bar */
-.pers-imagegen-bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; margin-bottom: 4px; background: linear-gradient(135deg, rgba(108,92,231,0.08), rgba(0,206,209,0.08)); border: 1px solid var(--accent); border-radius: 10px; }
-.pers-imagegen-input { flex: 1; padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; background: var(--card-bg); color: var(--fg); font-family: inherit; }
-.pers-imagegen-input:focus { outline: none; border-color: var(--accent); }
-.pers-imagegen-bar .btn-sm { padding: 6px 12px; font-size: 11px; }
-.nl-enrich-toggle, .ig-enrich-toggle { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer; user-select:none; transition: all .2s; background: var(--card-bg); border: 1px solid var(--border); color: var(--text2); }
-.nl-enrich-toggle:hover, .ig-enrich-toggle:hover { border-color: var(--accent); }
-.nl-enrich-toggle.active, .ig-enrich-toggle.active { background: linear-gradient(135deg, rgba(108,92,231,0.12), rgba(0,206,209,0.12)); border-color: var(--accent); color: var(--fg); }
-.nl-enrich-toggle input, .ig-enrich-toggle input { display: none; }
-.nl-enrich-dot, .ig-enrich-dot { width:8px; height:8px; border-radius:50%; background:var(--border); transition: background .2s; }
-.nl-enrich-toggle.active .nl-enrich-dot, .ig-enrich-toggle.active .ig-enrich-dot { background: var(--accent); }
+/* Orchestrator status messages in chat */
+.pers-orchestrator-log { margin: 4px 0 8px 0; }
+.pers-orchestrator-msg { font-size: 11px; color: var(--text2); font-style: italic; padding: 2px 0; line-height: 1.5; }
 .pers-style-rules-panel { margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); overflow: hidden; }
 .pers-style-rules-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); user-select: none; }
 .pers-style-rules-header:hover { color: var(--fg); }
@@ -3183,16 +3175,9 @@ body::after {
             <span id="pers-upload-name"></span>
             <button class="pers-upload-remove" onclick="removeTemplateUpload()">✕</button>
           </div>
-          <!-- AI Image generation prompt (hidden by default) -->
-          <div id="pers-imagegen-bar" class="pers-imagegen-bar" style="display:none;">
-            <input id="pers-imagegen-input" class="pers-imagegen-input" type="text" placeholder="Descrivi l'immagine da generare (es. tramonto sulla spiaggia, logo moderno...)" onkeydown="if(event.key==='Enter'){event.preventDefault();_submitImageGen();}">
-            <button class="btn btn-primary btn-sm" onclick="_submitImageGen()">Genera</button>
-            <button class="btn btn-secondary btn-sm" onclick="_toggleImageGen(false)">✕</button>
-          </div>
           <div class="pers-chat-input-row">
             <input type="file" id="pers-file-input" accept="image/*" multiple style="display:none" onchange="handleTemplateFileSelect(this)">
             <button class="btn btn-secondary pers-upload-btn" onclick="document.getElementById('pers-file-input').click()" title="Allega immagini (logo, screenshot, mockup)">📎</button>
-            <button class="btn btn-secondary pers-upload-btn" onclick="_toggleImageGen()" title="Genera immagine con AI">🖼️</button>
             <textarea id="pers-chat-input" class="pers-chat-input" placeholder="Descrivi il design che vuoi..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTemplateMessage();}"></textarea>
             <button id="pers-send-btn" class="btn btn-primary pers-send-btn" onclick="sendTemplateMessage()">Invia</button>
           </div>
@@ -5479,9 +5464,6 @@ function renderGeneratedContent() {
         <div class="carousel-actions">
           <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
           <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${i})">🎨 Rigenera img</button>
-          <label class="ig-enrich-toggle ${window._igEnrichImages ? 'active' : ''}" onclick="toggleIgEnrichImages(this)" title="Genera sfondi AI per le slide del carousel">
-            <input type="checkbox" ${window._igEnrichImages ? 'checked' : ''}><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
-          </label>
         </div>
         <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
         <div class="col-actions">
@@ -5597,9 +5579,6 @@ function renderGeneratedContent() {
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyNlHtml()">Copia HTML</button>
           <button class="btn btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="openNlPreview()">👁 Anteprima completa</button>
-          <label class="nl-enrich-toggle ${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI e inseriscile nella newsletter">
-            <input type="checkbox" ${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
-          </label>
           <button class="btn btn-approve btn-small ${nlApproved ? 'approved' : ''}" onclick="approveContent('newsletter', this)">${nlApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
         <div class="feedback-row" id="fb-newsletter">
@@ -5661,10 +5640,10 @@ async function renderSingleCarouselImages(key, text, paletteIdx, artIdx) {
     const igTplId = (window._selectedGenTemplates || {}).instagram;
     if (igTplId) payload.template_id = igTplId;
 
-    // If AI background images are enabled and we have a template, enrich first
-    if (window._igEnrichImages && igTplId) {
+    // AI decides if background images are needed (always-on when template available)
+    if (igTplId) {
       const loadEl = document.getElementById('render-loading-' + key);
-      if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>🖼️ Generando sfondi AI...</span></div>';
+      if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>Analisi immagini AI...</span></div>';
       try {
         const enrichResp = await fetch('/api/carousel/enrich-images', {
           method: 'POST',
@@ -5673,7 +5652,7 @@ async function renderSingleCarouselImages(key, text, paletteIdx, artIdx) {
         }).then(safeJson);
         if (enrichResp.images && Object.keys(enrichResp.images).length > 0) {
           payload.slide_images = enrichResp.images;
-          console.log('[IG enrich] Got', enrichResp.count, 'AI images for carousel');
+          console.log('[IG enrich] AI decided:', enrichResp.count, 'images for carousel');
         }
       } catch (enrichErr) {
         console.warn('[IG enrich] Image enrichment failed, continuing without:', enrichErr);
@@ -7503,9 +7482,6 @@ function renderCreaResults(results) {
           <div class="carousel-actions">
             <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
             <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${idx})">🎨 Rigenera img</button>
-            <label class="ig-enrich-toggle \${window._igEnrichImages ? 'active' : ''}" onclick="toggleIgEnrichImages(this)" title="Genera sfondi AI per le slide del carousel">
-              <input type="checkbox" \${window._igEnrichImages ? 'checked' : ''}><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
-            </label>
           </div>
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
           <div class="col-actions">
@@ -7548,9 +7524,6 @@ function renderCreaResults(results) {
             <button class="btn btn-secondary btn-small" onclick="copyNlHtmlCrea(${idx})">📋 Copia HTML</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">📄 Copia testo</button>
             <button class="btn btn-secondary btn-small" onclick="toggleNlSource(${idx})">🔧 Mostra sorgente</button>
-            <label class="nl-enrich-toggle \${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI nella newsletter">
-              <input type="checkbox" \${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
-            </label>
             <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
           </div>
           <div id="nl-source-wrap-${idx}" style="display:none;">
@@ -8365,43 +8338,14 @@ function renderPreferences() {
   panel.innerHTML = html;
 }
 
-// ---- Instagram Carousel AI Image Enrichment ----
-window._igEnrichImages = false;
-
-function toggleIgEnrichImages(label) {
-  window._igEnrichImages = !window._igEnrichImages;
-  document.querySelectorAll('.ig-enrich-toggle').forEach(el => {
-    el.classList.toggle('active', window._igEnrichImages);
-    const cb = el.querySelector('input[type="checkbox"]');
-    if (cb) cb.checked = window._igEnrichImages;
-  });
-  if (window._igEnrichImages) {
-    toast('🖼️ Immagini AI IG attive: le prossime immagini carousel includeranno sfondi generati');
-  }
-}
-
-// ---- Newsletter AI Image Enrichment ----
-window._nlEnrichImages = false;
-
-function toggleNlEnrichImages(label) {
-  window._nlEnrichImages = !window._nlEnrichImages;
-  // Update all toggle labels on the page
-  document.querySelectorAll('.nl-enrich-toggle').forEach(el => {
-    el.classList.toggle('active', window._nlEnrichImages);
-    const cb = el.querySelector('input[type="checkbox"]');
-    if (cb) cb.checked = window._nlEnrichImages;
-  });
-  if (window._nlEnrichImages) {
-    toast('🖼️ Immagini AI attive: le prossime anteprime includeranno immagini generate');
-  }
-}
-
+// ---- Newsletter AI Image Enrichment (always-on, AI decides) ----
 async function _enrichNlText(text, templateId) {
   /**
    * Call /api/newsletter/enrich-images to add AI-generated images to newsletter text.
+   * AI decides automatically if images are needed — no toggle required.
    * Returns the enriched text (or original text on error/skip).
    */
-  if (!window._nlEnrichImages || !text || !text.trim()) return text;
+  if (!text || !text.trim() || !templateId) return text;
   try {
     const payload = { text };
     if (templateId) payload.template_id = templateId;
@@ -8447,11 +8391,11 @@ async function openNlPreview() {
   }
   try {
     const nlTplId = (window._selectedGenTemplates || {}).newsletter;
-    // Optionally enrich text with AI-generated images before rendering
+    // AI decides if images are needed (always-on when template available)
     let nlText = ta.value;
-    if (window._nlEnrichImages) {
+    if (nlTplId) {
       frame.srcdoc = `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#888;">
-        <div style="text-align:center;"><div style="width:30px;height:30px;border:3px solid #6c5ce7;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div>🖼️ Generando immagini AI...</div>
+        <div style="text-align:center;"><div style="width:30px;height:30px;border:3px solid #6c5ce7;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div>Analisi immagini AI...</div>
         <style>@keyframes spin{to{transform:rotate(360deg)}}</style></body></html>`;
       nlText = await _enrichNlText(nlText, nlTplId);
     }
@@ -8489,13 +8433,12 @@ async function autoRenderNlPreview() {
     return;
   }
   // Show loading
-  const enriching = window._nlEnrichImages;
-  container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:30px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">${enriching ? '🖼️ Generando immagini AI e rendering...' : 'Rendering newsletter con template...'}</span></div>`;
+  const nlTplId = (window._selectedGenTemplates || {}).newsletter;
+  container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:30px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">${nlTplId ? 'Analisi immagini AI e rendering...' : 'Rendering newsletter...'}</span></div>`;
   try {
-    const nlTplId = (window._selectedGenTemplates || {}).newsletter;
-    // Optionally enrich text with AI-generated images
+    // AI decides if images are needed (always-on when template available)
     let nlText = ta.value;
-    if (enriching) {
+    if (nlTplId) {
       nlText = await _enrichNlText(nlText, nlTplId);
     }
     const nlPayload = { text: nlText };
@@ -8538,15 +8481,15 @@ async function autoRenderNlPreviewsCrea(nlItems) {
     }
     try {
       const nlTplId = (window._selectedGenTemplates || {}).newsletter;
-      // Optionally enrich with AI-generated images
+      // AI decides if images are needed (always-on when template available)
       let finalNlText = nlText;
-      if (window._nlEnrichImages) {
-        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:40px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">🖼️ Generando immagini AI...</span></div>';
+      if (nlTplId) {
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:40px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">Analisi immagini AI...</span></div>';
         finalNlText = await _enrichNlText(nlText, nlTplId);
       }
       const nlPayload = { text: finalNlText };
       if (nlTplId) nlPayload.template_id = nlTplId;
-      console.log('[NL preview] fetching HTML, text length:', finalNlText.length, 'template:', nlTplId || 'none', 'enriched:', window._nlEnrichImages);
+      console.log('[NL preview] fetching HTML, text length:', finalNlText.length, 'template:', nlTplId || 'none');
       const resp = await fetch('/api/newsletter/html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -9269,6 +9212,19 @@ async function sendTemplateMessage() {
       errBubble.textContent = data.error || 'Errore nella risposta';
       msgContainer.appendChild(errBubble);
     } else {
+      // Show orchestrator log messages (AI image generation steps)
+      if (data.orchestrator_log && data.orchestrator_log.length) {
+        const logDiv = document.createElement('div');
+        logDiv.className = 'pers-orchestrator-log';
+        data.orchestrator_log.forEach(msg => {
+          const line = document.createElement('div');
+          line.className = 'pers-orchestrator-msg';
+          line.textContent = msg;
+          logDiv.appendChild(line);
+        });
+        msgContainer.appendChild(logDiv);
+      }
+
       const botBubble = document.createElement('div');
       botBubble.className = 'pers-chat-bubble bot';
       botBubble.textContent = data.reply || 'Template aggiornato!';
@@ -9298,99 +9254,7 @@ async function sendTemplateMessage() {
   input.focus();
 }
 
-// ── AI Image Generation ──
-function _toggleImageGen(show) {
-  const bar = document.getElementById('pers-imagegen-bar');
-  if (!bar) return;
-  if (show === undefined) show = bar.style.display === 'none';
-  bar.style.display = show ? 'flex' : 'none';
-  if (show) document.getElementById('pers-imagegen-input').focus();
-}
-
-async function _submitImageGen() {
-  const input = document.getElementById('pers-imagegen-input');
-  const prompt = (input.value || '').trim();
-  if (!prompt || !_persCurrentId) return;
-  input.value = '';
-  _toggleImageGen(false);
-
-  const msgContainer = document.getElementById('pers-chat-messages');
-
-  // User bubble showing the image request
-  const userBubble = document.createElement('div');
-  userBubble.className = 'pers-chat-bubble user';
-  userBubble.innerHTML = `🖼️ <em>Genera immagine:</em> ${esc(prompt)}`;
-  msgContainer.appendChild(userBubble);
-
-  // Loading bubble
-  const loadBubble = document.createElement('div');
-  loadBubble.className = 'pers-chat-bubble bot loading';
-  loadBubble.innerHTML = 'Generazione immagine AI in corso <span class="typing-dots"><span></span><span></span><span></span></span>';
-  msgContainer.appendChild(loadBubble);
-  msgContainer.scrollTop = msgContainer.scrollHeight;
-
-  try {
-    // Step 1: Generate the image
-    const genRes = await fetch(`/api/templates/${_persCurrentId}/generate-image`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ prompt })
-    });
-    const genData = await genRes.json();
-
-    if (!genRes.ok || !genData.url) {
-      loadBubble.remove();
-      const errBubble = document.createElement('div');
-      errBubble.className = 'pers-chat-bubble bot';
-      errBubble.textContent = genData.error || 'Generazione immagine fallita. Riprova.';
-      msgContainer.appendChild(errBubble);
-      return;
-    }
-
-    // Show generated image in chat
-    loadBubble.innerHTML = `<img class="bubble-img-large" src="${genData.url}" alt="${esc(prompt)}"><br><span style="font-size:11px;color:var(--muted);">Immagine generata — invio al designer...</span> <span class="typing-dots"><span></span><span></span><span></span></span>`;
-
-    // Step 2: Send the image URL + context to the template chat AI
-    // The AI designer will position the image optimally in the HTML
-    const chatPayload = {
-      message: `Inserisci questa immagine nel template. L'immagine rappresenta: "${prompt}". Posizionala nel modo più efficace per la UX/UI.`,
-      image_urls: [genData.url]
-    };
-    const chatRes = await fetch(`/api/templates/${_persCurrentId}/chat`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(chatPayload)
-    });
-    const chatData = await chatRes.json();
-    loadBubble.remove();
-
-    if (!chatRes.ok) {
-      const errBubble = document.createElement('div');
-      errBubble.className = 'pers-chat-bubble bot';
-      errBubble.textContent = chatData.error || 'Errore nel posizionamento immagine.';
-      msgContainer.appendChild(errBubble);
-    } else {
-      const botBubble = document.createElement('div');
-      botBubble.className = 'pers-chat-bubble bot';
-      botBubble.innerHTML = `<img class="bubble-img-large" src="${genData.url}" alt="${esc(prompt)}"><br>${esc(chatData.reply || 'Immagine inserita nel template!')}`;
-      msgContainer.appendChild(botBubble);
-
-      if (chatData.html_content) {
-        _persCurrentHtml = chatData.html_content;
-        updateTemplatePreview();
-      }
-    }
-  } catch(e) {
-    loadBubble.remove();
-    const errBubble = document.createElement('div');
-    errBubble.className = 'pers-chat-bubble bot';
-    errBubble.textContent = 'Errore di connessione nella generazione immagine.';
-    msgContainer.appendChild(errBubble);
-  }
-
-  msgContainer.scrollTop = msgContainer.scrollHeight;
-}
-
+// ── Preview Content ──
 // Example content for IG preview placeholders (matches backend's render_template_preview)
 const _previewSampleContent = {
   cover: { COVER_TITLE: '5 Strategie di Marketing', COVER_SUBTITLE: 'che Cambieranno il Tuo Business nel 2026' },
@@ -9613,7 +9477,7 @@ async function deleteCurrentTemplate() {
     if (res.ok) {
       toast('Template eliminato');
       _persCurrentId = null;
-      showPersHome();
+      showPersScreen('pers-home');
       loadPersonalizzazione();
     } else {
       const data = await res.json().catch(() => ({}));

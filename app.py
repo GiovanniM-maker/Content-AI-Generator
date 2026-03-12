@@ -3895,6 +3895,68 @@ def delete_template(template_id):
     return jsonify({"status": "ok"})
 
 
+def _orchestrate_template_chat(user_msg: str, current_html: str,
+                                template_type: str, style_rules: dict = None) -> dict:
+    """Orchestrator AI: analyzes user message, decides if images are needed.
+
+    Uses MODEL_CHEAP (~$0.001) to analyze the user's request and determine:
+    - Whether AI-generated images are needed
+    - Image prompts (in English, max 2)
+    - Reformulated instruction for the HTML designer
+
+    Returns: {"needs_images": bool, "image_prompts": [...], "html_instruction": "..."}
+    """
+    # Build style context for image decisions
+    image_style_ctx = ""
+    if style_rules and style_rules.get("image_style"):
+        img_style = style_rules["image_style"]
+        image_style_ctx = f"""
+Stile immagini del template:
+- Descrizione: {img_style.get('description', 'N/A')}
+- Keywords: {', '.join(img_style.get('keywords', []))}
+- Evitare: {', '.join(img_style.get('avoid', []))}"""
+
+    system_prompt = f"""Sei un orchestratore AI per la personalizzazione di template {template_type}.
+Il tuo compito è analizzare il messaggio dell'utente e decidere se servono immagini AI.
+
+REGOLE DECISIONE IMMAGINI:
+- Se l'utente chiede esplicitamente un'immagine, sfondo, foto, illustrazione → needs_images = true
+- Se l'utente chiede modifiche di colore, font, layout, testo → needs_images = false
+- Se l'utente descrive un tema visivo complesso che beneficerebbe di immagini → needs_images = true
+- Max 2 immagini per richiesta
+- I prompt immagine DEVONO essere in inglese, dettagliati, professionali
+- NON generare immagini per richieste semplici di design (colori, spaziatura, font)
+{image_style_ctx}
+
+FORMATO RISPOSTA (SOLO JSON):
+{{
+  "needs_images": true/false,
+  "image_prompts": ["english prompt 1", "english prompt 2"],
+  "reasoning": "breve spiegazione in italiano della decisione"
+}}
+
+Se needs_images = false, image_prompts deve essere un array vuoto []."""
+
+    try:
+        result = _llm_call(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Messaggio utente: {user_msg}\n\nTipo template: {template_type}"},
+            ],
+            model=MODEL_CHEAP, temperature=0.2,
+        )
+        cleaned = _strip_fences(result)
+        parsed = json.loads(cleaned)
+        return {
+            "needs_images": bool(parsed.get("needs_images", False)),
+            "image_prompts": parsed.get("image_prompts", [])[:2],
+            "reasoning": parsed.get("reasoning", ""),
+        }
+    except Exception as e:
+        _log_pipeline("warn", f"Orchestrator failed, defaulting to no images: {e}")
+        return {"needs_images": False, "image_prompts": [], "reasoning": "Orchestrator error, skip images"}
+
+
 @app.route("/api/templates/<template_id>/chat", methods=["POST"])
 def template_chat(template_id):
     """Chat with the AI to iteratively build/modify a template's HTML."""
@@ -3921,6 +3983,54 @@ def template_chat(template_id):
     chat_history = tpl.get("chat_history", []) or []
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
     current_components = tpl.get("components", {}) or {}
+    style_rules = tpl.get("style_rules", {}) or {}
+
+    # --- ORCHESTRATOR: analyze message, decide images, generate if needed ---
+    orchestrator_log = []
+    ai_generated_images = []
+
+    # Only run orchestrator when user didn't attach images manually
+    if user_message.strip() and not image_urls:
+        try:
+            orch_result = _orchestrate_template_chat(
+                user_message, current_html, template_type, style_rules
+            )
+            if orch_result.get("needs_images"):
+                reasoning = orch_result.get("reasoning", "")
+                orchestrator_log.append(f"🎨 {reasoning}")
+
+                default_ratio = aspect_ratio if template_type == "instagram" else "16:9"
+                for prompt in orch_result.get("image_prompts", [])[:2]:
+                    orchestrator_log.append(f"🖼️ Generazione immagine: {prompt[:80]}...")
+                    style_prefix = ""
+                    if style_rules and style_rules.get("image_style", {}).get("description"):
+                        style_prefix = style_rules["image_style"]["description"] + ", "
+                    img_url = _generate_and_upload_image(
+                        prompt=style_prefix + prompt,
+                        user_id=user_id,
+                        template_id=template_id,
+                        aspect_ratio=default_ratio,
+                    )
+                    if img_url:
+                        ai_generated_images.append({"url": img_url, "description": prompt})
+                        orchestrator_log.append(f"✅ Immagine generata con successo")
+                    else:
+                        orchestrator_log.append(f"⚠️ Generazione immagine fallita, continuo senza")
+
+                if ai_generated_images:
+                    orchestrator_log.append("🔧 Integrazione immagini nel template...")
+            else:
+                _log_pipeline("info", "Orchestrator: no images needed for this request")
+        except Exception as e:
+            _log_pipeline("warn", f"Orchestrator pipeline error (non-fatal): {e}")
+
+    # Enrich user message with AI-generated image URLs for the HTML designer
+    enriched_user_message = user_message
+    if ai_generated_images:
+        img_context = "\n\n[Immagini AI generate dall'orchestratore — integrare nel template:]\n"
+        for i, img in enumerate(ai_generated_images, 1):
+            img_context += f"[Immagine AI generata: {img['url']} — Descrizione: {img['description']}]\n"
+        enriched_user_message += img_context
 
     # Build system prompt based on template type
     if template_type == "instagram":
@@ -4145,7 +4255,7 @@ REGOLE:
             })
         messages.append({"role": "user", "content": user_content})
     else:
-        messages.append({"role": "user", "content": user_message})
+        messages.append({"role": "user", "content": enriched_user_message})
 
     try:
         raw_response = _llm_call_validated(
@@ -4253,11 +4363,12 @@ REGOLE:
             except Exception as e:
                 _log_pipeline("warn", f"Style rules extraction skipped: {e}")
 
-        _log_pipeline("info", f"Template chat: updated {template_id} (html_changed={html_changed})")
+        _log_pipeline("info", f"Template chat: updated {template_id} (html_changed={html_changed}, images={len(ai_generated_images)})")
         return jsonify({
             "reply": reply_text,
             "html_content": new_html if html_changed else None,
             "style_rules": extracted_rules,
+            "orchestrator_log": orchestrator_log if orchestrator_log else None,
         })
 
     except Exception as e:
@@ -4454,48 +4565,6 @@ def template_upload_asset(template_id):
     except Exception as e:
         _log_pipeline("error", f"Template asset upload error: {e}")
         return jsonify({"error": "Errore nell'upload. Riprova."}), 500
-
-
-@app.route("/api/templates/<template_id>/generate-image", methods=["POST"])
-def template_generate_image(template_id):
-    """Generate an AI image from a text prompt and upload it to Storage.
-
-    Body: { "prompt": "description of the image", "aspect_ratio": "16:9" }
-    Returns: { "url": "https://...", "description": "..." }
-    """
-    user_id = _get_user_id()
-    tpl = db.get_user_template_by_id(user_id, template_id)
-    if not tpl:
-        return jsonify({"error": "Template non trovato"}), 404
-
-    body = request.json or {}
-    prompt = body.get("prompt", "").strip()
-    if not prompt:
-        return jsonify({"error": "Prompt immagine mancante"}), 400
-
-    # Use the template's aspect ratio by default for IG, 16:9 for NL
-    tpl_type = tpl.get("template_type", "instagram")
-    default_ratio = tpl.get("aspect_ratio", "1:1") if tpl_type == "instagram" else "16:9"
-    aspect_ratio = body.get("aspect_ratio", default_ratio)
-
-    # Enhance the prompt for better results
-    enhanced_prompt = f"Professional, high-quality image: {prompt}. Clean, modern style suitable for {'social media carousel' if tpl_type == 'instagram' else 'email newsletter'}. No text or watermarks."
-
-    try:
-        url = _generate_and_upload_image(
-            prompt=enhanced_prompt,
-            user_id=user_id,
-            template_id=template_id,
-            aspect_ratio=aspect_ratio,
-        )
-        if not url:
-            return jsonify({"error": "Generazione immagine fallita. Riprova."}), 500
-
-        _log_pipeline("info", f"AI image generated for template {template_id}: {prompt[:50]}")
-        return jsonify({"url": url, "description": prompt})
-    except Exception as e:
-        _log_pipeline("error", f"Image generation endpoint error: {e}")
-        return jsonify({"error": "Errore nella generazione immagine."}), 500
 
 
 @app.route("/api/templates/clone/<preset_id>", methods=["POST"])
