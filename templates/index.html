@@ -1003,8 +1003,10 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 .breadcrumb-current { color: var(--text); font-weight: 600; }
 
 /* Admin-only elements */
-.admin-only { display: none; }
-body.is-admin .admin-only { display: flex; }
+.admin-only { display: none !important; }
+body.is-admin .admin-only { display: flex !important; }
+body.is-admin .monitor-tabs .admin-only { display: inline-block !important; }
+body.is-admin .monitor-section.admin-only { display: block !important; }
 
 /* Landing login shortcut */
 .landing-login-link { display: inline-block; margin-top: 12px; font-size: 14px; color: var(--text2); }
@@ -2934,7 +2936,7 @@ body::after {
   <div class="libreria-nav">
     <button class="libreria-nav-btn active" data-section="history" onclick="showLibreriaSection('history', this)">📋 Cronologia</button>
     <button class="libreria-nav-btn" data-section="settings" onclick="showLibreriaSection('settings', this)">⚙️ Impostazioni</button>
-    <button class="libreria-nav-btn admin-only" id="btn-avanzate" data-section="monitor" onclick="showLibreriaSection('monitor', this)">🔧 Avanzate</button>
+    <button class="libreria-nav-btn" id="btn-avanzate" data-section="monitor" onclick="showLibreriaSection('monitor', this)">🎯 Prompt Tuning</button>
   </div>
 
   <!-- SCREEN 5: History -->
@@ -3033,17 +3035,17 @@ body::after {
 
   <!-- SCREEN 7: Monitor -->
   <div id="screen-monitor" class="screen">
-    <h1>🔧 Avanzate</h1>
-    <p class="subtitle">Diagnostica, versioning prompt, salute feed, log pipeline</p>
+    <h1 id="monitor-title">🎯 Prompt Tuning</h1>
+    <p class="subtitle" id="monitor-subtitle">Storico dei prompt e feedback — il tuo contenuto migliora ad ogni generazione</p>
 
-    <div id="monitor-health" class="monitor-section"></div>
+    <div id="monitor-health" class="monitor-section admin-only"></div>
 
     <div class="monitor-tabs">
       <button class="monitor-tab active" onclick="switchMonitorTab('prompts', this)">Storico Prompt</button>
-      <button class="monitor-tab" onclick="switchMonitorTab('pipeline', this)">Log Pipeline</button>
-      <button class="monitor-tab" onclick="switchMonitorTab('feeds', this)">Salute Feed</button>
+      <button class="monitor-tab admin-only" onclick="switchMonitorTab('pipeline', this)">Log Pipeline</button>
+      <button class="monitor-tab admin-only" onclick="switchMonitorTab('feeds', this)">Salute Feed</button>
       <button class="monitor-tab" onclick="switchMonitorTab('feedback', this)">Memoria Feedback</button>
-      <button class="monitor-tab" onclick="switchMonitorTab('prefs', this)">Preferenze Selezione</button>
+      <button class="monitor-tab admin-only" onclick="switchMonitorTab('prefs', this)">Preferenze Selezione</button>
     </div>
 
     <div id="monitor-tab-prompts" class="monitor-panel"></div>
@@ -4839,11 +4841,6 @@ function showScreen(name) {
 }
 
 function showLibreriaSection(section, btn) {
-  // Admin-only guard for monitor section
-  if (section === 'monitor' && !isAdmin) {
-    toast('🔒 Sezione riservata all\'amministratore');
-    return;
-  }
   // Switch sub-nav active state
   document.querySelectorAll('.libreria-nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
@@ -4852,12 +4849,24 @@ function showLibreriaSection(section, btn) {
   if (libTab) libTab.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + section).classList.add('active');
   // Update breadcrumb
-  const subNames = { history: 'Cronologia', settings: 'Impostazioni', monitor: 'Avanzate' };
+  const subNames = { history: 'Cronologia', settings: 'Impostazioni', monitor: isAdmin ? 'Avanzate' : 'Prompt Tuning' };
   const bcSub = document.getElementById('breadcrumb-libreria-sub');
   if (bcSub) bcSub.textContent = subNames[section] || section;
   // Load data
   if (section === 'history') loadHistory();
-  if (section === 'monitor') loadMonitor();
+  if (section === 'monitor') {
+    // Update title based on admin status
+    const mTitle = document.getElementById('monitor-title');
+    const mSub = document.getElementById('monitor-subtitle');
+    if (isAdmin) {
+      if (mTitle) mTitle.textContent = '🔧 Avanzate';
+      if (mSub) mSub.textContent = 'Diagnostica, versioning prompt, salute feed, log pipeline';
+    } else {
+      if (mTitle) mTitle.textContent = '🎯 Prompt Tuning';
+      if (mSub) mSub.textContent = 'Storico dei prompt e feedback — il tuo contenuto migliora ad ogni generazione';
+    }
+    loadMonitor();
+  }
   if (section === 'settings') { loadSettings(); loadMfaStatus(); }
 }
 
@@ -7819,29 +7828,41 @@ function switchMonitorTab(tab, btn) {
 
 async function loadMonitor() {
   const healthEl = document.getElementById('monitor-health');
-  healthEl.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento...</div>';
 
   try {
-    const [healthRes, promptsRes, pipelineRes, feedbackRes, prefsRes] = await Promise.all([
-      fetch('/api/monitor/health').then(r => r.json()),
+    // All users: load prompts + feedback (prompt tuning)
+    const corePromises = [
       fetch('/api/monitor/prompts').then(r => r.json()),
-      fetch('/api/monitor/pipeline').then(r => r.json()),
       fetch('/api/feedback').then(r => r.json()),
-      fetch('/api/monitor/preferences').then(r => r.json()),
-    ]);
+    ];
 
-    monitorHealth = healthRes;
-    monitorPrompts = promptsRes;
-    monitorPipeline = pipelineRes;
-    monitorFeedback = feedbackRes;
-    monitorPrefs = prefsRes;
+    // Admin-only: also load health, pipeline, preferences
+    if (isAdmin) {
+      healthEl.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento...</div>';
+      corePromises.push(
+        fetch('/api/monitor/health').then(r => r.json()),
+        fetch('/api/monitor/pipeline').then(r => r.json()),
+        fetch('/api/monitor/preferences').then(r => r.json()),
+      );
+    }
 
-    renderHealthSummary();
+    const results = await Promise.all(corePromises);
+
+    monitorPrompts = results[0];
+    monitorFeedback = results[1];
+
     renderPromptChangelog();
-    renderPipelineLog();
-    renderFeedHealth();
     renderFeedbackMemory();
-    renderPreferences();
+
+    if (isAdmin) {
+      monitorHealth = results[2];
+      monitorPipeline = results[3];
+      monitorPrefs = results[4];
+      renderHealthSummary();
+      renderPipelineLog();
+      renderFeedHealth();
+      renderPreferences();
+    }
   } catch(err) {
     healthEl.innerHTML = `<div class="empty-state">Errore: ${esc(err.message)}</div>`;
   }
