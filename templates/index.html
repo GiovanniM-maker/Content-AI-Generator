@@ -2103,7 +2103,18 @@ body::after {
 .pers-chat-bubble { padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; max-width: 90%; word-wrap: break-word; }
 .pers-chat-bubble.user { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
 .pers-chat-bubble.bot { background: var(--card-bg); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 4px; }
-.pers-chat-bubble.bot.loading { opacity: 0.6; }
+.pers-chat-bubble.bot.loading { opacity: 0.7; }
+.pers-chat-bubble.bot.loading .typing-dots { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
+.pers-chat-bubble.bot.loading .typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+.pers-chat-bubble.bot.loading .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.pers-chat-bubble.bot.loading .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
 .pers-chat-input-row { display: flex; gap: 8px; margin-top: 8px; }
 .pers-chat-input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; resize: none; background: var(--card-bg); color: var(--fg); font-family: inherit; }
 .pers-send-btn { align-self: flex-end; }
@@ -2124,6 +2135,21 @@ body::after {
 .pers-preview-container iframe { width: 100%; height: 100%; border: none; }
 .pers-preview-container pre { width: 100%; height: 100%; overflow: auto; padding: 12px; font-size: 12px; margin: 0; background: #1a1a2e; color: #a29bfe; }
 .pers-preview-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 40px; }
+.pers-preview-col { position: relative; }
+.pers-preview-loading-overlay {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10;
+  background: rgba(255,255,255,0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  border-radius: 12px; transition: opacity 0.3s;
+}
+.pers-preview-loading-overlay .pers-loader-spinner {
+  width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+.pers-preview-loading-overlay .pers-loader-text {
+  font-size: 13px; color: var(--text2); font-weight: 500;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Mini-gallery on template cards */
 .pers-card-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 100%; height: 140px; background: var(--border); }
@@ -8850,12 +8876,23 @@ async function sendTemplateMessage() {
   }
   msgContainer.appendChild(userBubble);
 
-  // Add loading bubble
+  // Add loading bubble with animated dots
   const loadBubble = document.createElement('div');
   loadBubble.className = 'pers-chat-bubble bot loading';
-  loadBubble.textContent = hasImage ? 'Upload immagine e analisi...' : 'Sto lavorando al template...';
+  const loadText = hasImage ? 'Upload immagine e analisi' : 'Sto lavorando al template';
+  loadBubble.innerHTML = loadText + ' <span class="typing-dots"><span></span><span></span><span></span></span>';
   msgContainer.appendChild(loadBubble);
   msgContainer.scrollTop = msgContainer.scrollHeight;
+
+  // Add blur + spinner overlay on preview area
+  const previewCol = document.querySelector('.pers-preview-col');
+  let previewOverlay = null;
+  if (previewCol) {
+    previewOverlay = document.createElement('div');
+    previewOverlay.className = 'pers-preview-loading-overlay';
+    previewOverlay.innerHTML = '<div class="pers-loader-spinner"></div><div class="pers-loader-text">Aggiornamento preview...</div>';
+    previewCol.appendChild(previewOverlay);
+  }
 
   // Upload image first if present
   let imageUrl = null;
@@ -8864,10 +8901,11 @@ async function sendTemplateMessage() {
     removeTemplateUpload();
     if (!imageUrl && !message) {
       loadBubble.remove();
+      if (previewOverlay) previewOverlay.remove();
       sendBtn.disabled = false;
       return;
     }
-    loadBubble.textContent = 'Sto lavorando al template...';
+    loadBubble.innerHTML = 'Sto lavorando al template <span class="typing-dots"><span></span><span></span><span></span></span>';
   }
 
   try {
@@ -8881,6 +8919,7 @@ async function sendTemplateMessage() {
     });
     const data = await res.json();
     loadBubble.remove();
+    if (previewOverlay) previewOverlay.remove();
 
     if (!res.ok) {
       const errBubble = document.createElement('div');
@@ -8900,6 +8939,7 @@ async function sendTemplateMessage() {
     }
   } catch(e) {
     loadBubble.remove();
+    if (previewOverlay) previewOverlay.remove();
     const errBubble = document.createElement('div');
     errBubble.className = 'pers-chat-bubble bot';
     errBubble.textContent = 'Errore di connessione. Riprova.';
