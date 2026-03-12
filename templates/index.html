@@ -8499,12 +8499,32 @@ function renderPersHome() {
             <span>${new Date(t.updated_at || t.created_at).toLocaleDateString('it-IT')}</span>
           </div>
         </div>
-        <div class="pers-card-actions" onclick="event.stopPropagation();">
-          <button class="btn btn-sm btn-secondary" onclick="openTemplateChat('${t.id}')">Modifica</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteTemplate('${t.id}','${esc(t.name)}')">Elimina</button>
+        <div class="pers-card-actions">
+          <button class="btn btn-sm btn-secondary" data-action="edit" data-id="${t.id}">Modifica</button>
+          <button class="btn btn-sm btn-danger" data-action="delete" data-id="${t.id}" data-name="${esc(t.name)}">Elimina</button>
         </div>
       </div>
     `).join('');
+
+    // Event delegation for card action buttons (avoids inline onclick issues)
+    if (!grid._hasDelegation) {
+      grid._hasDelegation = true;
+      grid.addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        e.stopPropagation(); // Don't trigger card's openTemplateChat
+        e.preventDefault();
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        console.log('[pers-grid] action:', action, 'id:', id);
+        if (action === 'edit') {
+          openTemplateChat(id);
+        } else if (action === 'delete') {
+          const name = btn.dataset.name || 'Senza nome';
+          deleteTemplate(id, name);
+        }
+      });
+    }
   }
 
   // Render presets
@@ -8985,10 +9005,14 @@ function persPreviewMode(mode, btn) {
 }
 
 async function deleteTemplate(id, name) {
-  if (!confirm(`Eliminare il template "${name}"?`)) return;
+  console.log('[deleteTemplate] called with id:', id, 'name:', name);
+  const confirmed = confirm('Eliminare il template "' + (name || 'Senza nome') + '"?');
+  console.log('[deleteTemplate] confirm result:', confirmed);
+  if (!confirmed) return;
 
   // Find the card and apply blur effect immediately for perceived speed
-  const card = document.querySelector(`.pers-card[data-template-id="${id}"]`);
+  const card = document.querySelector('.pers-card[data-template-id="' + id + '"]');
+  console.log('[deleteTemplate] found card:', !!card);
   if (card) {
     card.style.transition = 'filter 0.3s, opacity 0.3s, transform 0.3s';
     card.style.filter = 'blur(3px)';
@@ -8998,7 +9022,9 @@ async function deleteTemplate(id, name) {
   }
 
   try {
-    const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+    console.log('[deleteTemplate] calling DELETE /api/templates/' + id);
+    const res = await fetch('/api/templates/' + id, { method: 'DELETE' });
+    console.log('[deleteTemplate] response status:', res.status, 'ok:', res.ok);
     if (res.ok) {
       // Animate card removal
       if (card) {
