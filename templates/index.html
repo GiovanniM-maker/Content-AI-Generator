@@ -5645,17 +5645,21 @@ async function renderSingleCarouselImages(key, text, paletteIdx, artIdx) {
       const loadEl = document.getElementById('render-loading-' + key);
       if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>Analisi immagini AI...</span></div>';
       try {
+        const enrichCtrl = new AbortController();
+        const enrichTimeout = setTimeout(() => enrichCtrl.abort(), 30000); // 30s timeout
         const enrichResp = await fetch('/api/carousel/enrich-images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, template_id: igTplId }),
+          signal: enrichCtrl.signal,
         }).then(safeJson);
+        clearTimeout(enrichTimeout);
         if (enrichResp.images && Object.keys(enrichResp.images).length > 0) {
           payload.slide_images = enrichResp.images;
           console.log('[IG enrich] AI decided:', enrichResp.count, 'images for carousel');
         }
       } catch (enrichErr) {
-        console.warn('[IG enrich] Image enrichment failed, continuing without:', enrichErr);
+        console.warn('[IG enrich] Image enrichment skipped:', enrichErr.name === 'AbortError' ? 'timeout' : enrichErr.message);
       }
       if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>Rendering immagini...</span></div>';
     }
@@ -8349,11 +8353,15 @@ async function _enrichNlText(text, templateId) {
   try {
     const payload = { text };
     if (templateId) payload.template_id = templateId;
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 30000); // 30s timeout
     const resp = await fetch('/api/newsletter/enrich-images', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: ctrl.signal,
     });
+    clearTimeout(timeout);
     const data = await resp.json();
     if (data.error) { console.warn('[NL enrich] error:', data.error); return text; }
     if (data.images_generated > 0) {
@@ -8362,7 +8370,7 @@ async function _enrichNlText(text, templateId) {
     }
     return data.text || text;
   } catch (err) {
-    console.warn('[NL enrich] failed:', err);
+    console.warn('[NL enrich] skipped:', err.name === 'AbortError' ? 'timeout (30s)' : err.message);
     return text; // non-fatal: return original
   }
 }
@@ -9279,6 +9287,14 @@ function _fillPreviewPlaceholders(html, slideType) {
   html = html.split('{{BRAND_HANDLE}}').join('@tuobrand');
   // Legacy fallback
   html = html.split('{{SLIDE_CONTENT}}').join(Object.values(sample).join('<br>'));
+  // Safety: inject overflow protection in case AI omitted it
+  // This prevents text overflow/repetition in scaled-down preview iframes
+  const overflowCSS = '<style>body{overflow:hidden!important;max-height:1080px!important;}</style>';
+  if (html.includes('</head>')) {
+    html = html.replace('</head>', overflowCSS + '</head>');
+  } else if (html.includes('<body')) {
+    html = html.replace('<body', overflowCSS + '<body');
+  }
   return html;
 }
 

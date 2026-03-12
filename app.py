@@ -3919,13 +3919,18 @@ Stile immagini del template:
     system_prompt = f"""Sei un orchestratore AI per la personalizzazione di template {template_type}.
 Il tuo compito è analizzare il messaggio dell'utente e decidere se servono immagini AI.
 
-REGOLE DECISIONE IMMAGINI:
-- Se l'utente chiede esplicitamente un'immagine, sfondo, foto, illustrazione → needs_images = true
-- Se l'utente chiede modifiche di colore, font, layout, testo → needs_images = false
-- Se l'utente descrive un tema visivo complesso che beneficerebbe di immagini → needs_images = true
+REGOLE DECISIONE IMMAGINI — SII MOLTO CONSERVATIVO:
+- needs_images = true SOLO se l'utente usa ESPLICITAMENTE parole come:
+  "immagine", "foto", "sfondo fotografico", "illustrazione", "logo", "genera un'immagine", "aggiungi una foto", "background image"
+- needs_images = false per TUTTO il resto, incluso:
+  - Richieste di stile: "minimal", "moderno", "elegante", "contemporaneo" → NO immagini
+  - Richieste di colore: "sfondo scuro", "colori caldi", "palette blu" → NO immagini (sfondo = colore CSS, NON immagine)
+  - Richieste di layout: "più spaziatura", "font più grande", "centra il testo" → NO immagini
+  - Richieste generiche: "rendilo più professionale", "stile tech" → NO immagini
+  - Temi generali: "tema travel", "tema food" → NO immagini (il designer HTML userà colori/font)
 - Max 2 immagini per richiesta
 - I prompt immagine DEVONO essere in inglese, dettagliati, professionali
-- NON generare immagini per richieste semplici di design (colori, spaziatura, font)
+- NEL DUBBIO: needs_images = false (è sempre meglio non generare)
 {image_style_ctx}
 
 FORMATO RISPOSTA (SOLO JSON):
