@@ -7341,23 +7341,29 @@ function renderCreaResults(results) {
           </div>
         </div>`;
       } else if (platform === 'newsletter') {
-        // --- Newsletter: include template preview ---
+        // --- Newsletter: HTML template preview as main view ---
         const words = text.split(/\s+/).filter(Boolean).length;
         html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="newsletter" data-idx="${idx}" id="col-${key}">
           <h3>Newsletter ${idx + 1}</h3>
           <div class="col-sub">${esc(item.source)}</div>
           <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
-          <div id="nl-auto-preview-${idx}" class="nl-auto-preview-crea" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;">
-            <div class="loading" style="justify-content:center;padding:30px;"><div class="spinner"></div>Rendering newsletter con template...</div>
+          <div id="nl-auto-preview-${idx}" class="nl-auto-preview-crea" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;min-height:300px;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:40px;">
+              <div class="spinner"></div>
+              <span style="font-size:13px;color:var(--text2);">Rendering newsletter con template...</span>
+            </div>
           </div>
-          <div class="col-actions" style="margin-bottom:8px;">
+          <div class="col-actions" style="margin-bottom:8px;flex-wrap:wrap;gap:6px;">
             <button class="btn btn-secondary btn-small" onclick="copyNlHtmlCrea(${idx})">📋 Copia HTML</button>
-            <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia testo</button>
+            <button class="btn btn-primary btn-small" onclick="copyC('${key}')">📄 Copia testo</button>
+            <button class="btn btn-secondary btn-small" onclick="toggleNlSource(${idx})">🔧 Mostra sorgente</button>
             <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
           </div>
-          <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
-          <div class="col-actions">
-            <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
+          <div id="nl-source-wrap-${idx}" style="display:none;">
+            <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
+            <div class="col-actions">
+              <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
+            </div>
           </div>
           <div class="feedback-row" id="fb-${key}">
             <label class="fb-label">📝 Feedback:</label>
@@ -8285,6 +8291,16 @@ function copyNlHtmlCrea(idx) {
   const html = _creaNlHtmlCache[idx];
   if (!html) { toast('Nessun HTML da copiare. Attendi il rendering.'); return; }
   navigator.clipboard.writeText(html).then(() => toast('HTML newsletter copiato! ✨'));
+}
+
+function toggleNlSource(idx) {
+  const wrap = document.getElementById('nl-source-wrap-' + idx);
+  if (!wrap) return;
+  const isHidden = wrap.style.display === 'none';
+  wrap.style.display = isHidden ? 'block' : 'none';
+  // Update button text
+  const btn = wrap.parentElement.querySelector('[onclick*="toggleNlSource"]');
+  if (btn) btn.textContent = isHidden ? '🔧 Nascondi sorgente' : '🔧 Mostra sorgente';
 }
 
 function nlSwitchView(view, btn) {
