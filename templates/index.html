@@ -529,6 +529,24 @@ input:focus, select:focus { outline: none; border-color: var(--borderglow); box-
 .content-col.newsletter textarea { min-height: 380px; }
 .col-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; flex-wrap: wrap; }
 
+/* Regeneration overlay */
+.content-col { position: relative; }
+.content-col.regenerating > *:not(.regen-overlay) {
+  filter: blur(2px);
+  opacity: 0.5;
+  pointer-events: none;
+  transition: filter 0.3s, opacity 0.3s;
+}
+.regen-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(255,255,255,0.4);
+  backdrop-filter: blur(1px);
+  border-radius: var(--radius);
+  font-size: 14px; font-weight: 600; color: var(--accent);
+}
+.regen-overlay .spinner { width: 22px; height: 22px; }
+
 /* Schedule inline */
 .schedule-row {
   display: flex;
@@ -5668,6 +5686,21 @@ function copyC(key) {
   navigator.clipboard.writeText(ta.value).then(() => toast('Copiato!'));
 }
 
+function showColLoader(col, msg) {
+  if (!col) return;
+  col.classList.add('regenerating');
+  const overlay = document.createElement('div');
+  overlay.className = 'regen-overlay';
+  overlay.innerHTML = `<div class="spinner"></div><span>${msg || 'Rigenerando...'}</span>`;
+  col.appendChild(overlay);
+}
+function hideColLoader(col) {
+  if (!col) return;
+  col.classList.remove('regenerating');
+  const overlay = col.querySelector('.regen-overlay');
+  if (overlay) overlay.remove();
+}
+
 function regenerateSingle(format, idx) {
   const key = format + '_' + idx;
   const ta = document.getElementById('content-' + key);
@@ -5677,6 +5710,7 @@ function regenerateSingle(format, idx) {
   const feedback = fbTextarea ? fbTextarea.value.trim() : '';
   const sendBtn = fbRow ? fbRow.querySelector('.btn-green') : null;
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '...'; }
+  showColLoader(col, 'Rigenerando contenuto...');
 
   const s = selectedArticles[idx] || _creaArticles[idx] || (_creaArticles.length ? _creaArticles[idx % _creaArticles.length] : null) || { article: { title: '', description: '' }, opinion: '' };
   const opinionTa = document.getElementById('opinion-' + key);
@@ -5712,13 +5746,19 @@ function regenerateSingle(format, idx) {
     if (fbTextarea) fbTextarea.value = '';
     if (fbRow) fbRow.classList.remove('open');
     if (format === 'instagram') reRenderCarousel(key, idx);
+    // Re-render newsletter HTML preview after regeneration
+    if (format === 'newsletter') {
+      const previewEl = document.getElementById('nl-auto-preview-' + idx);
+      if (previewEl) autoRenderNlPreviewsCrea([{ content: data.content }]);
+      else autoRenderNlPreview();
+    }
     approvedItems[key] = false;
     const appBtn = col.querySelector('.btn-approve');
     if (appBtn) { appBtn.classList.remove('approved'); appBtn.textContent = 'Approva'; }
     col.classList.remove('approved');
+    hideColLoader(col);
     if (feedback) {
       toast('Rigenerato con feedback!');
-      // Also persist feedback for prompt tuning
       fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5728,6 +5768,7 @@ function regenerateSingle(format, idx) {
     saveSessionContent();
   })
   .catch(err => {
+    hideColLoader(col);
     toast('Errore: ' + err.message);
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Rigenera'; }
   });
@@ -5741,6 +5782,7 @@ function regenerateNewsletter() {
   const feedback = fbTextarea ? fbTextarea.value.trim() : '';
   const sendBtn = fbRow ? fbRow.querySelector('.btn-green') : null;
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '...'; }
+  showColLoader(col, 'Rigenerando newsletter...');
 
   fetch('/api/generate-newsletter', {
     method: 'POST',
@@ -5765,10 +5807,12 @@ function regenerateNewsletter() {
       }).catch(() => {});
     }
     saveSessionContent();
+    hideColLoader(col);
     // Re-render preview with new content
     autoRenderNlPreview();
   })
   .catch(err => {
+    hideColLoader(col);
     toast('Errore: ' + err.message);
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Rigenera'; }
   });
