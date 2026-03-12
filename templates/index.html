@@ -7126,10 +7126,7 @@ async function _finalizeGeneration(results, sessionId, sources, chatText, wantEm
   const actionsEl = document.getElementById('crea-results-actions');
   if (actionsEl) actionsEl.style.display = 'flex';
 
-  // Auto-render newsletter template preview if newsletter was generated
-  if (results.newsletter && results.newsletter.length > 0) {
-    autoRenderNlPreviewsCrea(results.newsletter);
-  }
+  // Newsletter preview now triggered inside renderCreaResults()
 
   // Save/update session
   if (!sessionId) {
@@ -7342,6 +7339,7 @@ function renderCreaResults(results) {
   let hasInstagram = false;
 
   for (const [platform, items] of Object.entries(results)) {
+    console.log('[renderCrea] platform:', platform, 'items:', items?.length);
     html += `<div class="content-section"><h2>${platformNames[platform] || platform}</h2><div class="content-grid">`;
     items.forEach((item, idx) => {
       const key = platform + '_' + idx;
@@ -7387,13 +7385,19 @@ function renderCreaResults(results) {
             <button class="btn btn-orange btn-small" onclick="scheduleContent('instagram', ${idx})">Programma</button>
           </div>
         </div>`;
-      } else if (platform === 'newsletter') {
-        // --- Newsletter: HTML template preview as main view ---
+      } else {
+        // --- All other platforms (linkedin, twitter, video_script, newsletter) ---
+        const isNl = (platform === 'newsletter');
         const words = text.split(/\s+/).filter(Boolean).length;
-        html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="newsletter" data-idx="${idx}" id="col-${key}">
-          <h3>Newsletter ${idx + 1}</h3>
+        const itemLabel = isNl ? 'Newsletter' : (platform === 'video_script' ? 'Script' : 'Post');
+        html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="${platform}" data-idx="${idx}" id="col-${key}">
+          <h3>${itemLabel} ${idx + 1}</h3>
           <div class="col-sub">${esc(item.source)}</div>
-          <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
+          <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>`;
+
+        if (isNl) {
+          // Newsletter: HTML preview as primary view, textarea hidden
+          html += `
           <div id="nl-auto-preview-${idx}" class="nl-auto-preview-crea" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;min-height:300px;">
             <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:40px;">
               <div class="spinner"></div>
@@ -7408,34 +7412,19 @@ function renderCreaResults(results) {
           </div>
           <div id="nl-source-wrap-${idx}" style="display:none;">
             <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
-            <div class="col-actions">
-              <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
-            </div>
-          </div>
-          <div class="feedback-row" id="fb-${key}">
-            <label class="fb-label">📝 Feedback:</label>
-            <textarea placeholder="Come vuoi che lo riscriva?" id="fb-text-${key}"></textarea>
-            <button class="btn btn-green btn-small" onclick="regenerateSingle('newsletter', ${idx})">Rigenera</button>
-          </div>
-          <div class="schedule-row">
-            <label>📅 Programma:</label>
-            <input type="datetime-local" id="sched-${key}">
-            <button class="btn btn-orange btn-small" onclick="scheduleContent('newsletter', ${idx})">Programma</button>
-          </div>
-        </div>`;
-      } else {
-        // --- All other platforms (linkedin, twitter, video_script) ---
-        const words = text.split(/\s+/).filter(Boolean).length;
-        html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="${platform}" data-idx="${idx}" id="col-${key}">
-          <h3>${platform === 'video_script' ? 'Script' : 'Post'} ${idx + 1}</h3>
-          <div class="col-sub">${esc(item.source)}</div>
-          <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
+          </div>`;
+        } else {
+          // Non-newsletter: standard textarea layout
+          html += `
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
           <div class="col-actions">
             <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia</button>
             <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
-          </div>
+          </div>`;
+        }
+
+        html += `
           <div class="feedback-row" id="fb-${key}">
             <label class="fb-label">📝 Feedback:</label>
             <textarea placeholder="Come vuoi che lo riscriva?" id="fb-text-${key}"></textarea>
@@ -7456,6 +7445,13 @@ function renderCreaResults(results) {
   // Trigger carousel image rendering for Instagram
   if (hasInstagram) {
     renderCreaCarouselImages(results.instagram || []);
+  }
+
+  // Trigger newsletter HTML preview rendering
+  const nlItems = results.newsletter || results.Newsletter || [];
+  if (nlItems.length > 0) {
+    console.log('[renderCrea] triggering NL preview for', nlItems.length, 'items');
+    autoRenderNlPreviewsCrea(nlItems);
   }
 }
 
@@ -8303,16 +8299,21 @@ async function autoRenderNlPreviewsCrea(nlItems) {
   if (!nlItems || nlItems.length === 0) return;
   const promises = nlItems.map(async (item, idx) => {
     const container = document.getElementById('nl-auto-preview-' + idx);
-    if (!container) return;
-    const ta = document.getElementById('content-newsletter_' + idx);
-    if (!ta || !ta.value.trim()) {
+    if (!container) { console.warn('[NL preview] container not found for idx', idx); return; }
+    // Try multiple textarea ID patterns
+    const ta = document.getElementById('content-newsletter_' + idx)
+             || document.getElementById('content-newsletter');
+    // Also accept text directly from the item
+    const nlText = (ta && ta.value && ta.value.trim()) ? ta.value : (item.content || '');
+    if (!nlText.trim()) {
       container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text2);font-size:13px;">Nessun contenuto newsletter.</p>';
       return;
     }
     try {
-      const nlPayload = { text: ta.value };
+      const nlPayload = { text: nlText };
       const nlTplId = (window._selectedGenTemplates || {}).newsletter;
       if (nlTplId) nlPayload.template_id = nlTplId;
+      console.log('[NL preview] fetching HTML, text length:', nlText.length, 'template:', nlTplId || 'none');
       const resp = await fetch('/api/newsletter/html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -8324,10 +8325,22 @@ async function autoRenderNlPreviewsCrea(nlItems) {
       const iframe = document.createElement('iframe');
       iframe.className = 'nl-auto-iframe';
       iframe.sandbox = 'allow-same-origin';
+      iframe.style.width = '100%';
+      iframe.style.minHeight = '400px';
+      iframe.style.border = 'none';
       container.innerHTML = '';
       container.appendChild(iframe);
       iframe.srcdoc = data.html;
+      // Auto-resize iframe when content loads
+      iframe.onload = () => {
+        try {
+          const h = iframe.contentDocument.body.scrollHeight;
+          if (h > 100) iframe.style.height = Math.min(h + 40, 800) + 'px';
+        } catch(e) {}
+      };
+      console.log('[NL preview] rendered successfully for idx', idx);
     } catch (err) {
+      console.error('[NL preview] error:', err);
       container.innerHTML = `<p style="padding:20px;text-align:center;color:#e74c3c;font-size:13px;">Errore rendering: ${err.message}</p>`;
     }
   });

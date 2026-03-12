@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 import feedparser
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context, g
+from flask import Flask, jsonify, render_template, request, Response, stream_with_context, g, make_response
 
 import db
 import auth
@@ -724,7 +724,11 @@ def landing():
 @app.route("/app")
 def app_dashboard():
     """SPA dashboard — serves the main application (auth handled client-side)."""
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 # ---------------------------------------------------------------------------
