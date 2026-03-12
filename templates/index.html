@@ -286,6 +286,9 @@ h3 { font-family: 'Syne', sans-serif; letter-spacing: -0.02em; }
 .btn-green:hover { opacity: 0.9; transform: translateY(-1px); }
 .btn-orange { background: var(--orange); color: #000; font-weight: 700; }
 .btn-orange:hover { opacity: 0.9; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-danger { background: #e74c3c; color: #fff; }
+.btn-danger:hover { background: #c0392b; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(231,76,60,0.35); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 
 /* Log */
@@ -2062,7 +2065,9 @@ body::after {
 .pers-card-meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
 .pers-card-badge { background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
 .pers-card-actions { display: flex; gap: 8px; padding: 8px 14px 12px; }
-.pers-card-actions .btn { font-size: 12px; padding: 4px 12px; }
+.pers-card-actions .btn { font-size: 12px; padding: 4px 12px; border-radius: 8px; transition: all 0.2s; }
+.pers-card-actions .btn-danger { background: transparent; color: #e74c3c; border: 1px solid #e74c3c; }
+.pers-card-actions .btn-danger:hover { background: #e74c3c; color: #fff; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(231,76,60,0.3); }
 
 /* Preset card */
 .pers-preset-card { position: relative; }
@@ -8484,7 +8489,7 @@ function renderPersHome() {
     grid.innerHTML = '<div class="pers-empty">Nessun template ancora. Creane uno!</div>';
   } else {
     grid.innerHTML = _persTemplates.map(t => `
-      <div class="pers-card" onclick="openTemplateChat('${t.id}')">
+      <div class="pers-card" data-template-id="${t.id}" onclick="openTemplateChat('${t.id}')">
         ${_renderCardThumb(t, false)}
         <div class="pers-card-body">
           <div class="pers-card-name">${esc(t.name)}</div>
@@ -8981,19 +8986,90 @@ function persPreviewMode(mode, btn) {
 
 async function deleteTemplate(id, name) {
   if (!confirm(`Eliminare il template "${name}"?`)) return;
-  showLoading('Eliminazione template...');
+
+  // Find the card and apply blur effect immediately for perceived speed
+  const card = document.querySelector(`.pers-card[data-template-id="${id}"]`);
+  if (card) {
+    card.style.transition = 'filter 0.3s, opacity 0.3s, transform 0.3s';
+    card.style.filter = 'blur(3px)';
+    card.style.opacity = '0.5';
+    card.style.pointerEvents = 'none';
+    card.style.transform = 'scale(0.97)';
+  }
+
   try {
     const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
-    hideLoading();
-    if (res.ok) { toast('Template eliminato'); loadPersonalizzazione(); }
-    else toast('Errore nell\'eliminazione');
-  } catch(e) { hideLoading(); toast('Errore'); }
+    if (res.ok) {
+      // Animate card removal
+      if (card) {
+        card.style.transition = 'all 0.4s ease-out';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.9) translateY(10px)';
+        card.style.maxHeight = card.offsetHeight + 'px';
+        card.style.overflow = 'hidden';
+        setTimeout(() => {
+          card.style.maxHeight = '0';
+          card.style.padding = '0';
+          card.style.margin = '0';
+          card.style.border = 'none';
+        }, 200);
+      }
+      toast('Template eliminato');
+      // Reload after animation completes
+      setTimeout(() => loadPersonalizzazione(), 600);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      console.error('[deleteTemplate] failed:', res.status, data);
+      toast(data.error || 'Errore nell\'eliminazione');
+      // Restore card
+      if (card) {
+        card.style.filter = 'none';
+        card.style.opacity = '1';
+        card.style.pointerEvents = '';
+        card.style.transform = '';
+      }
+    }
+  } catch(e) {
+    console.error('[deleteTemplate] exception:', e);
+    toast('Errore di rete');
+    if (card) {
+      card.style.filter = 'none';
+      card.style.opacity = '1';
+      card.style.pointerEvents = '';
+      card.style.transform = '';
+    }
+  }
 }
 
-function deleteCurrentTemplate() {
-  if (_persCurrentId) {
-    const title = document.getElementById('pers-chat-title').textContent;
-    deleteTemplate(_persCurrentId, title);
+async function deleteCurrentTemplate() {
+  if (!_persCurrentId) return;
+  const title = document.getElementById('pers-chat-title').textContent;
+  if (!confirm(`Eliminare il template "${title}"?`)) return;
+
+  // Blur the chat view
+  const chatLayout = document.querySelector('.pers-chat-layout');
+  if (chatLayout) {
+    chatLayout.style.transition = 'filter 0.3s, opacity 0.3s';
+    chatLayout.style.filter = 'blur(3px)';
+    chatLayout.style.opacity = '0.5';
+  }
+
+  try {
+    const res = await fetch(`/api/templates/${_persCurrentId}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast('Template eliminato');
+      _persCurrentId = null;
+      showPersHome();
+      loadPersonalizzazione();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error || 'Errore nell\'eliminazione');
+      if (chatLayout) { chatLayout.style.filter = 'none'; chatLayout.style.opacity = '1'; }
+    }
+  } catch(e) {
+    console.error('[deleteCurrentTemplate] exception:', e);
+    toast('Errore di rete');
+    if (chatLayout) { chatLayout.style.filter = 'none'; chatLayout.style.opacity = '1'; }
   }
 }
 
