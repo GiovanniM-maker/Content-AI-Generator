@@ -82,8 +82,9 @@ def _before_request_auth():
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-MODEL_CHEAP = "google/gemini-2.0-flash-001"
-MODEL_GENERATION = "anthropic/claude-sonnet-4-5"
+MODEL_CHEAP = "google/gemini-2.0-flash-001"           # Cheapest: scoring, parsing, quick tasks ($0.10/M in, $0.40/M out)
+MODEL_SMART = "google/gemini-3.1-pro-preview"          # Smart+affordable: generation, HTML, template chat ($2/M in, $12/M out)
+MODEL_PREMIUM = "anthropic/claude-sonnet-4-5"          # Premium fallback only ($3/M in, $15/M out)
 
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
@@ -355,6 +356,100 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
     return data["choices"][0]["message"]["content"]
 
 
+def _llm_call_validated(messages: list, model: str = MODEL_SMART,
+                        temperature: float = 0.5, expect_json: bool = False,
+                        expect_html: bool = False, fallback_model: str = None) -> str:
+    """Two-model pipeline: generate with primary model, validate, retry with fallback if needed.
+
+    Validator logic (deterministic, no AI cost):
+    - expect_json: Verifies output is valid JSON, attempts to fix common issues
+    - expect_html: Verifies output contains proper HTML structure
+    - If validation fails, retries once with the same model (stricter prompt)
+    - If retry fails and fallback_model given, tries with fallback
+    """
+    raw = _llm_call(messages, model=model, temperature=temperature)
+
+    # --- Deterministic validator (no AI, just code) ---
+    if expect_json:
+        cleaned = _strip_fences(raw)
+        try:
+            json.loads(cleaned)
+            return cleaned  # valid JSON
+        except json.JSONDecodeError:
+            # Try to extract JSON from text
+            first = cleaned.find("{")
+            last = cleaned.rfind("}")
+            if first != -1 and last > first:
+                try:
+                    json.loads(cleaned[first:last + 1])
+                    return cleaned[first:last + 1]
+                except json.JSONDecodeError:
+                    pass
+            # Try array
+            first = cleaned.find("[")
+            last = cleaned.rfind("]")
+            if first != -1 and last > first:
+                try:
+                    json.loads(cleaned[first:last + 1])
+                    return cleaned[first:last + 1]
+                except json.JSONDecodeError:
+                    pass
+            _log_pipeline("warn", f"JSON validation failed, retrying", {"model": model})
+            # Retry with explicit instruction
+            retry_msgs = messages + [
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": "ERRORE: la tua risposta non è JSON valido. Rispondi con SOLO JSON valido, senza testo prima o dopo. Niente ```json```, niente commenti."}
+            ]
+            retry_model = fallback_model or model
+            raw2 = _llm_call(retry_msgs, model=retry_model, temperature=max(0.1, temperature - 0.2))
+            cleaned2 = _strip_fences(raw2)
+            try:
+                json.loads(cleaned2)
+                return cleaned2
+            except json.JSONDecodeError:
+                first2 = cleaned2.find("{")
+                last2 = cleaned2.rfind("}")
+                if first2 != -1 and last2 > first2:
+                    try:
+                        json.loads(cleaned2[first2:last2 + 1])
+                        return cleaned2[first2:last2 + 1]
+                    except json.JSONDecodeError:
+                        pass
+                _log_pipeline("error", "JSON validation failed after retry")
+                return raw  # Return original, let caller handle
+
+    if expect_html:
+        cleaned = _strip_fences(raw)
+        # Basic HTML validation: must contain <html or <!DOCTYPE or at minimum a <div
+        if "<html" in cleaned.lower() or "<!doctype" in cleaned.lower() or "<div" in cleaned.lower():
+            return cleaned
+        _log_pipeline("warn", f"HTML validation failed, retrying", {"model": model})
+        retry_msgs = messages + [
+            {"role": "assistant", "content": raw},
+            {"role": "user", "content": "ERRORE: la tua risposta non contiene HTML valido. Restituisci SOLO il codice HTML completo, da <!DOCTYPE html> a </html>. Niente commenti, niente ```."}
+        ]
+        retry_model = fallback_model or model
+        raw2 = _llm_call(retry_msgs, model=retry_model, temperature=max(0.1, temperature - 0.2))
+        cleaned2 = _strip_fences(raw2)
+        return cleaned2
+
+    return raw
+
+
+def _strip_fences(s: str) -> str:
+    """Remove markdown code fences from LLM output."""
+    s = s.strip()
+    if s.startswith("```json"):
+        s = s[7:]
+    elif s.startswith("```html"):
+        s = s[7:]
+    elif s.startswith("```"):
+        s = s[3:]
+    if s.endswith("```"):
+        s = s[:-3]
+    return s.strip()
+
+
 def _parse_published(entry) -> datetime | None:
     """Extract published datetime from a feed entry."""
     for attr in ("published_parsed", "updated_parsed"):
@@ -453,7 +548,7 @@ ISTRUZIONI:
     try:
         result = _llm_call(
             [{"role": "user", "content": enrichment_msg}],
-            model=MODEL_GENERATION, temperature=0.3,
+            model=MODEL_SMART, temperature=0.3,
         )
         return result.strip()
     except Exception as e:
@@ -2089,7 +2184,7 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
                 {"role": "system", "content": _get_prompt("system_prompt")},
                 {"role": "user", "content": user_msg},
             ],
-            model=MODEL_GENERATION, temperature=0.7,
+            model=MODEL_SMART, temperature=0.7,
         )
         _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
         _update_weekly_status(format_type, "generated")
@@ -2187,7 +2282,7 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
                 {"role": "system", "content": _get_prompt("system_prompt")},
                 {"role": "user", "content": user_msg},
             ],
-            model=MODEL_GENERATION, temperature=0.7,
+            model=MODEL_SMART, temperature=0.7,
         )
         _log_pipeline("info", "Generated newsletter")
         _update_weekly_status("newsletter", "generated")
@@ -2287,21 +2382,14 @@ TESTO NEWSLETTER:
 """
 
     try:
-        result = _llm_call(
+        html_result = _llm_call_validated(
             [
                 {"role": "system", "content": "Sei un esperto di email HTML design. Converti il testo in HTML email con inline CSS perfetto per Beehiiv."},
                 {"role": "user", "content": conversion_prompt + text},
             ],
-            model=MODEL_GENERATION, temperature=0.3,
+            model=MODEL_SMART, temperature=0.3,
+            expect_html=True,
         )
-        html_result = result.strip()
-        if html_result.startswith("```html"):
-            html_result = html_result[7:]
-        if html_result.startswith("```"):
-            html_result = html_result[3:]
-        if html_result.endswith("```"):
-            html_result = html_result[:-3]
-        html_result = html_result.strip()
         _log_pipeline("info", "Converted newsletter to HTML")
         return jsonify({"html": html_result})
     except Exception as e:
@@ -3100,26 +3188,19 @@ REGOLE:
         messages.append({"role": "user", "content": user_message})
 
     try:
-        raw_response = _llm_call(messages, model=MODEL_GENERATION, temperature=0.4)
+        raw_response = _llm_call_validated(
+            messages, model=MODEL_SMART, temperature=0.4,
+            expect_json=True,
+        )
 
         # Parse JSON response from LLM
         reply_text = ""
         new_html = current_html
         html_changed = False
 
-        def _strip_code_fences(s):
-            s = s.strip()
-            if s.startswith("```json"):
-                s = s[7:]
-            elif s.startswith("```"):
-                s = s[3:]
-            if s.endswith("```"):
-                s = s[:-3]
-            return s.strip()
-
         def _try_parse_response(text):
             """Try multiple strategies to extract JSON from the LLM response."""
-            cleaned = _strip_code_fences(text)
+            cleaned = _strip_fences(text)
             # Strategy 1: Direct JSON parse
             try:
                 parsed = json.loads(cleaned)
@@ -3153,7 +3234,7 @@ REGOLE:
             _log_pipeline("warn", "Template chat: model returned JSON without 'html' field")
         else:
             # No valid JSON — try to find raw HTML
-            cleaned = _strip_code_fences(raw_response)
+            cleaned = _strip_fences(raw_response)
             html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
             if html_match:
                 new_html = html_match.group(1)
