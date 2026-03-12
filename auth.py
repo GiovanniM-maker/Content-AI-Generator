@@ -44,11 +44,22 @@ def _get_jwt_secret() -> str:
 # ---------------------------------------------------------------------------
 
 def _extract_token() -> str | None:
-    """Extract JWT token from Authorization header or cookie."""
+    """Extract JWT token from Authorization header, query param, or cookie.
+
+    Priority order:
+    1. Authorization: Bearer <token> header (standard API calls)
+    2. ?token=<token> query parameter (for EventSource/SSE which can't set headers)
+    3. sb-access-token cookie (legacy fallback)
+    """
     # Check Authorization header first
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         return auth_header[7:]
+
+    # Check query parameter (needed for EventSource/SSE which cannot set headers)
+    token = request.args.get("token")
+    if token:
+        return token
 
     # Check cookie fallback
     token = request.cookies.get("sb-access-token")

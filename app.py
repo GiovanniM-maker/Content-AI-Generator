@@ -1531,14 +1531,26 @@ def feed_progress():
 
     def generate():
         sent = 0
+        last_ping = time.time()
+        max_duration = 300  # 5 min safety limit
+        start = time.time()
         while True:
             progress = state["progress"]
             while sent < len(progress):
                 msg = progress[sent]
                 yield f"data: {json.dumps({'msg': msg})}\n\n"
                 sent += 1
+                last_ping = time.time()
             if not state["running"] and sent >= len(progress):
                 yield f"data: {json.dumps({'done': True})}\n\n"
+                break
+            # Send keep-alive comment every 15s to prevent proxy timeout
+            if time.time() - last_ping > 15:
+                yield ": keepalive\n\n"
+                last_ping = time.time()
+            # Safety timeout
+            if time.time() - start > max_duration:
+                yield f"data: {json.dumps({'done': True, 'msg': 'Timeout raggiunto'})}\n\n"
                 break
             time.sleep(0.3)
         # Cleanup: free progress memory after stream completes
@@ -1546,7 +1558,10 @@ def feed_progress():
             if user_id in _fetch_state and not _fetch_state[user_id].get("running"):
                 _fetch_state.pop(user_id, None)
 
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+    resp = Response(stream_with_context(generate()), mimetype="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"  # Disable Nginx/proxy buffering
+    return resp
 
 
 def _do_fetch(user_id: str, state: dict, feeds_config: dict):

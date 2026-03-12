@@ -4890,7 +4890,9 @@ function fetchFeeds() {
   fetch('/api/feeds/fetch', { method: 'POST' })
     .then(r => {
       if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'Errore'); });
-      const es = new EventSource('/api/feeds/progress');
+      const _sseToken = getAccessToken();
+      const _sseUrl = '/api/feeds/progress' + (_sseToken ? '?token=' + encodeURIComponent(_sseToken) : '');
+      const es = new EventSource(_sseUrl);
       es.onmessage = (e) => {
         const data = JSON.parse(e.data);
         if (data.done) {
@@ -4908,7 +4910,11 @@ function fetchFeeds() {
           log.scrollTop = log.scrollHeight;
         }
       };
-      es.onerror = () => { es.close(); btn.disabled = false; };
+      es.onerror = () => {
+        es.close();
+        log.innerHTML += '<span class="log-err">⚠ Connessione interrotta. Il fetch continua in background — ricarica tra 1 minuto per vedere i risultati.</span>\n';
+        btn.disabled = false;
+      };
     })
     .catch(err => {
       log.innerHTML += `<span class="log-err">Errore: ${esc(err.message)}</span>\n`;
@@ -6747,28 +6753,68 @@ async function autoFetchIfStale(force) {
   try {
     const fetchResp = await fetch('/api/feeds/fetch', { method: 'POST' });
     if (fetchResp.status === 409) {
-      // Already running — connect to existing progress stream
       logBox.innerHTML += '<div>⏳ Fetch già in corso, monitoraggio...</div>';
     } else if (!fetchResp.ok) {
       const errData = await fetchResp.json().catch(() => ({}));
       throw new Error(errData.error || `Errore HTTP ${fetchResp.status}`);
     }
-    // Stream progress via SSE
-    const es = new EventSource('/api/feeds/progress');
+
+    // Wait for feed fetch to complete via SSE, with poll fallback
     let hasErrors = false;
-    await new Promise((resolve) => {
-      es.onmessage = (ev) => {
-        const d = JSON.parse(ev.data);
-        if (d.msg) {
-          if (d.msg.includes('Warning') || d.msg.includes('❌')) hasErrors = true;
-          logBox.innerHTML += '<div>' + esc(d.msg) + '</div>';
-          logBox.scrollTop = logBox.scrollHeight;
-          document.getElementById('dash-fetch-msg').textContent = d.msg;
-        }
-        if (d.done) { es.close(); resolve(); }
-      };
-      es.onerror = () => { es.close(); resolve(); };
-    });
+    let sseDone = false;
+
+    // Try SSE first (real-time progress)
+    try {
+      const _sseToken2 = getAccessToken();
+      const _sseUrl2 = '/api/feeds/progress' + (_sseToken2 ? '?token=' + encodeURIComponent(_sseToken2) : '');
+      const es = new EventSource(_sseUrl2);
+      await new Promise((resolve, reject) => {
+        const sseTimeout = setTimeout(() => { es.close(); reject(new Error('sse_timeout')); }, 180000);
+        es.onmessage = (ev) => {
+          try {
+            const d = JSON.parse(ev.data);
+            if (d.msg) {
+              if (d.msg.includes('Warning') || d.msg.includes('❌')) hasErrors = true;
+              logBox.innerHTML += '<div>' + esc(d.msg) + '</div>';
+              logBox.scrollTop = logBox.scrollHeight;
+              document.getElementById('dash-fetch-msg').textContent = d.msg;
+            }
+            if (d.done) { clearTimeout(sseTimeout); es.close(); resolve(); }
+          } catch(pe) { /* ignore parse error */ }
+        };
+        es.onerror = () => { clearTimeout(sseTimeout); es.close(); reject(new Error('sse_error')); };
+      });
+      sseDone = true;
+    } catch(sseErr) {
+      // SSE failed (connection drop, timeout, auth) — fall back to polling
+      logBox.innerHTML += '<div>⏳ Connessione real-time interrotta, polling in corso...</div>';
+      document.getElementById('dash-fetch-msg').textContent = 'Aggiornamento in corso...';
+    }
+
+    // Poll fallback: keep checking /api/articles/status until count > 0 or timeout
+    if (!sseDone) {
+      const pollStart = Date.now();
+      const pollTimeout = 180000; // 3 minutes max
+      while (Date.now() - pollStart < pollTimeout) {
+        await new Promise(r => setTimeout(r, 3000)); // check every 3s
+        try {
+          const statusResp = await fetch('/api/articles/status');
+          const statusData = await statusResp.json();
+          if (statusData.count > 0 && !statusData.stale) {
+            logBox.innerHTML += '<div>✅ Articoli pronti!</div>';
+            break;
+          }
+          // Also check if progress stream reports done
+          const progResp = await fetch('/api/feeds/progress?token=' + encodeURIComponent(getAccessToken() || ''));
+          // If we get a quick response with done, we know it finished
+          const reader = progResp.body?.getReader();
+          if (reader) { reader.cancel(); }
+        } catch(pe) { /* continue polling */ }
+        const elapsed = Math.round((Date.now() - pollStart) / 1000);
+        document.getElementById('dash-fetch-msg').textContent = `Aggiornamento feed in corso... (${elapsed}s)`;
+      }
+    }
+
     fetchOk = true;
     document.getElementById('dash-last-update').textContent = hasErrors ? 'Aggiornato (con avvisi)' : 'Aggiornato ora';
   } catch(e) {
@@ -6846,7 +6892,7 @@ function updateGenSummary() {
   const platCount = document.getElementById('crea-plat-count');
   if (platCount) platCount.textContent = total;
   if (total === 0) {
-    summaryEl.textContent = 'Seleziona almeno una piattaforma';
+    summaryEl.innerHTML = '<span style="color:var(--red);font-weight:600;">⚠ Seleziona almeno una piattaforma</span>';
     btn.disabled = true;
     btn.textContent = '✨ Genera contenuti';
   } else {
@@ -7032,6 +7078,11 @@ async function _finalizeGeneration(results, sessionId, sources, chatText, wantEm
   renderCreaResults(results);
   const actionsEl = document.getElementById('crea-results-actions');
   if (actionsEl) actionsEl.style.display = 'flex';
+
+  // Auto-render newsletter template preview if newsletter was generated
+  if (results.newsletter && results.newsletter.length > 0) {
+    autoRenderNlPreviewsCrea(results.newsletter);
+  }
 
   // Save/update session
   if (!sessionId) {
@@ -7289,11 +7340,41 @@ function renderCreaResults(results) {
             <button class="btn btn-orange btn-small" onclick="scheduleContent('instagram', ${idx})">Programma</button>
           </div>
         </div>`;
+      } else if (platform === 'newsletter') {
+        // --- Newsletter: include template preview ---
+        const words = text.split(/\s+/).filter(Boolean).length;
+        html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="newsletter" data-idx="${idx}" id="col-${key}">
+          <h3>Newsletter ${idx + 1}</h3>
+          <div class="col-sub">${esc(item.source)}</div>
+          <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
+          <div id="nl-auto-preview-${idx}" class="nl-auto-preview-crea" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;">
+            <div class="loading" style="justify-content:center;padding:30px;"><div class="spinner"></div>Rendering newsletter con template...</div>
+          </div>
+          <div class="col-actions" style="margin-bottom:8px;">
+            <button class="btn btn-secondary btn-small" onclick="copyNlHtmlCrea(${idx})">📋 Copia HTML</button>
+            <button class="btn btn-primary btn-small" onclick="copyC('${key}')">Copia testo</button>
+            <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
+          </div>
+          <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
+          <div class="col-actions">
+            <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
+          </div>
+          <div class="feedback-row" id="fb-${key}">
+            <label class="fb-label">📝 Feedback:</label>
+            <textarea placeholder="Come vuoi che lo riscriva?" id="fb-text-${key}"></textarea>
+            <button class="btn btn-green btn-small" onclick="regenerateSingle('newsletter', ${idx})">Rigenera</button>
+          </div>
+          <div class="schedule-row">
+            <label>📅 Programma:</label>
+            <input type="datetime-local" id="sched-${key}">
+            <button class="btn btn-orange btn-small" onclick="scheduleContent('newsletter', ${idx})">Programma</button>
+          </div>
+        </div>`;
       } else {
-        // --- All other platforms ---
+        // --- All other platforms (linkedin, twitter, video_script) ---
         const words = text.split(/\s+/).filter(Boolean).length;
         html += `<div class="content-col ${isApproved ? 'approved' : ''}" data-format="${platform}" data-idx="${idx}" id="col-${key}">
-          <h3>${platform === 'newsletter' ? 'Newsletter' : (platform === 'video_script' ? 'Script' : 'Post')} ${idx + 1}</h3>
+          <h3>${platform === 'video_script' ? 'Script' : 'Post'} ${idx + 1}</h3>
           <div class="col-sub">${esc(item.source)}</div>
           <div class="col-meta">${words} parole &middot; ${text.length} caratteri</div>
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="min-height:150px;">${esc(text)}</textarea>
@@ -8130,7 +8211,8 @@ function closeNlPreview() {
 async function autoRenderNlPreview() {
   const container = document.getElementById('nl-auto-preview');
   if (!container) return;
-  const ta = document.getElementById('content-newsletter');
+  // Support both old flow (content-newsletter) and Crea flow (content-newsletter_0)
+  const ta = document.getElementById('content-newsletter') || document.getElementById('content-newsletter_0');
   if (!ta || !ta.value.trim()) {
     container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text2);font-size:13px;">Nessun contenuto newsletter da visualizzare.</p>';
     cachedNlHtml = '';
@@ -8160,6 +8242,49 @@ async function autoRenderNlPreview() {
     container.innerHTML = `<p style="padding:20px;text-align:center;color:#e74c3c;font-size:13px;">Errore rendering: ${err.message}</p>`;
     cachedNlHtml = '';
   }
+}
+
+// Auto-render newsletter previews in Crea flow (supports multiple newsletters)
+let _creaNlHtmlCache = {};
+async function autoRenderNlPreviewsCrea(nlItems) {
+  if (!nlItems || nlItems.length === 0) return;
+  const promises = nlItems.map(async (item, idx) => {
+    const container = document.getElementById('nl-auto-preview-' + idx);
+    if (!container) return;
+    const ta = document.getElementById('content-newsletter_' + idx);
+    if (!ta || !ta.value.trim()) {
+      container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text2);font-size:13px;">Nessun contenuto newsletter.</p>';
+      return;
+    }
+    try {
+      const nlPayload = { text: ta.value };
+      const nlTplId = (window._selectedGenTemplates || {}).newsletter;
+      if (nlTplId) nlPayload.template_id = nlTplId;
+      const resp = await fetch('/api/newsletter/html', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nlPayload),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      _creaNlHtmlCache[idx] = data.html;
+      const iframe = document.createElement('iframe');
+      iframe.className = 'nl-auto-iframe';
+      iframe.sandbox = 'allow-same-origin';
+      container.innerHTML = '';
+      container.appendChild(iframe);
+      iframe.srcdoc = data.html;
+    } catch (err) {
+      container.innerHTML = `<p style="padding:20px;text-align:center;color:#e74c3c;font-size:13px;">Errore rendering: ${err.message}</p>`;
+    }
+  });
+  await Promise.allSettled(promises);
+}
+
+function copyNlHtmlCrea(idx) {
+  const html = _creaNlHtmlCache[idx];
+  if (!html) { toast('Nessun HTML da copiare. Attendi il rendering.'); return; }
+  navigator.clipboard.writeText(html).then(() => toast('HTML newsletter copiato! ✨'));
 }
 
 function nlSwitchView(view, btn) {
