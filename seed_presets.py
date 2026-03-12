@@ -704,6 +704,15 @@ def seed():
     existing = sb.table("preset_templates").select("id, name, template_type").execute()
     existing_map = {(r["name"], r["template_type"]): r["id"] for r in (existing.data or [])}
 
+    # Detect if 'components' column exists (try a select)
+    has_components_col = True
+    try:
+        sb.table("preset_templates").select("id,components").limit(1).execute()
+    except Exception:
+        has_components_col = False
+        print("⚠  Column 'components' not found — run migration_add_components.sql first!")
+        print("   NL presets will be seeded WITHOUT components.\n")
+
     updated = 0
     created = 0
 
@@ -719,8 +728,8 @@ def seed():
             "html_content": preset["html_content"],
             "aspect_ratio": preset["aspect_ratio"],
         }
-        # Include components if present (newsletter v2)
-        if "components" in preset:
+        # Include components if present AND column exists (newsletter v2)
+        if "components" in preset and has_components_col:
             update_data["components"] = preset["components"]
             insert_data["components"] = preset["components"]
         if key in existing_map:
@@ -733,6 +742,9 @@ def seed():
             print(f"  Created: {preset['template_type']}/{preset['name']}")
 
     print(f"\nDone! Updated: {updated}, Created: {created}")
+    if not has_components_col:
+        print("\n⚠  Re-run this script AFTER running migration_add_components.sql")
+        print("   to populate components for newsletter presets.")
 
 
 if __name__ == "__main__":
