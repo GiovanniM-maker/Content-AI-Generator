@@ -86,11 +86,30 @@ def _clamp(value: int | float, lo: int | float, hi: int | float) -> int | float:
     return max(lo, min(hi, value))
 
 
+def _safe_int(value, default: int) -> int:
+    """Convert to int safely, returning default on failure."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(value, default: float) -> float:
+    """Convert to float safely, returning default on failure."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def _is_valid_color(c: str) -> bool:
     """Check if a color string looks safe (hex, rgb, rgba, hsl, or named CSS)."""
     if not isinstance(c, str):
         return False
     c = c.strip()
+    # Block CSS injection characters
+    if '}' in c or ';' in c:
+        return False
     if re.match(r'^#[0-9a-fA-F]{3,8}$', c):
         return True
     if re.match(r'^(rgb|rgba|hsl|hsla|linear-gradient|radial-gradient)\(', c):
@@ -129,28 +148,36 @@ def validate_design_spec(spec: dict) -> dict[str, Any]:
         if "body_font" in typo and str(typo["body_font"]) in ALLOWED_FONTS:
             clean["typography"]["body_font"] = str(typo["body_font"])
         if "heading_weight" in typo:
-            clean["typography"]["heading_weight"] = int(_clamp(int(typo["heading_weight"]), 100, 900))
+            v = _safe_int(typo["heading_weight"], clean["typography"]["heading_weight"])
+            clean["typography"]["heading_weight"] = int(_clamp(v, 100, 900))
         if "body_weight" in typo:
-            clean["typography"]["body_weight"] = int(_clamp(int(typo["body_weight"]), 100, 900))
+            v = _safe_int(typo["body_weight"], clean["typography"]["body_weight"])
+            clean["typography"]["body_weight"] = int(_clamp(v, 100, 900))
         if "heading_size_px" in typo:
-            clean["typography"]["heading_size_px"] = int(_clamp(int(typo["heading_size_px"]), 24, 120))
+            v = _safe_int(typo["heading_size_px"], clean["typography"]["heading_size_px"])
+            clean["typography"]["heading_size_px"] = int(_clamp(v, 24, 120))
         if "body_size_px" in typo:
-            clean["typography"]["body_size_px"] = int(_clamp(int(typo["body_size_px"]), 14, 60))
+            v = _safe_int(typo["body_size_px"], clean["typography"]["body_size_px"])
+            clean["typography"]["body_size_px"] = int(_clamp(v, 14, 60))
         if "line_height" in typo:
-            clean["typography"]["line_height"] = float(_clamp(float(typo["line_height"]), 0.8, 2.5))
+            v = _safe_float(typo["line_height"], clean["typography"]["line_height"])
+            clean["typography"]["line_height"] = float(_clamp(v, 0.8, 2.5))
 
     # Layout
     if "layout" in spec and isinstance(spec["layout"], dict):
         lay = spec["layout"]
         if "padding_px" in lay:
-            clean["layout"]["padding_px"] = int(_clamp(int(lay["padding_px"]), 20, 160))
+            v = _safe_int(lay["padding_px"], clean["layout"]["padding_px"])
+            clean["layout"]["padding_px"] = int(_clamp(v, 20, 160))
         if "corner_radius_px" in lay:
-            clean["layout"]["corner_radius_px"] = int(_clamp(int(lay["corner_radius_px"]), 0, 60))
+            v = _safe_int(lay["corner_radius_px"], clean["layout"]["corner_radius_px"])
+            clean["layout"]["corner_radius_px"] = int(_clamp(v, 0, 60))
         for bool_key in ["show_slide_counter", "show_brand_footer", "accent_line", "decorative_orbs"]:
             if bool_key in lay and isinstance(lay[bool_key], bool):
                 clean["layout"][bool_key] = lay[bool_key]
         if "accent_line_width_px" in lay:
-            clean["layout"]["accent_line_width_px"] = int(_clamp(int(lay["accent_line_width_px"]), 0, 200))
+            v = _safe_int(lay["accent_line_width_px"], clean["layout"]["accent_line_width_px"])
+            clean["layout"]["accent_line_width_px"] = int(_clamp(v, 0, 200))
         if "brand_position" in lay and lay["brand_position"] in ("bottom", "top", "none"):
             clean["layout"]["brand_position"] = lay["brand_position"]
 
@@ -167,7 +194,7 @@ def validate_design_spec(spec: dict) -> dict[str, Any]:
         for key in ("logo_url", "background_image_url"):
             if key in spec["images"] and isinstance(spec["images"][key], str):
                 url = spec["images"][key].strip()
-                if url == "" or url.startswith("https://"):
+                if url == "" or (url.startswith("https://") and len(url) <= 2048):
                     clean["images"][key] = url
 
     return clean

@@ -3106,20 +3106,23 @@ def render_carousel_images():
                     )
                     slide_htmls.append(html)
 
-                # Use Playwright to render HTML → PNG
-                from carousel_renderer import render_carousel_from_template_async
-                # Build a template JSON that maps each slide to its pre-rendered HTML
-                template_json = json.dumps({
-                    "cover": slide_htmls[0] if len(slide_htmls) > 0 else "",
-                    "content": slide_htmls[1] if len(slide_htmls) > 1 else slide_htmls[0],
-                    "list": slide_htmls[2] if len(slide_htmls) > 2 else slide_htmls[0],
-                    "cta": slide_htmls[-1] if len(slide_htmls) > 1 else slide_htmls[0],
-                })
-                result = render_carousel_from_template_async(
-                    text,
-                    template_html=template_json,
-                    aspect_ratio=aspect_ratio,
+                # Render each pre-built HTML directly via Playwright
+                from carousel_renderer import (
+                    parse_carousel_text, ASPECT_DIMENSIONS as CR_DIMS,
                 )
+                from playwright.sync_api import sync_playwright
+                cr_width, cr_height = CR_DIMS.get(aspect_ratio, (1080, 1080))
+                slides_bytes = []
+                with sync_playwright() as pw:
+                    browser = pw.chromium.launch(headless=True)
+                    page = browser.new_page(viewport={"width": cr_width, "height": cr_height})
+                    for slide_html in slide_htmls:
+                        page.set_content(slide_html, wait_until="networkidle")
+                        page.wait_for_timeout(500)
+                        slides_bytes.append(page.screenshot(type="png"))
+                    browser.close()
+                _, carousel_caption = parse_carousel_text(text)
+                result = {"slides_bytes": slides_bytes, "caption": carousel_caption}
             else:
                 # Legacy path: use html_content directly
                 from carousel_renderer import render_carousel_from_template_async
@@ -3768,8 +3771,9 @@ def template_preview(template_id):
 
     template_type = tpl["template_type"]
     html_content = tpl.get("html_content", "")
+    design_spec = tpl.get("design_spec") or None
 
-    if not html_content.strip():
+    if not design_spec and not html_content.strip():
         return jsonify({"error": "Template vuoto — inizia a chattare per crearlo"}), 400
 
     if template_type == "newsletter":
@@ -3805,7 +3809,6 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
 
     # For Instagram — render all 4 slide types as mini-gallery
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
-    design_spec = tpl.get("design_spec") or None
 
     # ── Fast path: in-memory cache (keyed on content hash) ──
     import hashlib
