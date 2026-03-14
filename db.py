@@ -1085,8 +1085,13 @@ def create_user_template(
     aspect_ratio: str = "1:1",
     chat_history: list = None,
     components: dict = None,
+    design_spec: dict = None,
 ) -> dict:
-    """Create a new user template."""
+    """Create a new user template.
+
+    design_spec: structured DesignSystemSpec JSON (new architecture).
+    html_content: legacy HTML storage (kept for backward compatibility).
+    """
     row = {
         "user_id": user_id,
         "template_type": template_type,
@@ -1096,6 +1101,8 @@ def create_user_template(
         "chat_history": chat_history or [],
         "components": components or {},
     }
+    if design_spec is not None:
+        row["design_spec"] = design_spec
     result = _sb().table("user_templates").insert(row).execute()
     return result.data[0] if result.data else {}
 
@@ -1107,8 +1114,12 @@ def update_user_template(
     chat_history: list = None,
     name: str = None,
     components: dict = None,
+    design_spec: dict = None,
 ) -> dict:
-    """Update an existing user template (with ownership check)."""
+    """Update an existing user template (with ownership check).
+
+    design_spec: structured DesignSystemSpec JSON (new architecture).
+    """
     updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if html_content is not None:
         updates["html_content"] = html_content
@@ -1118,6 +1129,8 @@ def update_user_template(
         updates["name"] = name
     if components is not None:
         updates["components"] = components
+    if design_spec is not None:
+        updates["design_spec"] = design_spec
     result = (
         _sb().table("user_templates")
         .update(updates)
