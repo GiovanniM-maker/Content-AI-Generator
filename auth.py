@@ -8,42 +8,11 @@ Provides:
 """
 
 import functools
-import logging
 import os
-import re as _re
 import time
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from flask import request, jsonify, g
-
-_log = logging.getLogger(__name__)
-
-_EMAIL_RE = _re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
-
-
-def _is_valid_email(email: str) -> bool:
-    """Basic email format validation."""
-    return bool(_EMAIL_RE.match(email)) if email else False
-
-
-def _retry_session(retries: int = 3, backoff_factor: float = 0.3) -> requests.Session:
-    """Create a requests session with retry logic for transient errors."""
-    session = requests.Session()
-    retry = Retry(
-        total=retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=[502, 503, 504],
-        allowed_methods=["GET", "POST"],
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
-
-
-_http = _retry_session()
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -110,8 +79,8 @@ def verify_token(token: str) -> dict | None:
         return None
 
     try:
-        # Use Supabase GoTrue API to verify token and get user (with retry)
-        resp = _http.get(
+        # Use Supabase GoTrue API to verify token and get user
+        resp = requests.get(
             f"{SUPABASE_URL}/auth/v1/user",
             headers={
                 "Authorization": f"Bearer {token}",
@@ -128,8 +97,7 @@ def verify_token(token: str) -> dict | None:
                 "user_metadata": user_data.get("user_metadata", {}),
             }
         return None
-    except Exception as e:
-        _log.warning("Token verification failed: %s", e)
+    except Exception:
         return None
 
 
@@ -202,13 +170,7 @@ def signup(email: str, password: str, full_name: str = "") -> dict:
     Returns dict with 'user' and 'session' keys on success.
     Raises RuntimeError on failure.
     """
-    if not _is_valid_email(email):
-        return {"error": "Formato email non valido"}, 400
-
-    if len(password) < 8:
-        return {"error": "La password deve essere di almeno 8 caratteri"}, 400
-
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/signup",
         headers={
             "apikey": SUPABASE_ANON_KEY,
@@ -248,10 +210,7 @@ def login(email: str, password: str) -> dict:
     Returns dict with access_token, refresh_token, user info.
     Raises RuntimeError on failure.
     """
-    if not _is_valid_email(email):
-        return {"error": "Formato email non valido"}, 400
-
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
         headers={
             "apikey": SUPABASE_ANON_KEY,
@@ -297,7 +256,7 @@ def refresh_session(refresh_token: str) -> dict:
     Returns new access_token and refresh_token.
     Raises RuntimeError on failure.
     """
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",
         headers={
             "apikey": SUPABASE_ANON_KEY,
@@ -324,7 +283,7 @@ def refresh_session(refresh_token: str) -> dict:
 def logout_server(access_token: str) -> bool:
     """Invalidate a session on the server side."""
     try:
-        resp = _http.post(
+        resp = requests.post(
             f"{SUPABASE_URL}/auth/v1/logout",
             headers={
                 "Authorization": f"Bearer {access_token}",
@@ -333,15 +292,14 @@ def logout_server(access_token: str) -> bool:
             timeout=10,
         )
         return resp.status_code < 400
-    except Exception as e:
-        _log.warning("Server-side logout failed: %s", e)
+    except Exception:
         return False
 
 
 def get_user_from_token(access_token: str) -> dict | None:
     """Get full user profile from a valid access token."""
     try:
-        resp = _http.get(
+        resp = requests.get(
             f"{SUPABASE_URL}/auth/v1/user",
             headers={
                 "Authorization": f"Bearer {access_token}",
@@ -352,8 +310,7 @@ def get_user_from_token(access_token: str) -> dict | None:
         if resp.status_code == 200:
             return resp.json()
         return None
-    except Exception as e:
-        _log.warning("Failed to get user from token: %s", e)
+    except Exception:
         return None
 
 
@@ -367,7 +324,7 @@ def send_password_reset(email: str) -> bool:
     Returns True if the request was accepted (regardless of whether the email exists
     — prevents email enumeration).
     """
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/recover",
         headers={
             "apikey": SUPABASE_ANON_KEY,
@@ -418,7 +375,7 @@ def send_magic_link(email: str) -> bool:
 
     Returns True if accepted.
     """
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/magiclink",
         headers={
             "apikey": SUPABASE_ANON_KEY,
@@ -453,7 +410,7 @@ def exchange_code_for_session(code: str) -> dict:
     Returns dict with access_token, refresh_token, user.
     Raises RuntimeError on failure.
     """
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=pkce",
         headers={
             "apikey": SUPABASE_ANON_KEY,
@@ -466,7 +423,7 @@ def exchange_code_for_session(code: str) -> dict:
 
     if resp.status_code >= 400:
         # Fallback: try the verify endpoint for OTP-style codes
-        resp2 = _http.post(
+        resp2 = requests.post(
             f"{SUPABASE_URL}/auth/v1/verify",
             headers={
                 "apikey": SUPABASE_ANON_KEY,
@@ -503,7 +460,7 @@ def mfa_enroll(access_token: str) -> dict:
 
     Returns dict with: id, type, totp.qr_code, totp.secret, totp.uri
     """
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/factors",
         headers={
             "Authorization": f"Bearer {access_token}",
@@ -525,7 +482,7 @@ def mfa_challenge(access_token: str, factor_id: str) -> dict:
 
     Returns dict with: id (challenge_id)
     """
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/factors/{factor_id}/challenge",
         headers={
             "Authorization": f"Bearer {access_token}",
@@ -546,7 +503,7 @@ def mfa_verify(access_token: str, factor_id: str, challenge_id: str, code: str) 
 
     Returns new session tokens on success.
     """
-    resp = _http.post(
+    resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/factors/{factor_id}/verify",
         headers={
             "Authorization": f"Bearer {access_token}",
@@ -605,7 +562,7 @@ def check_user_exists(email: str) -> bool:
 
     try:
         # Use Supabase admin API to list users filtered by email
-        resp = _http.get(
+        resp = requests.get(
             f"{SUPABASE_URL}/auth/v1/admin/users",
             headers={
                 "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
@@ -622,6 +579,5 @@ def check_user_exists(email: str) -> bool:
             if u.get("email", "").lower() == email.lower():
                 return True
         return False
-    except Exception as e:
-        _log.warning("User existence check failed: %s", e)
+    except Exception:
         return False

@@ -16,8 +16,6 @@ from urllib.parse import urlparse
 
 import feedparser
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context, g, make_response
 
@@ -95,7 +93,7 @@ NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 
 # Admin email — full access, bypasses all plan limits
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+ADMIN_EMAIL = "giovanni.mavilla.grz@gmail.com"
 
 
 def _is_admin() -> bool:
@@ -103,18 +101,6 @@ def _is_admin() -> bool:
     return getattr(g, "user_email", "") == ADMIN_EMAIL
 BEEHIIV_PUB_ID = os.getenv("BEEHIIV_PUB_ID", "")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://content-ai-generator-1.onrender.com")
-
-# HTTP session with retry logic for transient errors on external APIs
-def _make_retry_session(retries=3, backoff_factor=0.3):
-    s = requests.Session()
-    retry = Retry(total=retries, backoff_factor=backoff_factor,
-                  status_forcelist=[502, 503, 504], allowed_methods=["GET", "POST"])
-    adapter = HTTPAdapter(max_retries=retry)
-    s.mount("https://", adapter)
-    s.mount("http://", adapter)
-    return s
-
-_http = _make_retry_session()
 
 DEFAULT_RSS_FEEDS = [
     "https://huggingface.co/blog/feed.xml",
@@ -352,11 +338,11 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": APP_BASE_URL,
+        "HTTP-Referer": "http://localhost:5001",
         "X-Title": "Content Dashboard",
     }
     payload = {"model": model, "messages": messages, "temperature": temperature}
-    resp = _http.post(
+    resp = requests.post(
         f"{OPENROUTER_BASE}/chat/completions",
         headers=headers, json=payload, timeout=240,
     )
@@ -370,10 +356,7 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
         err_msg = data["error"].get("message", str(data["error"]))
         _log_pipeline("error", f"LLM API error: {err_msg}", {"model": model})
         raise RuntimeError(f"OpenRouter API error: {err_msg}")
-    choices = data.get("choices", [])
-    if not choices:
-        raise RuntimeError("OpenRouter returned no choices in response")
-    return choices[0].get("message", {}).get("content", "")
+    return data["choices"][0]["message"]["content"]
 
 
 def _generate_image(prompt: str, aspect_ratio: str = "1:1",
@@ -386,7 +369,7 @@ def _generate_image(prompt: str, aspect_ratio: str = "1:1",
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": APP_BASE_URL,
+        "HTTP-Referer": "http://localhost:5001",
         "X-Title": "Content Dashboard",
     }
     payload = {
@@ -399,7 +382,7 @@ def _generate_image(prompt: str, aspect_ratio: str = "1:1",
         payload["image_config"] = {"aspect_ratio": aspect_ratio}
 
     try:
-        resp = _http.post(
+        resp = requests.post(
             f"{OPENROUTER_BASE}/chat/completions",
             headers=headers, json=payload, timeout=120,
         )
@@ -409,11 +392,7 @@ def _generate_image(prompt: str, aspect_ratio: str = "1:1",
             _log_pipeline("error", f"Image gen error: {data['error']}")
             return None
         # Extract base64 image from response
-        choices = data.get("choices", [])
-        if not choices:
-            _log_pipeline("warn", "Image gen returned no choices")
-            return None
-        msg = choices[0].get("message", {})
+        msg = data.get("choices", [{}])[0].get("message", {})
         images = msg.get("images", [])
         if images:
             return images[0].get("image_url", {}).get("url")
@@ -799,7 +778,7 @@ def _send_ntfy(title: str, message: str, url: str | None = None, tags: str = "lo
         }
         if url:
             payload["click"] = url
-        resp = _http.post("https://ntfy.sh/", json=payload, timeout=10)
+        resp = requests.post("https://ntfy.sh/", json=payload, timeout=10)
         resp.raise_for_status()
         _log_pipeline("info", f"ntfy notification sent: {title}")
         return True
@@ -980,6 +959,7 @@ def auth_signup():
         return jsonify({"error": "La password deve avere almeno 8 caratteri"}), 400
 
     # Password strength validation
+    import re
     if not re.search(r"[A-Z]", password):
         return jsonify({"error": "La password deve contenere almeno una lettera maiuscola"}), 400
     if not re.search(r"[a-z]", password):
@@ -1076,7 +1056,6 @@ def auth_me():
             "full_name": (profile or {}).get("full_name", ""),
             "avatar_url": (profile or {}).get("avatar_url", ""),
             "plan": (profile or {}).get("plan", "free"),
-            "is_admin": _is_admin(),
         },
         "subscription": {
             "plan": (subscription or {}).get("plan", "free"),
@@ -1115,6 +1094,7 @@ def auth_update_password():
     if len(new_password) < 8:
         return jsonify({"error": "La password deve avere almeno 8 caratteri"}), 400
 
+    import re
     if not re.search(r"[A-Z]", new_password):
         return jsonify({"error": "La password deve contenere almeno una lettera maiuscola"}), 400
     if not re.search(r"[a-z]", new_password):
@@ -1579,9 +1559,7 @@ def save_feeds_config():
 
 @app.route("/api/feeds/config/add", methods=["POST"])
 def add_feed():
-    body = request.json if request.is_json else None
-    if not isinstance(body, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
+    body = request.json
     category = body.get("category", "").strip()
     url = body.get("url", "").strip()
     name = body.get("name", "").strip()
@@ -1605,9 +1583,7 @@ def add_feed():
 
 @app.route("/api/feeds/config/remove", methods=["POST"])
 def remove_feed():
-    body = request.json if request.is_json else None
-    if not isinstance(body, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
+    body = request.json
     category = body.get("category", "").strip()
     url = body.get("url", "").strip()
     if not category or not url:
@@ -1624,9 +1600,7 @@ def remove_feed():
 
 @app.route("/api/feeds/config/add-category", methods=["POST"])
 def add_category():
-    body = request.json if request.is_json else None
-    if not isinstance(body, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
+    body = request.json
     category = body.get("category", "").strip()
     if not category:
         return jsonify({"error": "category name required"}), 400
@@ -1639,9 +1613,7 @@ def add_category():
 
 @app.route("/api/feeds/config/remove-category", methods=["POST"])
 def remove_category():
-    body = request.json if request.is_json else None
-    if not isinstance(body, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
+    body = request.json
     category = body.get("category", "").strip()
     if not category:
         return jsonify({"error": "category name required"}), 400
@@ -1890,14 +1862,13 @@ Return ONLY a valid JSON array, no markdown, no explanation.
             result = result.strip()
             # Strip markdown code fences if present
             if result.startswith("```"):
-                parts = result.split("\n", 1)
-                result = parts[1] if len(parts) > 1 else parts[0]
-                parts = result.rsplit("```", 1)
-                result = parts[0]
+                result = result.split("\n", 1)[1]
+                result = result.rsplit("```", 1)[0]
             # Try direct parse first; if it fails, extract JSON array via regex
             try:
                 parsed = json.loads(result)
             except json.JSONDecodeError:
+                import re
                 match = re.search(r'\[.*\]', result, re.DOTALL)
                 if match:
                     parsed = json.loads(match.group(0))
@@ -2159,7 +2130,7 @@ IG_VARIANT_ANGLES = [
 def _serper_search(query: str, num_results: int = 10) -> list[dict]:
     if not SERPER_API_KEY:
         raise ValueError("SERPER_API_KEY not configured in .env")
-    resp = _http.post(
+    resp = requests.post(
         "https://google.serper.dev/search",
         headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
         json={"q": query, "num": num_results, "gl": "it", "hl": "it"},
@@ -2181,12 +2152,11 @@ def _serper_search(query: str, num_results: int = 10) -> list[dict]:
 
 @app.route("/api/search", methods=["POST"])
 def web_search():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     query = body.get("query", "").strip()
     if not query:
         return jsonify({"error": "Query required"}), 400
-    num = max(1, min(body.get("num_results", 10), 20))
+    num = min(body.get("num_results", 10), 20)
     try:
         results = _serper_search(query, num)
         _log_pipeline("info", f"Web search: '{query}' → {len(results)} results")
@@ -2198,7 +2168,6 @@ def web_search():
 
 @app.route("/api/search/score", methods=["POST"])
 def search_score():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     results = body.get("results", [])
     if not results:
@@ -2249,9 +2218,7 @@ Score da 1 a 10 (10 = perfetto per content su AI/automazione business)."""
 
 @app.route("/api/generate", methods=["POST"])
 def generate_content():
-    body = request.json if request.is_json else None
-    if not isinstance(body, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
+    body = request.json
     article = body.get("article", {})
     opinion = body.get("opinion", "")
     format_type = body.get("format")
@@ -2311,37 +2278,6 @@ def generate_content():
     else:
         opinion_section = "\nNOTA: Questa è una prima bozza. L'utente non ha ancora aggiunto la sua prospettiva personale. Genera il contenuto basandoti sull'articolo, mantenendo il tono dell'utente. L'opinione verrà integrata nella prossima iterazione."
 
-    # --- Template style constraints (inject into prompt if template selected) ---
-    template_id = body.get("template_id", "")
-    style_constraints = ""
-    if format_type == "instagram" and template_id:
-        try:
-            tpl = db.get_user_template_by_id(user_id, template_id)
-            if tpl and tpl.get("style_rules"):
-                rules = tpl["style_rules"]
-                typo = rules.get("typography", {})
-                ct = typo.get("cover_title", {})
-                ch = typo.get("content_header", {})
-                cb = typo.get("content_body", {})
-                li = typo.get("list_items", {})
-                cta = typo.get("cta_text", {})
-                cr = rules.get("content_rules", {})
-                emph = cb.get("emphasis_tag", "strong")
-                body_total = cb.get("max_chars_per_line", 55) * cb.get("max_lines", 8)
-                style_constraints = f"""
-
-VINCOLI TEMPLATE (il testo verrà renderizzato in un template con queste regole — RISPETTALE):
-- Titolo cover: max {ct.get('max_chars', 80)} caratteri
-- Header slide: max {ch.get('max_chars', 60)} caratteri
-- Body slide: max ~{body_total} caratteri totali ({cb.get('max_lines', 8)} righe x ~{cb.get('max_chars_per_line', 55)} car/riga)
-- Liste: max {li.get('max_items', 6)} punti, max {li.get('max_chars_per_item', 50)} car/punto
-- CTA: max {cta.get('max_chars', 150)} caratteri
-- Slide totali consigliate: {cr.get('recommended_slides', '4-7')}
-- Usa <{emph}> per enfasi (il template lo renderizza con stile accento)
-- NON superare MAI i limiti di caratteri — il testo viene troncato se troppo lungo!"""
-        except Exception as e:
-            _log_pipeline("warn", f"Failed to load style constraints for template {template_id}: {e}")
-
     source_mode = article.get("source_mode", "rss")
     if source_mode == "custom_text":
         custom_text = _sanitize_user_input(body.get("custom_text", "") or article.get("custom_text", ""), max_length=5000)
@@ -2350,7 +2286,7 @@ VINCOLI TEMPLATE (il testo verrà renderizzato in un template con queste regole 
 {opinion_section}
 
 FORMATO RICHIESTO:
-{fmt}{regen_instruction}{style_constraints}
+{fmt}{regen_instruction}
 
 Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza commenti aggiuntivi."""
     else:
@@ -2367,7 +2303,7 @@ Descrizione: {art_desc}
 {opinion_section}
 
 FORMATO RICHIESTO:
-{fmt}{regen_instruction}{style_constraints}
+{fmt}{regen_instruction}
 
 Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza commenti aggiuntivi."""
 
@@ -2379,31 +2315,21 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
             ],
             model=MODEL_SMART, temperature=0.7,
         )
+        _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
+        _update_weekly_status(format_type, "generated")
+        # Increment generation counter (for plan limits)
+        try:
+            db.increment_generation_count(user_id)
+        except Exception:
+            pass
+        try:
+            db.create_notification(user_id, "generation", f"Contenuto {format_type} generato", article.get("title", "")[:120])
+        except Exception:
+            pass
+        return jsonify({"content": result, "format": format_type})
     except Exception as e:
         _log_pipeline("error", f"LLM generation error ({format_type}): {e}")
         return jsonify({"error": "Errore nella generazione del contenuto. Riprova tra poco."}), 500
-
-    # Content generated successfully — build response first, then do bookkeeping.
-    # Failures below must NOT destroy the generated content.
-    _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
-    response = jsonify({"content": result, "format": format_type})
-
-    try:
-        _update_weekly_status(format_type, "generated")
-    except Exception as e:
-        _log_pipeline("error", f"Failed to update weekly status: {e}")
-
-    try:
-        db.increment_generation_count(user_id)
-    except Exception as e:
-        _log_pipeline("error", f"Failed to increment generation count for user {user_id}: {e}")
-
-    try:
-        db.create_notification(user_id, "generation", f"Contenuto {format_type} generato", article.get("title", "")[:120])
-    except Exception:
-        pass
-
-    return response
 
 
 # ---------------------------------------------------------------------------
@@ -2472,15 +2398,10 @@ def assemble_newsletter_html(markdown_text: str, layout_html: str, components: d
             lambda m: f'<em style="{_style("em")}">{m.group(1)}</em>',
             text
         )
-        # Links: [text](url) — only allow http/https URLs to prevent javascript: XSS
-        def _safe_link(m):
-            url = m.group(2).strip()
-            if not url.startswith(("http://", "https://", "mailto:")):
-                return m.group(1)  # Strip unsafe URLs, keep text only
-            return f'<a href="{url}" style="{_style("a")}">{m.group(1)}</a>'
+        # Links: [text](url)
         text = _re.sub(
             r'\[([^\]]+)\]\(([^)]+)\)',
-            _safe_link,
+            lambda m: f'<a href="{m.group(2)}" style="{_style("a")}">{m.group(1)}</a>',
             text
         )
         # Inline code: `code`
@@ -2621,7 +2542,6 @@ def assemble_newsletter_html(markdown_text: str, layout_html: str, components: d
 
 @app.route("/api/generate-newsletter", methods=["POST"])
 def generate_newsletter():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     topics = body.get("topics", [])
     feedback = _sanitize_user_input(body.get("feedback", ""), max_length=1000)
@@ -2682,37 +2602,12 @@ Descrizione: {art_desc}
     if feedback:
         regen_instruction = f"\n\nISTRUZIONE DI RISCRITTURA (priorità alta, segui questa indicazione):\n{feedback}"
 
-    # --- Template style constraints for newsletter ---
-    template_id = body.get("template_id", "")
-    nl_style_constraints = ""
-    if template_id:
-        try:
-            tpl = db.get_user_template_by_id(user_id, template_id)
-            if tpl and tpl.get("style_rules"):
-                rules = tpl["style_rules"]
-                typo = rules.get("typography", {})
-                h1 = typo.get("h1", {})
-                h2 = typo.get("h2", {})
-                p = typo.get("p", {})
-                cr = rules.get("content_rules", {})
-                nl_style_constraints = f"""
-
-VINCOLI TEMPLATE NEWSLETTER (il testo verrà renderizzato nel template scelto — RISPETTA questi limiti):
-- Titoli H1 (# ): max {h1.get('max_chars', 80)} caratteri
-- Sottotitoli H2 (## ): max {h2.get('max_chars', 60)} caratteri
-- Paragrafi: max ~{p.get('max_chars_per_paragraph', 400)} caratteri ciascuno
-- Il template supporta: callout={'sì' if cr.get('supports_callouts') else 'no'}, blockquote={'sì' if cr.get('supports_blockquotes') else 'no'}, immagini={'sì' if cr.get('supports_images') else 'no'}
-- Sezioni tipiche: {cr.get('max_sections', 5)}
-- Usa markdown standard: # ## ### **bold** *italic* > blockquote - liste"""
-        except Exception as e:
-            _log_pipeline("warn", f"Failed to load NL style constraints for template {template_id}: {e}")
-
     nl_format = _get_prompt("format_newsletter")
     user_msg = f"""Questa settimana l'utente ha selezionato questi topic per la sua newsletter:
 {topics_text}
 
 FORMATO RICHIESTO:
-{nl_format}{regen_instruction}{nl_style_constraints}
+{nl_format}{regen_instruction}
 
 IMPORTANTE: La sezione esclusiva deve essere un valore aggiunto reale.
 
@@ -2731,8 +2626,8 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
         # Increment generation counter (for plan limits)
         try:
             db.increment_generation_count(user_id)
-        except Exception as e:
-            _log_pipeline("error", f"Failed to increment generation count for user {user_id}: {e}")
+        except Exception:
+            pass
         try:
             db.create_notification(user_id, "generation", "Newsletter generata", f"{len(topics)} topic inclusi")
         except Exception:
@@ -2745,7 +2640,6 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
 
 @app.route("/api/newsletter/enrich-images", methods=["POST"])
 def newsletter_enrich_images():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     """AI Node: Analyze newsletter markdown text and generate images where appropriate.
 
     This is an intelligent intermediary node that:
@@ -2862,153 +2756,8 @@ Se il testo non beneficia di immagini, ritorna un array vuoto: []"""
         return jsonify({"text": text, "images_generated": 0})
 
 
-@app.route("/api/carousel/enrich-images", methods=["POST"])
-def carousel_enrich_images():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
-    """AI Node: Analyze carousel text and generate style-matching AI images.
-
-    Two-phase pipeline:
-    1. Decision phase (MODEL_CHEAP): analyzes slides, picks which ones (max 2) get images
-    2. Generation phase (MODEL_IMAGE / FLUX.2 Pro): generates images matching template style
-
-    Body: { "text": "---SLIDE--- separated carousel text", "template_id": "uuid" }
-    Returns: { "images": {"0": "url", "2": "url"}, "count": 2 }
-    """
-    user_id = _get_user_id()
-    body = request.json or {}
-    text = body.get("text", "").strip()
-    template_id = body.get("template_id", "")
-    if not text:
-        return jsonify({"error": "Nessun testo fornito"}), 400
-
-    try:
-        # Parse slides from text
-        import re as _re
-        parts = _re.split(r"---CAPTION---", text, flags=_re.IGNORECASE)
-        slide_text = parts[0]
-        raw_slides = [s.strip() for s in _re.split(r"---SLIDE---", slide_text, flags=_re.IGNORECASE) if s.strip()]
-        if not raw_slides:
-            return jsonify({"images": {}, "count": 0})
-
-        # Load template style rules for image style guidance
-        image_style_desc = "Professional, clean, modern style"
-        image_style_avoid = ""
-        if template_id:
-            tpl = db.get_user_template_by_id(user_id, template_id)
-            if tpl and tpl.get("style_rules"):
-                rules = tpl["style_rules"]
-                img_style = rules.get("image_style", {})
-                if img_style.get("description"):
-                    image_style_desc = img_style["description"]
-                avoid_list = img_style.get("avoid", [])
-                if avoid_list:
-                    image_style_avoid = f" Avoid: {', '.join(avoid_list)}."
-
-        # Build slide summary for the AI
-        slide_summaries = []
-        for i, s in enumerate(raw_slides):
-            # Identify slide type from content structure
-            lines = s.strip().split("\n")
-            has_list = any(ln.strip().startswith(("- ", "• ", "✅", "📌", "🔹", "1.", "2.", "3.")) for ln in lines)
-            is_short = len(s) < 100
-            slide_type = "cover" if i == 0 else ("list" if has_list else ("cta" if i == len(raw_slides) - 1 and is_short else "content"))
-            preview = s[:200].replace("\n", " | ")
-            slide_summaries.append(f"Slide {i} [{slide_type}]: {preview}")
-
-        slides_text = "\n".join(slide_summaries)
-
-        # Phase 1: AI decides which slides get images (MODEL_CHEAP, ~$0.001)
-        decision_prompt = f"""Analizza queste slide di un carousel Instagram e decidi quali beneficerebbero di un'immagine di sfondo.
-
-SLIDE:
-{slides_text}
-
-REGOLE:
-- Massimo 2 immagini totali
-- La cover (slide 0) spesso beneficia di un'immagine
-- Slide con contenuto descrittivo/narrativo: sì
-- Slide con liste di punti: raramente (l'immagine distrae)
-- Slide CTA (call to action, ultima): quasi mai
-- Se il carousel ha poche slide (≤3), massimo 1 immagine
-
-Per ogni immagine, fornisci:
-1. "slide_index": indice della slide (0-based)
-2. "prompt": descrizione dettagliata dell'immagine da generare (in inglese, per FLUX.2 Pro)
-
-L'immagine verrà usata come sfondo semi-trasparente dietro il testo, quindi:
-- Deve funzionare come sfondo (non troppo dettagliata, no testo)
-- Deve evocare il tema della slide
-- Stile desiderato: {image_style_desc}
-
-Rispondi SOLO con un JSON array:
-[{{"slide_index": 0, "prompt": "abstract dark gradient with purple light rays, minimal tech aesthetic"}}]
-
-Se nessuna slide beneficia di immagini, ritorna: []"""
-
-        raw = _llm_call(
-            [{"role": "user", "content": decision_prompt}],
-            model=MODEL_CHEAP, temperature=0.3,
-        )
-
-        # Parse the AI's decision
-        cleaned = _strip_fences(raw).strip()
-        try:
-            image_plan = json.loads(cleaned)
-        except json.JSONDecodeError:
-            first = cleaned.find("[")
-            last = cleaned.rfind("]")
-            if first != -1 and last > first:
-                image_plan = json.loads(cleaned[first:last + 1])
-            else:
-                image_plan = []
-
-        if not image_plan or not isinstance(image_plan, list):
-            return jsonify({"images": {}, "count": 0})
-
-        # Limit to 2 images max
-        image_plan = image_plan[:2]
-
-        # Phase 2: Generate images (MODEL_IMAGE / FLUX.2 Pro, ~$0.03/img)
-        images_map = {}
-        storage_tpl_id = template_id if template_id else f"ig_{uuid.uuid4().hex[:8]}"
-
-        for plan in image_plan:
-            slide_idx = plan.get("slide_index", 0)
-            prompt = plan.get("prompt", "")
-            if not prompt or slide_idx < 0 or slide_idx >= len(raw_slides):
-                continue
-
-            # Prefix with template style + suffix for background use
-            full_prompt = (
-                f"{image_style_desc}, {prompt}. "
-                f"High quality, suitable as background image behind text.{image_style_avoid} "
-                f"No text, no watermarks, no logos."
-            )
-
-            url = _generate_and_upload_image(
-                prompt=full_prompt,
-                user_id=user_id,
-                template_id=storage_tpl_id,
-                aspect_ratio="1:1",
-            )
-
-            if url:
-                images_map[str(slide_idx)] = url
-
-        _log_pipeline("info", f"Carousel enriched with {len(images_map)} AI images for {len(raw_slides)} slides")
-        return jsonify({
-            "images": images_map,
-            "count": len(images_map),
-        })
-
-    except Exception as e:
-        _log_pipeline("error", f"Carousel image enrichment error: {e}")
-        return jsonify({"images": {}, "count": 0})
-
-
 @app.route("/api/newsletter/html", methods=["POST"])
 def newsletter_to_html():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     text = _sanitize_user_input((body.get("text") or ""), max_length=20000)
     template_id = body.get("template_id")
@@ -3116,7 +2865,6 @@ TESTO NEWSLETTER:
 
 @app.route("/api/schedule", methods=["GET"])
 def get_schedule():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     schedule = db.get_schedules(user_id)
     return jsonify(schedule)
@@ -3124,11 +2872,8 @@ def get_schedule():
 
 @app.route("/api/schedule", methods=["POST"])
 def create_schedule():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     body = request.json
-    if not body or not body.get("platform") or not body.get("scheduled_at"):
-        return jsonify({"error": "platform and scheduled_at are required"}), 400
     item = db.insert_schedule(user_id, body)
     _update_weekly_status(item.get("platform", ""), "scheduled")
     _log_pipeline("info", f"Content scheduled: {item.get('platform', '')} at {item.get('scheduled_at', '')}")
@@ -3137,7 +2882,6 @@ def create_schedule():
 
 @app.route("/api/schedule/bulk", methods=["POST"])
 def create_schedule_bulk():
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     body = request.json
     items_data = body.get("items", [])
@@ -3153,7 +2897,6 @@ def create_schedule_bulk():
 
 @app.route("/api/schedule/<item_id>", methods=["DELETE"])
 def delete_schedule(item_id):
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     db.delete_schedule(user_id, item_id)
     return jsonify({"status": "ok"})
@@ -3161,7 +2904,6 @@ def delete_schedule(item_id):
 
 @app.route("/api/schedule/<item_id>/publish", methods=["POST"])
 def mark_published(item_id):
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     db.update_schedule(user_id, item_id, {
         "status": "published",
@@ -3176,7 +2918,6 @@ def mark_published(item_id):
 
 @app.route("/api/schedule/<item_id>/content")
 def get_schedule_content(item_id):
-    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     item = db.get_schedule_item(user_id, item_id)
     if not item:
@@ -3237,8 +2978,6 @@ def get_sessions():
 def save_session():
     user_id = _get_user_id()
     body = request.json
-    if not body or not body.get("session_id"):
-        return jsonify({"error": "session_id is required"}), 400
     session = db.insert_session(user_id, body)
     return jsonify(session)
 
@@ -3310,7 +3049,7 @@ def notify_completion():
             <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px;">
               <h2 style="color:#111;">Generazione completata!</h2>
               <p>I contenuti per <strong>{platform_list or 'le piattaforme selezionate'}</strong> sono stati generati con successo.</p>
-              <p><a href="{APP_BASE_URL}/app"
+              <p><a href="{os.getenv('APP_URL', 'https://content-ai-generator.onrender.com')}/app"
                      style="display:inline-block;background:#111;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">
                 Vai ai tuoi contenuti →
               </a></p>
@@ -3504,9 +3243,7 @@ Solo JSON, niente altro."""
 
 @app.route("/api/render-carousel", methods=["POST"])
 def render_carousel_images():
-    body = request.json if request.is_json else None
-    if not isinstance(body, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
+    body = request.json
     text = body.get("text", "")
     palette_idx = body.get("palette", 0)
     template_id = body.get("template_id")
@@ -3518,7 +3255,7 @@ def render_carousel_images():
 
     # Check platform access — Instagram carousel requires Pro+
     if not _is_admin():
-        user_plan = _get_user_plan()
+        user_plan = _get_plan()
         plan_details = payments.PLANS.get(user_plan, payments.PLANS["free"])
         if "instagram" not in plan_details.get("platforms", []):
             return jsonify({
@@ -3526,9 +3263,6 @@ def render_carousel_images():
                 "code": "PLAN_LIMIT",
                 "upgrade_required": True,
             }), 403
-
-    # Optional: slide images from AI enrichment
-    slide_images = body.get("slide_images")  # dict: {"0": "url", "2": "url"}
 
     try:
         if template_id:
@@ -3541,8 +3275,6 @@ def render_carousel_images():
                 text,
                 template_html=tpl["html_content"],
                 aspect_ratio=tpl.get("aspect_ratio", "1:1"),
-                style_rules=tpl.get("style_rules"),
-                slide_images=slide_images,
             )
         else:
             # Default rendering (original palette-based)
@@ -3707,180 +3439,6 @@ def _get_user_plan() -> str:
     return (sub or {}).get("plan", "free")
 
 
-def _extract_style_rules(template_html: str, template_type: str,
-                          aspect_ratio: str = "1:1",
-                          components: dict = None) -> dict:
-    """Analyze template HTML and extract structured style rules via AI.
-
-    Returns a JSON dict with:
-      - visual_style (mood, color_palette, aesthetic)
-      - typography (per-zone: max_chars, font sizes, weights)
-      - layout (viewport, padding, safe zones)
-      - image_style (description for AI image generation matching)
-      - content_rules (recommended slide count, format guidance)
-
-    Uses MODEL_FAST (Gemini 2.5 Flash) — cost: ~$0.002 per extraction.
-    """
-    if not template_html or not template_html.strip():
-        return {}
-
-    # Build context about the template
-    if template_type == "instagram":
-        # Determine viewport from aspect_ratio
-        ar_map = {"1:1": (1080, 1080), "4:3": (1080, 810), "3:4": (1080, 1440)}
-        vw, vh = ar_map.get(aspect_ratio, (1080, 1080))
-
-        system_msg = f"""Sei un analista di template HTML per carousel Instagram.
-Analizza il template e estrai regole di stile strutturate come JSON.
-
-Il template ha viewport {vw}x{vh}px (aspect ratio {aspect_ratio}).
-Il template contiene 4 tipi di slide: cover, content, list, cta.
-
-ANALIZZA:
-1. Stile visivo: colori usati (hex), mood, estetica generale
-2. Tipografia: per ogni zona di testo (cover_title, content_header, content_body, list_items, cta_text):
-   - font-weight usato
-   - font-size range (max e min in px)
-   - max caratteri stimati per riga (basato su font-size e larghezza contenuto)
-   - max righe visibili nell'area disponibile
-   - tag enfasi usato (strong, em, span con classe, etc.)
-3. Layout: padding, margini, larghezza/altezza area sicura per contenuto
-4. Stile immagini: che tipo di immagini AI si abbinerebbero a questo stile
-5. Regole contenuto: quante slide consigliate, formato cover/content/list/cta
-
-RITORNA SOLO un JSON valido con questa struttura esatta:
-{{
-  "visual_style": {{
-    "mood": "descrizione breve del mood visivo",
-    "color_palette": ["#hex1", "#hex2", ...],
-    "aesthetic": "descrizione estetica"
-  }},
-  "typography": {{
-    "cover_title": {{
-      "font_weight": 900, "max_font_size_px": 80, "min_font_size_px": 46,
-      "max_chars": 80, "max_lines": 3, "line_height": 1.12
-    }},
-    "content_header": {{
-      "font_weight": 800, "max_font_size_px": 46, "max_chars": 60, "max_lines": 2
-    }},
-    "content_body": {{
-      "font_weight": 400, "max_font_size_px": 36, "min_font_size_px": 24,
-      "max_chars_per_line": 55, "max_lines": 8, "line_height": 1.55,
-      "emphasis_tag": "strong"
-    }},
-    "list_items": {{ "max_items": 6, "max_chars_per_item": 50 }},
-    "cta_text": {{ "max_chars": 150 }}
-  }},
-  "layout": {{
-    "viewport_width": {vw}, "viewport_height": {vh},
-    "padding_px": 90, "safe_content_width": 900
-  }},
-  "image_style": {{
-    "description": "english description of matching AI image style",
-    "keywords": ["keyword1", "keyword2"],
-    "preferred_aspect_ratio": "{aspect_ratio}",
-    "avoid": ["thing to avoid 1", "thing to avoid 2"]
-  }},
-  "content_rules": {{
-    "recommended_slides": "4-7",
-    "cover_format": "description",
-    "content_format": "description",
-    "list_format": "description",
-    "cta_format": "description"
-  }}
-}}"""
-    else:
-        # Newsletter template
-        components_info = ""
-        if components:
-            components_info = f"\n\nCOMPONENTI CSS DEL TEMPLATE:\n{json.dumps(components, indent=2)}"
-
-        system_msg = f"""Sei un analista di template HTML per newsletter email.
-Analizza il template e estrai regole di stile strutturate come JSON.
-
-Il template ha larghezza massima tipica di 600px per email.{components_info}
-
-ANALIZZA:
-1. Stile visivo: colori principali, mood, estetica
-2. Tipografia: per ogni tipo di elemento (h1, h2, p, li, strong):
-   - font-size usato
-   - max caratteri consigliati
-3. Layout: larghezza max, sezioni tipiche, struttura header/footer
-4. Stile immagini: che tipo di immagini AI si abbinerebbero
-5. Regole contenuto: formati supportati (callout, blockquote, immagini), max sezioni
-
-RITORNA SOLO un JSON valido con questa struttura esatta:
-{{
-  "visual_style": {{
-    "mood": "descrizione breve",
-    "color_palette": ["#hex1", "#hex2", ...],
-    "aesthetic": "descrizione estetica"
-  }},
-  "typography": {{
-    "h1": {{ "max_chars": 80, "font_size": "28px" }},
-    "h2": {{ "max_chars": 60, "font_size": "22px" }},
-    "p": {{ "max_chars_per_paragraph": 400, "font_size": "16px" }},
-    "li": {{ "max_chars": 120 }}
-  }},
-  "layout": {{
-    "max_width": 600, "has_header": true, "has_footer": true,
-    "sections_typical": 3
-  }},
-  "image_style": {{
-    "description": "english description of matching AI image style",
-    "keywords": ["keyword1", "keyword2"],
-    "preferred_aspect_ratio": "16:9",
-    "avoid": ["thing to avoid"]
-  }},
-  "content_rules": {{
-    "supports_callouts": true,
-    "supports_blockquotes": true,
-    "supports_images": true,
-    "max_sections": 5,
-    "format": "markdown"
-  }}
-}}"""
-
-    user_msg = f"TEMPLATE HTML:\n```html\n{template_html[:8000]}\n```"
-
-    try:
-        raw = _llm_call(
-            [
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": user_msg},
-            ],
-            model=MODEL_FAST,
-            temperature=0.2,
-        )
-
-        # Parse the JSON response
-        cleaned = _strip_fences(raw)
-        # Try direct parse
-        try:
-            rules = json.loads(cleaned)
-        except json.JSONDecodeError:
-            # Find JSON object between first { and last }
-            first = cleaned.find("{")
-            last = cleaned.rfind("}")
-            if first != -1 and last > first:
-                rules = json.loads(cleaned[first:last + 1])
-            else:
-                _log_pipeline("warn", "Style rules extraction: failed to parse JSON")
-                return {}
-
-        # Add metadata
-        from datetime import datetime as dt, timezone as tz
-        rules["extracted_at"] = dt.now(tz.utc).isoformat()
-        rules["extraction_model"] = MODEL_FAST
-
-        _log_pipeline("info", f"Style rules extracted for {template_type} template")
-        return rules
-
-    except Exception as e:
-        _log_pipeline("warn", f"Style rules extraction failed: {e}")
-        return {}
-
-
 @app.route("/api/templates", methods=["GET"])
 def list_templates():
     """List user templates + preset templates. Includes plan limit info."""
@@ -3959,73 +3517,6 @@ def delete_template(template_id):
     return jsonify({"status": "ok"})
 
 
-def _orchestrate_template_chat(user_msg: str, current_html: str,
-                                template_type: str, style_rules: dict = None) -> dict:
-    """Orchestrator AI: analyzes user message, decides if images are needed.
-
-    Uses MODEL_CHEAP (~$0.001) to analyze the user's request and determine:
-    - Whether AI-generated images are needed
-    - Image prompts (in English, max 2)
-    - Reformulated instruction for the HTML designer
-
-    Returns: {"needs_images": bool, "image_prompts": [...], "html_instruction": "..."}
-    """
-    # Build style context for image decisions
-    image_style_ctx = ""
-    if style_rules and style_rules.get("image_style"):
-        img_style = style_rules["image_style"]
-        image_style_ctx = f"""
-Stile immagini del template:
-- Descrizione: {img_style.get('description', 'N/A')}
-- Keywords: {', '.join(img_style.get('keywords', []))}
-- Evitare: {', '.join(img_style.get('avoid', []))}"""
-
-    system_prompt = f"""Sei un orchestratore AI per la personalizzazione di template {template_type}.
-Il tuo compito è analizzare il messaggio dell'utente e decidere se servono immagini AI.
-
-REGOLE DECISIONE IMMAGINI — SII MOLTO CONSERVATIVO:
-- needs_images = true SOLO se l'utente usa ESPLICITAMENTE parole come:
-  "immagine", "foto", "sfondo fotografico", "illustrazione", "logo", "genera un'immagine", "aggiungi una foto", "background image"
-- needs_images = false per TUTTO il resto, incluso:
-  - Richieste di stile: "minimal", "moderno", "elegante", "contemporaneo" → NO immagini
-  - Richieste di colore: "sfondo scuro", "colori caldi", "palette blu" → NO immagini (sfondo = colore CSS, NON immagine)
-  - Richieste di layout: "più spaziatura", "font più grande", "centra il testo" → NO immagini
-  - Richieste generiche: "rendilo più professionale", "stile tech" → NO immagini
-  - Temi generali: "tema travel", "tema food" → NO immagini (il designer HTML userà colori/font)
-- Max 2 immagini per richiesta
-- I prompt immagine DEVONO essere in inglese, dettagliati, professionali
-- NEL DUBBIO: needs_images = false (è sempre meglio non generare)
-{image_style_ctx}
-
-FORMATO RISPOSTA (SOLO JSON):
-{{
-  "needs_images": true/false,
-  "image_prompts": ["english prompt 1", "english prompt 2"],
-  "reasoning": "breve spiegazione in italiano della decisione"
-}}
-
-Se needs_images = false, image_prompts deve essere un array vuoto []."""
-
-    try:
-        result = _llm_call(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Messaggio utente: {user_msg}\n\nTipo template: {template_type}"},
-            ],
-            model=MODEL_CHEAP, temperature=0.2,
-        )
-        cleaned = _strip_fences(result)
-        parsed = json.loads(cleaned)
-        return {
-            "needs_images": bool(parsed.get("needs_images", False)),
-            "image_prompts": parsed.get("image_prompts", [])[:2],
-            "reasoning": parsed.get("reasoning", ""),
-        }
-    except Exception as e:
-        _log_pipeline("warn", f"Orchestrator failed, defaulting to no images: {e}")
-        return {"needs_images": False, "image_prompts": [], "reasoning": "Orchestrator error, skip images"}
-
-
 @app.route("/api/templates/<template_id>/chat", methods=["POST"])
 def template_chat(template_id):
     """Chat with the AI to iteratively build/modify a template's HTML."""
@@ -4052,54 +3543,6 @@ def template_chat(template_id):
     chat_history = tpl.get("chat_history", []) or []
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
     current_components = tpl.get("components", {}) or {}
-    style_rules = tpl.get("style_rules", {}) or {}
-
-    # --- ORCHESTRATOR: analyze message, decide images, generate if needed ---
-    orchestrator_log = []
-    ai_generated_images = []
-
-    # Only run orchestrator when user didn't attach images manually
-    if user_message.strip() and not image_urls:
-        try:
-            orch_result = _orchestrate_template_chat(
-                user_message, current_html, template_type, style_rules
-            )
-            if orch_result.get("needs_images"):
-                reasoning = orch_result.get("reasoning", "")
-                orchestrator_log.append(f"🎨 {reasoning}")
-
-                default_ratio = aspect_ratio if template_type == "instagram" else "16:9"
-                for prompt in orch_result.get("image_prompts", [])[:2]:
-                    orchestrator_log.append(f"🖼️ Generazione immagine: {prompt[:80]}...")
-                    style_prefix = ""
-                    if style_rules and style_rules.get("image_style", {}).get("description"):
-                        style_prefix = style_rules["image_style"]["description"] + ", "
-                    img_url = _generate_and_upload_image(
-                        prompt=style_prefix + prompt,
-                        user_id=user_id,
-                        template_id=template_id,
-                        aspect_ratio=default_ratio,
-                    )
-                    if img_url:
-                        ai_generated_images.append({"url": img_url, "description": prompt})
-                        orchestrator_log.append(f"✅ Immagine generata con successo")
-                    else:
-                        orchestrator_log.append(f"⚠️ Generazione immagine fallita, continuo senza")
-
-                if ai_generated_images:
-                    orchestrator_log.append("🔧 Integrazione immagini nel template...")
-            else:
-                _log_pipeline("info", "Orchestrator: no images needed for this request")
-        except Exception as e:
-            _log_pipeline("warn", f"Orchestrator pipeline error (non-fatal): {e}")
-
-    # Enrich user message with AI-generated image URLs for the HTML designer
-    enriched_user_message = user_message
-    if ai_generated_images:
-        img_context = "\n\n[Immagini AI generate dall'orchestratore — integrare nel template:]\n"
-        for i, img in enumerate(ai_generated_images, 1):
-            img_context += f"[Immagine AI generata: {img['url']} — Descrizione: {img['description']}]\n"
-        enriched_user_message += img_context
 
     # Build system prompt based on template type
     if template_type == "instagram":
@@ -4324,7 +3767,7 @@ REGOLE:
             })
         messages.append({"role": "user", "content": user_content})
     else:
-        messages.append({"role": "user", "content": enriched_user_message})
+        messages.append({"role": "user", "content": user_message})
 
     try:
         raw_response = _llm_call_validated(
@@ -4359,86 +3802,35 @@ REGOLE:
                     pass
             return None
 
-        # --- Diagnostic logging ---
-        _log_pipeline("info", f"Template chat LLM response: len={len(raw_response)}", extra={
-            "response_length": len(raw_response),
-            "template_id": template_id,
-        })
-
         parsed = _try_parse_response(raw_response)
 
-        # --- Log parse result ---
-        parse_ok = parsed is not None
-        used_fallback = False
-        _log_pipeline("info", f"Template chat parse: json_ok={parse_ok}, has_html={'html' in parsed if parsed else False}", extra={
-            "json_parse_ok": parse_ok,
-            "has_html_field": "html" in parsed if parsed else False,
-            "has_reply_field": "reply" in parsed if parsed else False,
-        })
-
-        # --- Size limit per HTML field (100KB per slide, 500KB total) ---
-        MAX_SLIDE_HTML_SIZE = 100_000  # 100KB per single slide/layout
-        MAX_TOTAL_HTML_SIZE = 500_000  # 500KB total for all slides combined
-
         if parsed and "html" in parsed:
+            reply_text = parsed.get("reply", "Template aggiornato!")
             raw_html = parsed["html"]
-
-            # Validate size limits
-            size_error = None
             if isinstance(raw_html, dict):
-                # Instagram: check each slide and total
-                total_size = 0
-                for slide_key, slide_html in raw_html.items():
-                    if not isinstance(slide_html, str):
-                        continue
-                    slide_size = len(slide_html)
-                    total_size += slide_size
-                    _log_pipeline("info", f"Template chat slide '{slide_key}': size={slide_size}")
-                    if slide_size > MAX_SLIDE_HTML_SIZE:
-                        size_error = f"Slide '{slide_key}' troppo grande ({slide_size // 1000}KB > {MAX_SLIDE_HTML_SIZE // 1000}KB)"
-                        break
-                if not size_error and total_size > MAX_TOTAL_HTML_SIZE:
-                    size_error = f"HTML totale troppo grande ({total_size // 1000}KB > {MAX_TOTAL_HTML_SIZE // 1000}KB)"
-            elif isinstance(raw_html, str):
-                # Newsletter: single HTML layout
-                html_size = len(raw_html)
-                _log_pipeline("info", f"Template chat newsletter HTML: size={html_size}")
-                if html_size > MAX_SLIDE_HTML_SIZE:
-                    size_error = f"HTML troppo grande ({html_size // 1000}KB > {MAX_SLIDE_HTML_SIZE // 1000}KB)"
-
-            if size_error:
-                _log_pipeline("warn", f"Template chat: size limit exceeded — {size_error}")
-                reply_text = f"⚠️ {size_error}. Riprova con un design più semplice."
+                new_html = json.dumps(raw_html)
             else:
-                reply_text = parsed.get("reply", "Template aggiornato!")
-                if isinstance(raw_html, dict):
-                    # Instagram: validate required slide keys
-                    expected_keys = {"cover", "content", "list", "cta"}
-                    present_keys = set(k for k, v in raw_html.items() if isinstance(v, str) and v.strip())
-                    if template_type == "instagram" and not present_keys.intersection(expected_keys):
-                        _log_pipeline("warn", f"Template chat: html dict has no valid slide keys: {list(raw_html.keys())}")
-                        reply_text = "⚠️ Il template generato non contiene slide valide (cover/content/list/cta). Riprova."
-                    else:
-                        new_html = json.dumps(raw_html)
-                        html_changed = True
-                else:
-                    new_html = raw_html
-                    html_changed = True
-
-                # Extract components for newsletter templates
-                if html_changed and template_type == "newsletter" and "components" in parsed and isinstance(parsed["components"], dict):
-                    new_components = parsed["components"]
-                    components_changed = True
-
+                new_html = raw_html
+            html_changed = True
+            # Extract components for newsletter templates
+            if template_type == "newsletter" and "components" in parsed and isinstance(parsed["components"], dict):
+                new_components = parsed["components"]
+                components_changed = True
         elif parsed and "reply" in parsed:
             # Got JSON but no html field — model responded conversationally
             reply_text = parsed["reply"]
             _log_pipeline("warn", "Template chat: model returned JSON without 'html' field")
         else:
-            # No valid JSON — DO NOT attempt raw HTML fallback (causes garbage preview)
-            used_fallback = True
-            _log_pipeline("warn", f"Template chat: JSON parse failed completely, response_len={len(raw_response)}, first_200={raw_response[:200]!r}")
-            reply_text = "⚠️ Non sono riuscito a generare il template (risposta malformata). Riprova con istruzioni più specifiche."
+            # No valid JSON — try to find raw HTML
+            cleaned = _strip_fences(raw_response)
+            html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
+            if html_match:
+                new_html = html_match.group(1)
+                reply_text = cleaned[:cleaned.find("<!DOCTYPE")].strip() or "Ecco il template aggiornato."
+                html_changed = True
+            else:
+                reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
+                _log_pipeline("warn", f"Template chat: failed to parse JSON response")
 
         # Update chat history (store text only — images referenced by URL in message)
         history_user_content = user_message
@@ -4464,31 +3856,10 @@ REGOLE:
             for k in stale_keys:
                 del _preview_cache[k]
 
-        # Extract style rules when HTML changes (async-safe, non-blocking on error)
-        extracted_rules = None
-        if html_changed and new_html.strip():
-            try:
-                extracted_rules = _extract_style_rules(
-                    template_html=new_html,
-                    template_type=template_type,
-                    aspect_ratio=aspect_ratio,
-                    components=new_components if template_type == "newsletter" else None,
-                )
-                if extracted_rules:
-                    db.update_user_template(
-                        template_id=template_id,
-                        user_id=user_id,
-                        style_rules=extracted_rules,
-                    )
-            except Exception as e:
-                _log_pipeline("warn", f"Style rules extraction skipped: {e}")
-
-        _log_pipeline("info", f"Template chat: updated {template_id} (html_changed={html_changed}, images={len(ai_generated_images)})")
+        _log_pipeline("info", f"Template chat: updated {template_id} (html_changed={html_changed})")
         return jsonify({
             "reply": reply_text,
             "html_content": new_html if html_changed else None,
-            "style_rules": extracted_rules,
-            "orchestrator_log": orchestrator_log if orchestrator_log else None,
         })
 
     except Exception as e:
@@ -4687,6 +4058,48 @@ def template_upload_asset(template_id):
         return jsonify({"error": "Errore nell'upload. Riprova."}), 500
 
 
+@app.route("/api/templates/<template_id>/generate-image", methods=["POST"])
+def template_generate_image(template_id):
+    """Generate an AI image from a text prompt and upload it to Storage.
+
+    Body: { "prompt": "description of the image", "aspect_ratio": "16:9" }
+    Returns: { "url": "https://...", "description": "..." }
+    """
+    user_id = _get_user_id()
+    tpl = db.get_user_template_by_id(user_id, template_id)
+    if not tpl:
+        return jsonify({"error": "Template non trovato"}), 404
+
+    body = request.json or {}
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        return jsonify({"error": "Prompt immagine mancante"}), 400
+
+    # Use the template's aspect ratio by default for IG, 16:9 for NL
+    tpl_type = tpl.get("template_type", "instagram")
+    default_ratio = tpl.get("aspect_ratio", "1:1") if tpl_type == "instagram" else "16:9"
+    aspect_ratio = body.get("aspect_ratio", default_ratio)
+
+    # Enhance the prompt for better results
+    enhanced_prompt = f"Professional, high-quality image: {prompt}. Clean, modern style suitable for {'social media carousel' if tpl_type == 'instagram' else 'email newsletter'}. No text or watermarks."
+
+    try:
+        url = _generate_and_upload_image(
+            prompt=enhanced_prompt,
+            user_id=user_id,
+            template_id=template_id,
+            aspect_ratio=aspect_ratio,
+        )
+        if not url:
+            return jsonify({"error": "Generazione immagine fallita. Riprova."}), 500
+
+        _log_pipeline("info", f"AI image generated for template {template_id}: {prompt[:50]}")
+        return jsonify({"url": url, "description": prompt})
+    except Exception as e:
+        _log_pipeline("error", f"Image generation endpoint error: {e}")
+        return jsonify({"error": "Errore nella generazione immagine."}), 500
+
+
 @app.route("/api/templates/clone/<preset_id>", methods=["POST"])
 def clone_preset(preset_id):
     """Clone a preset template as a new user template."""
@@ -4708,9 +4121,6 @@ def clone_preset(preset_id):
     body = request.json or {}
     custom_name = body.get("name", f"{preset['name']} (personalizzato)")
 
-    # Copy style_rules from preset if available, otherwise extract
-    preset_rules = preset.get("style_rules") or {}
-
     tpl = db.create_user_template(
         user_id=user_id,
         template_type=preset["template_type"],
@@ -4719,24 +4129,7 @@ def clone_preset(preset_id):
         aspect_ratio=preset.get("aspect_ratio", "1:1"),
         chat_history=[],
         components=preset.get("components", {}),
-        style_rules=preset_rules,
     )
-
-    # If preset had no style_rules, extract them now
-    if not preset_rules and tpl.get("id") and preset["html_content"].strip():
-        try:
-            extracted = _extract_style_rules(
-                template_html=preset["html_content"],
-                template_type=preset["template_type"],
-                aspect_ratio=preset.get("aspect_ratio", "1:1"),
-                components=preset.get("components"),
-            )
-            if extracted:
-                db.update_user_template(tpl["id"], user_id, style_rules=extracted)
-                tpl["style_rules"] = extracted
-        except Exception:
-            pass
-
     _log_pipeline("info", f"Cloned preset '{preset['name']}' as '{custom_name}'")
     return jsonify(tpl), 201
 
@@ -4753,38 +4146,6 @@ def rename_template(template_id):
     if not tpl:
         return jsonify({"error": "Template non trovato"}), 404
     return jsonify(tpl)
-
-
-@app.route("/api/templates/<template_id>/extract-rules", methods=["POST"])
-def extract_template_rules(template_id):
-    """Re-extract style rules from a template's current HTML.
-
-    Useful after manual edits or to refresh outdated rules.
-    """
-    user_id = _get_user_id()
-    tpl = db.get_user_template_by_id(user_id, template_id)
-    if not tpl:
-        return jsonify({"error": "Template non trovato"}), 404
-
-    html_content = tpl.get("html_content", "")
-    if not html_content.strip():
-        return jsonify({"error": "Template vuoto — nessun HTML da analizzare"}), 400
-
-    try:
-        rules = _extract_style_rules(
-            template_html=html_content,
-            template_type=tpl["template_type"],
-            aspect_ratio=tpl.get("aspect_ratio", "1:1"),
-            components=tpl.get("components"),
-        )
-        if rules:
-            db.update_user_template(template_id, user_id, style_rules=rules)
-            return jsonify({"style_rules": rules})
-        else:
-            return jsonify({"error": "Estrazione regole fallita. Riprova."}), 500
-    except Exception as e:
-        _log_pipeline("error", f"Style rules extraction endpoint error: {e}")
-        return jsonify({"error": "Errore nell'estrazione delle regole di stile."}), 500
 
 
 # ---------------------------------------------------------------------------

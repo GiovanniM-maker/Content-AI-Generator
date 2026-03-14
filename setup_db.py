@@ -69,12 +69,8 @@ def main():
     else:
         # Step 2: Create default admin user
         print("\n→ Creating default admin user...")
-        email = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@content-ai.local")
-        password = os.getenv("DEFAULT_ADMIN_PASSWORD", "")
-        if not password:
-            import secrets
-            password = secrets.token_urlsafe(16)
-            print(f"  ℹ Generated random password: {password}")
+        email = "admin@content-ai.local"
+        password = "ContentAI2026!"  # Only for initial setup/testing
 
         try:
             result = db.create_admin_user(email, password)

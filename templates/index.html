@@ -2126,28 +2126,17 @@ body::after {
 .pers-upload-preview span { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pers-upload-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 4px; }
 .pers-upload-remove:hover { color: #e74c3c; }
-/* Orchestrator status messages in chat */
-.pers-orchestrator-log { margin: 4px 0 8px 0; }
-.pers-orchestrator-msg { font-size: 11px; color: var(--text2); font-style: italic; padding: 2px 0; line-height: 1.5; }
-/* AI image enrichment toggles */
-.nl-enrich-toggle, .ig-enrich-toggle { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer; user-select:none; transition: all .2s; background: var(--card-bg); border: 1px solid var(--border); color: var(--text2); }
-.nl-enrich-toggle:hover, .ig-enrich-toggle:hover { border-color: var(--accent); }
-.nl-enrich-toggle.active, .ig-enrich-toggle.active { background: linear-gradient(135deg, rgba(108,92,231,0.12), rgba(0,206,209,0.12)); border-color: var(--accent); color: var(--fg); }
-.nl-enrich-toggle input, .ig-enrich-toggle input { display: none; }
-.nl-enrich-dot, .ig-enrich-dot { width:8px; height:8px; border-radius:50%; background:var(--border); transition: background .2s; }
-.nl-enrich-toggle.active .nl-enrich-dot, .ig-enrich-toggle.active .ig-enrich-dot { background: var(--accent); }
-.pers-style-rules-panel { margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); overflow: hidden; }
-.pers-style-rules-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); user-select: none; }
-.pers-style-rules-header:hover { color: var(--fg); }
-.pers-style-rules-body { padding: 10px 14px; font-size: 11px; color: var(--text2); line-height: 1.6; max-height: 300px; overflow-y: auto; }
-.pers-style-rules-body .sr-section { margin-bottom: 8px; }
-.pers-style-rules-body .sr-section-title { font-weight: 700; font-size: 11px; color: var(--fg); margin-bottom: 3px; }
-.pers-style-rules-body .sr-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid rgba(128,128,128,0.1); }
-.pers-style-rules-body .sr-label { color: var(--text2); }
-.pers-style-rules-body .sr-value { font-weight: 600; color: var(--accent); }
-.pers-style-rules-body .sr-colors { display: flex; gap: 4px; margin-top: 4px; }
-.pers-style-rules-body .sr-swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(128,128,128,0.3); }
-.pers-style-rules-actions { padding: 6px 14px 10px; }
+/* AI Image generation bar */
+.pers-imagegen-bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; margin-bottom: 4px; background: linear-gradient(135deg, rgba(108,92,231,0.08), rgba(0,206,209,0.08)); border: 1px solid var(--accent); border-radius: 10px; }
+.pers-imagegen-input { flex: 1; padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; background: var(--card-bg); color: var(--fg); font-family: inherit; }
+.pers-imagegen-input:focus { outline: none; border-color: var(--accent); }
+.pers-imagegen-bar .btn-sm { padding: 6px 12px; font-size: 11px; }
+.nl-enrich-toggle { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer; user-select:none; transition: all .2s; background: var(--card-bg); border: 1px solid var(--border); color: var(--text2); }
+.nl-enrich-toggle:hover { border-color: var(--accent); }
+.nl-enrich-toggle.active { background: linear-gradient(135deg, rgba(108,92,231,0.12), rgba(0,206,209,0.12)); border-color: var(--accent); color: var(--fg); }
+.nl-enrich-toggle input { display: none; }
+.nl-enrich-dot { width:8px; height:8px; border-radius:50%; background:var(--border); transition: background .2s; }
+.nl-enrich-toggle.active .nl-enrich-dot { background: var(--accent); }
 .pers-chat-bubble .bubble-img { max-width: 120px; border-radius: 6px; margin-top: 6px; display: block; }
 
 /* Preview */
@@ -2218,14 +2207,6 @@ body::after {
 .pers-preview-gallery-item.expanded .pers-preview-iframe-wrap.ratio-3-4 { padding-top: 133.33%; }
 .pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: var(--iframe-scale-expanded, scale(0.5)); }
 .pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; z-index: 2; }
-/* Slide tab bar for single-slide preview */
-.pers-slide-tabs { display: flex; gap: 4px; padding: 8px 12px; background: var(--surface, #f9f9f9); border-bottom: 1px solid var(--border, #e5e5e5); }
-.pers-slide-tab { padding: 6px 16px; border: 1px solid var(--border, #ddd); border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; color: var(--text-secondary, #666); }
-.pers-slide-tab:hover { border-color: var(--accent, #6c5ce7); color: var(--accent, #6c5ce7); }
-.pers-slide-tab.active { background: var(--accent, #6c5ce7); color: #fff; border-color: var(--accent, #6c5ce7); }
-/* Single-slide preview container */
-.pers-preview-single { padding: 12px; width: 100%; overflow-y: auto; }
-.pers-preview-single .pers-preview-iframe-wrap { max-width: 100%; margin: 0 auto; }
 
 /* Gallery in template-select modal */
 .tpl-select-card .pers-card-gallery { height: 100px; }
@@ -2681,8 +2662,7 @@ body::after {
     <div class="topbar-tab" data-tab="crea" onclick="showTab('crea')">
       <span>✨</span> Crea <span id="crea-badge" class="crea-tab-badge" style="display:none;">0</span>
     </div>
-    <!-- BETA: Pianifica tab disabled — scheduling not in beta scope -->
-    <div class="topbar-tab" data-tab="pianifica" onclick="showTab('pianifica')" style="display:none;">
+    <div class="topbar-tab" data-tab="pianifica" onclick="showTab('pianifica')">
       <span>📅</span> Pianifica
     </div>
     <div class="topbar-tab" data-tab="libreria" onclick="showTab('libreria')">
@@ -2821,9 +2801,8 @@ body::after {
       <div class="crea-input-wrapper">
         <textarea id="crea-chat-input" class="crea-chat-box" placeholder="Scrivi qui cosa vuoi creare...&#10;&#10;Es: &quot;Un post LinkedIn sull'impatto dell'AI nel marketing&quot;&#10;Es: &quot;Una newsletter sulle ultime novità di OpenAI&quot;"></textarea>
         <div class="crea-input-footer">
-          <!-- BETA: Web search disabled — not in beta scope -->
-          <label class="crea-web-toggle" style="display:none;">
-            <input type="checkbox" id="crea-web-search-toggle" disabled> 🔍 Cerca sul web
+          <label class="crea-web-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2);">
+            <input type="checkbox" id="crea-web-search-toggle"> 🔍 Cerca sul web
           </label>
           <span style="font-size:11px;color:var(--text3);" id="crea-chat-count">0 caratteri</span>
         </div>
@@ -3192,9 +3171,16 @@ body::after {
             <span id="pers-upload-name"></span>
             <button class="pers-upload-remove" onclick="removeTemplateUpload()">✕</button>
           </div>
+          <!-- AI Image generation prompt (hidden by default) -->
+          <div id="pers-imagegen-bar" class="pers-imagegen-bar" style="display:none;">
+            <input id="pers-imagegen-input" class="pers-imagegen-input" type="text" placeholder="Descrivi l'immagine da generare (es. tramonto sulla spiaggia, logo moderno...)" onkeydown="if(event.key==='Enter'){event.preventDefault();_submitImageGen();}">
+            <button class="btn btn-primary btn-sm" onclick="_submitImageGen()">Genera</button>
+            <button class="btn btn-secondary btn-sm" onclick="_toggleImageGen(false)">✕</button>
+          </div>
           <div class="pers-chat-input-row">
             <input type="file" id="pers-file-input" accept="image/*" multiple style="display:none" onchange="handleTemplateFileSelect(this)">
             <button class="btn btn-secondary pers-upload-btn" onclick="document.getElementById('pers-file-input').click()" title="Allega immagini (logo, screenshot, mockup)">📎</button>
+            <button class="btn btn-secondary pers-upload-btn" onclick="_toggleImageGen()" title="Genera immagine con AI">🖼️</button>
             <textarea id="pers-chat-input" class="pers-chat-input" placeholder="Descrivi il design che vuoi..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTemplateMessage();}"></textarea>
             <button id="pers-send-btn" class="btn btn-primary pers-send-btn" onclick="sendTemplateMessage()">Invia</button>
           </div>
@@ -3210,17 +3196,6 @@ body::after {
           </div>
           <div id="pers-preview-container" class="pers-preview-container">
             <div class="pers-preview-empty">La preview apparirà qui dopo il primo messaggio</div>
-          </div>
-          <!-- Style Rules Panel (collapsible) -->
-          <div id="pers-style-rules-panel" class="pers-style-rules-panel" style="display:none;">
-            <div class="pers-style-rules-header" onclick="toggleStyleRulesPanel()">
-              <span>📐 Regole stile</span>
-              <span id="pers-style-rules-chevron" style="font-size:12px;transition:transform .2s;">▼</span>
-            </div>
-            <div id="pers-style-rules-body" class="pers-style-rules-body" style="display:none;"></div>
-            <div class="pers-style-rules-actions" style="display:none;" id="pers-style-rules-actions">
-              <button class="btn btn-sm btn-secondary" onclick="regenerateStyleRules()">🔄 Rigenera regole</button>
-            </div>
           </div>
         </div>
       </div>
@@ -3327,7 +3302,7 @@ body::after {
         if (ov) { ov.style.display = 'none'; ov.classList.add('hidden'); }
       }
     }
-  } catch(e) { console.warn('Auth init error:', e); }
+  } catch(e) {}
 })();
 
 // ========================================================
@@ -3354,13 +3329,6 @@ function clearAuthData() {
 function getAccessToken() {
   const data = getAuthData();
   return data ? data.access_token : null;
-}
-
-// Reusable fetch timeout helper
-function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
 }
 
 // Wrap native fetch to auto-inject Authorization header
@@ -3714,11 +3682,6 @@ async function doLogin() {
 
   if (!email || !password) {
     errDiv.textContent = 'Inserisci email e password';
-    errDiv.style.display = 'block';
-    return;
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-    errDiv.textContent = 'Formato email non valido';
     errDiv.style.display = 'block';
     return;
   }
@@ -4272,7 +4235,7 @@ function onAuthSuccess(user) {
   hideAuthOverlay();
   updateSidebarUser(user);
   // Admin detection
-  isAdmin = !!(user && user.is_admin);
+  isAdmin = (user && user.email === ADMIN_EMAIL);
   applyAdminGating();
   // Reload data for the new user
   loadWeeklyBanner();
@@ -4304,10 +4267,8 @@ function updateSidebarUser(user) {
   if (!el) return;
   el.style.display = 'flex';
   const name = user.full_name || user.email || '?';
-  const userNameEl = document.getElementById('user-name');
-  if (userNameEl) userNameEl.textContent = name.split(' ')[0] || name; // Show first name only in topbar
-  const userAvatarEl = document.getElementById('user-avatar');
-  if (userAvatarEl) userAvatarEl.textContent = (name[0] || '?').toUpperCase();
+  document.getElementById('user-name').textContent = name.split(' ')[0] || name; // Show first name only in topbar
+  document.getElementById('user-avatar').textContent = (name[0] || '?').toUpperCase();
   // Load usage after updating user
   loadUsageBar();
 }
@@ -4359,7 +4320,7 @@ function initAuth() {
         return resp.json().then(me => {
           hideAuthOverlay();
           updateSidebarUser(me.user);
-          isAdmin = !!(me.user && me.user.is_admin);
+          isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
           applyAdminGating();
           loadDashboard();
           startNotifPolling();
@@ -4377,7 +4338,7 @@ function initAuth() {
             }).then(r => r.ok ? r.json() : null).then(me => {
               if (me) {
                 updateSidebarUser(me.user);
-                isAdmin = !!(me.user && me.user.is_admin);
+                isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
                 applyAdminGating();
                 loadDashboard();
                 startNotifPolling();
@@ -4677,7 +4638,8 @@ function playNotificationSound() {
   } catch(e) {}
 }
 
-// Admin system — determined server-side via /auth/me response
+// Admin system
+const ADMIN_EMAIL = 'giovanni.mavilla.grz@gmail.com';
 let isAdmin = false;
 
 // ---- Source Mode ----
@@ -4947,13 +4909,11 @@ function toast(msg) {
 // ---- Global loading helpers ----
 function showLoading(msg) {
   const el = document.getElementById('global-loader');
-  const glText = document.getElementById('gl-text');
-  if (glText) glText.textContent = msg || '';
-  if (el) el.classList.add('active');
+  document.getElementById('gl-text').textContent = msg || '';
+  el.classList.add('active');
 }
 function hideLoading() {
-  const el = document.getElementById('global-loader');
-  if (el) el.classList.remove('active');
+  document.getElementById('global-loader').classList.remove('active');
 }
 /** Set a button into loading state; returns a restore function */
 function btnLoading(btn, loadingText) {
@@ -5200,9 +5160,7 @@ function renderArticleList(articles) {
 }
 
 function toggleArticle(el, encoded) {
-  let article;
-  try { article = JSON.parse(decodeURIComponent(atob(encoded))); }
-  catch(e) { toast('Errore nel caricamento dell\'articolo'); return; }
+  const article = JSON.parse(decodeURIComponent(atob(encoded)));
   const idx = selectedArticles.findIndex(s => s.article.url === article.url);
   if (idx >= 0) {
     selectedArticles.splice(idx, 1);
@@ -5282,18 +5240,13 @@ async function generateAll() {
   function updateProgress(label) {
     completed++;
     const pct = Math.round((completed / totalCalls) * 100);
-    const genStatusEl = document.getElementById('gen-status');
-    if (genStatusEl) genStatusEl.textContent = label;
-    const genBarEl = document.getElementById('gen-bar');
-    if (genBarEl) genBarEl.style.width = pct + '%';
+    document.getElementById('gen-status').textContent = label;
+    document.getElementById('gen-bar').style.width = pct + '%';
     if (percentEl) percentEl.textContent = pct + '%';
     // Update overlay progress
-    const overlayBarEl = document.getElementById('gen-overlay-bar');
-    if (overlayBarEl) overlayBarEl.style.width = pct + '%';
-    const overlayPctEl = document.getElementById('gen-overlay-pct');
-    if (overlayPctEl) overlayPctEl.textContent = pct + '%';
-    const overlayStatusEl = document.getElementById('gen-overlay-status');
-    if (overlayStatusEl) overlayStatusEl.textContent = label;
+    document.getElementById('gen-overlay-bar').style.width = pct + '%';
+    document.getElementById('gen-overlay-pct').textContent = pct + '%';
+    document.getElementById('gen-overlay-status').textContent = label;
     // Calculate remaining ETA based on actual elapsed time
     if (etaEl) {
       const elapsed = (Date.now() - _genStartTime) / 1000;
@@ -5303,8 +5256,7 @@ async function generateAll() {
         etaEl.textContent = '✅ Completato!';
       } else {
         etaEl.textContent = remaining > 0 ? `⏱ ~${remaining}s rimanenti` : '⏱ Quasi fatto...';
-        const overlaySubEl = document.getElementById('gen-overlay-sub');
-        if (overlaySubEl) overlaySubEl.textContent = `⏱ ~${remaining}s rimanenti`;
+        document.getElementById('gen-overlay-sub').textContent = `⏱ ~${remaining}s rimanenti`;
       }
     }
   }
@@ -5331,13 +5283,12 @@ async function generateAll() {
 
     // Instagram
     if (platforms.includes('instagram')) {
-      const igTplIdOld = (window._selectedGenTemplates || {}).instagram || '';
       selectedArticles.forEach((s, i) => {
         promises.push(
           fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'instagram', variant: 0, template_id: igTplIdOld }),
+            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'instagram', variant: 0 }),
           }).then(safeJson).then(d => {
             if (d.error) throw new Error(d.error);
             currentContent['instagram_' + i] = d.content;
@@ -5385,11 +5336,10 @@ async function generateAll() {
 
     // Newsletter (sequential, needs all topics)
     if (platforms.includes('newsletter')) {
-      const nlTplIdOld = (window._selectedGenTemplates || {}).newsletter || '';
       const nlResp = await fetch('/api/generate-newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topics: selectedArticles, template_id: nlTplIdOld }),
+        body: JSON.stringify({ topics: selectedArticles }),
       }).then(safeJson);
       if (nlResp.error) throw new Error(nlResp.error);
       currentContent['newsletter'] = nlResp.content;
@@ -5436,10 +5386,9 @@ function parseCarousel(text) {
 }
 
 function renderGeneratedContent() {
-  const genProgressEl = document.getElementById('gen-progress');
-  if (genProgressEl) genProgressEl.style.display = 'none';
+  document.getElementById('gen-progress').style.display = 'none';
   const results = document.getElementById('gen-results');
-  if (results) results.style.display = 'block';
+  results.style.display = 'block';
   // Show post-generation action buttons
   const creaActions = document.getElementById('crea-results-actions');
   if (creaActions) creaActions.style.display = 'flex';
@@ -5505,10 +5454,6 @@ function renderGeneratedContent() {
         <div class="carousel-actions">
           <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
           <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${i})">🎨 Rigenera img</button>
-          <!-- BETA: Sfondi AI toggle hidden — carousel image enrichment disabled in beta -->
-          <label class="ig-enrich-toggle" style="display:none;" title="Non disponibile in beta">
-            <input type="checkbox" disabled><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
-          </label>
         </div>
         <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
         <div class="col-actions">
@@ -5624,9 +5569,8 @@ function renderGeneratedContent() {
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyNlHtml()">Copia HTML</button>
           <button class="btn btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="openNlPreview()">👁 Anteprima completa</button>
-          <!-- BETA: Immagini AI toggle hidden — newsletter enrichment disabled in beta -->
-          <label class="nl-enrich-toggle" style="display:none;" title="Non disponibile in beta">
-            <input type="checkbox" disabled><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
+          <label class="nl-enrich-toggle ${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI e inseriscile nella newsletter">
+            <input type="checkbox" ${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
           </label>
           <button class="btn btn-approve btn-small ${nlApproved ? 'approved' : ''}" onclick="approveContent('newsletter', this)">${nlApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
@@ -5688,31 +5632,6 @@ async function renderSingleCarouselImages(key, text, paletteIdx, artIdx) {
     // Use custom template if one was selected
     const igTplId = (window._selectedGenTemplates || {}).instagram;
     if (igTplId) payload.template_id = igTplId;
-
-    // If AI background images are enabled and we have a template, enrich first
-    if (window._igEnrichImages && igTplId) {
-      const loadEl = document.getElementById('render-loading-' + key);
-      if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>🖼️ Generando sfondi AI...</span></div>';
-      try {
-        const enrichCtrl = new AbortController();
-        const enrichTimeout = setTimeout(() => enrichCtrl.abort(), 30000); // 30s timeout
-        const enrichResp = await fetch('/api/carousel/enrich-images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, template_id: igTplId }),
-          signal: enrichCtrl.signal,
-        }).then(safeJson);
-        clearTimeout(enrichTimeout);
-        if (enrichResp.images && Object.keys(enrichResp.images).length > 0) {
-          payload.slide_images = enrichResp.images;
-          // debug: IG enrich count logged
-        }
-      } catch (enrichErr) {
-        console.warn('[IG enrich] Image enrichment skipped:', enrichErr.name === 'AbortError' ? 'timeout' : enrichErr.message);
-      }
-      if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>Rendering immagini...</span></div>';
-    }
-
     const resp = await fetch('/api/render-carousel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5788,8 +5707,7 @@ async function downloadCarousel(key) {
   if (!images || !images.length) { toast('Nessuna immagine da scaricare'); return; }
   showLoading(`Scaricando ${images.length} slide...`);
   for (let i = 0; i < images.length; i++) {
-    const glTextEl = document.getElementById('gl-text');
-    if (glTextEl) glTextEl.textContent = `Scaricando slide ${i+1}/${images.length}...`;
+    document.getElementById('gl-text').textContent = `Scaricando slide ${i+1}/${images.length}...`;
     const resp = await fetch(images[i]);
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
@@ -5887,18 +5805,16 @@ function regenerateSingle(format, idx) {
     const topics = (selectedArticles.length ? selectedArticles : _creaArticles).map(ss => ({
       article: ss.article || ss, opinion: ss.opinion || ''
     }));
-    const nlTplRegen = (window._selectedGenTemplates || {}).newsletter || '';
     apiCall = fetch('/api/generate-newsletter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topics, feedback, template_id: nlTplRegen }),
+      body: JSON.stringify({ topics, feedback }),
     });
   } else {
-    const igTplRegen = format === 'instagram' ? ((window._selectedGenTemplates || {}).instagram || '') : '';
     apiCall = fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ article: s.article, opinion, format, feedback, source_mode: (s.article || {}).source_mode || 'rss', custom_text: (s.article || {}).custom_text || '', template_id: igTplRegen }),
+      body: JSON.stringify({ article: s.article, opinion, format, feedback, source_mode: (s.article || {}).source_mode || 'rss', custom_text: (s.article || {}).custom_text || '' }),
     });
   }
 
@@ -5951,11 +5867,10 @@ function regenerateNewsletter() {
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '...'; }
   showColLoader(col, 'Rigenerando newsletter...');
 
-  const nlTplRegenDirect = (window._selectedGenTemplates || {}).newsletter || '';
   fetch('/api/generate-newsletter', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topics: selectedArticles, feedback, template_id: nlTplRegenDirect }),
+    body: JSON.stringify({ topics: selectedArticles, feedback }),
   })
   .then(safeJson)
   .then(data => {
@@ -7216,24 +7131,21 @@ async function _processQueue(queue, sessionId, sources, chatText, startIdx) {
       let resp;
       if (job.type === 'newsletter') {
         const topics = job.sources.map(s => ({ article: s, opinion: job.opinion }));
-        const nlTplId = (window._selectedGenTemplates || {}).newsletter || '';
         resp = await fetch('/api/generate-newsletter', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topics, template_id: nlTplId }),
+          body: JSON.stringify({ topics }),
         }).then(safeJson);
         if (!results.newsletter) results.newsletter = [];
         results.newsletter.push({ content: resp.content || resp.error || 'Errore', source: 'Newsletter' });
         currentContent['newsletter_' + (results.newsletter.length - 1)] = resp.content || '';
       } else {
-        const igTplId = (window._selectedGenTemplates || {}).instagram || '';
         const body = {
           article: job.source,
           format: job.type,
           opinion: job.opinion,
           source_mode: job.source.source_mode || 'rss',
           custom_text: job.source.custom_text || '',
-          template_id: job.type === 'instagram' ? igTplId : '',
         };
         if (job.variant > 0) body.feedback = `Crea una variante diversa (angolazione #${job.variant + 1}). Offri una prospettiva differente.`;
         resp = await fetch('/api/generate', {
@@ -7470,13 +7382,10 @@ async function generateFromCrea() {
 
   // Show progress UI
   const resultsSection = document.getElementById('crea-results');
-  if (resultsSection) resultsSection.style.display = 'block';
-  const genProgressSetup = document.getElementById('gen-progress');
-  if (genProgressSetup) genProgressSetup.style.display = 'block';
-  const genResultsSetup = document.getElementById('gen-results');
-  if (genResultsSetup) genResultsSetup.innerHTML = '';
-  const btnCreaGen = document.getElementById('btn-crea-generate');
-  if (btnCreaGen) btnCreaGen.disabled = true;
+  resultsSection.style.display = 'block';
+  document.getElementById('gen-progress').style.display = 'block';
+  document.getElementById('gen-results').innerHTML = '';
+  document.getElementById('btn-crea-generate').disabled = true;
   window._isGenerating = true;
   const genOverlay = document.getElementById('gen-overlay');
   genOverlay.classList.add('active');
@@ -7511,7 +7420,7 @@ function renderCreaResults(results) {
   let hasInstagram = false;
 
   for (const [platform, items] of Object.entries(results)) {
-    // debug: renderCrea platform logged
+    console.log('[renderCrea] platform:', platform, 'items:', items?.length);
     html += `<div class="content-section"><h2>${platformNames[platform] || platform}</h2><div class="content-grid">`;
     items.forEach((item, idx) => {
       const key = platform + '_' + idx;
@@ -7539,10 +7448,6 @@ function renderCreaResults(results) {
           <div class="carousel-actions">
             <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
             <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${idx})">🎨 Rigenera img</button>
-            <!-- BETA: Sfondi AI toggle hidden — carousel image enrichment disabled in beta -->
-            <label class="ig-enrich-toggle" style="display:none;" title="Non disponibile in beta">
-              <input type="checkbox" disabled><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
-            </label>
           </div>
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
           <div class="col-actions">
@@ -7585,9 +7490,8 @@ function renderCreaResults(results) {
             <button class="btn btn-secondary btn-small" onclick="copyNlHtmlCrea(${idx})">📋 Copia HTML</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">📄 Copia testo</button>
             <button class="btn btn-secondary btn-small" onclick="toggleNlSource(${idx})">🔧 Mostra sorgente</button>
-            <!-- BETA: Immagini AI toggle hidden — newsletter enrichment disabled in beta -->
-            <label class="nl-enrich-toggle" style="display:none;" title="Non disponibile in beta">
-              <input type="checkbox" disabled><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
+            <label class="nl-enrich-toggle \${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI nella newsletter">
+              <input type="checkbox" \${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
             </label>
             <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
           </div>
@@ -7631,7 +7535,7 @@ function renderCreaResults(results) {
   // Trigger newsletter HTML preview rendering
   const nlItems = results.newsletter || results.Newsletter || [];
   if (nlItems.length > 0) {
-    // debug: NL preview trigger logged
+    console.log('[renderCrea] triggering NL preview for', nlItems.length, 'items');
     autoRenderNlPreviewsCrea(nlItems);
   }
 }
@@ -8403,26 +8307,12 @@ function renderPreferences() {
   panel.innerHTML = html;
 }
 
-// ---- Instagram Carousel AI Image Enrichment ----
-window._igEnrichImages = false; // BETA: carousel image enrichment disabled
-
-function toggleIgEnrichImages(label) {
-  window._igEnrichImages = !window._igEnrichImages;
-  document.querySelectorAll('.ig-enrich-toggle').forEach(el => {
-    el.classList.toggle('active', window._igEnrichImages);
-    const cb = el.querySelector('input[type="checkbox"]');
-    if (cb) cb.checked = window._igEnrichImages;
-  });
-  if (window._igEnrichImages) {
-    toast('🖼️ Immagini AI IG attive: le prossime immagini carousel includeranno sfondi generati');
-  }
-}
-
 // ---- Newsletter AI Image Enrichment ----
 window._nlEnrichImages = false;
 
 function toggleNlEnrichImages(label) {
   window._nlEnrichImages = !window._nlEnrichImages;
+  // Update all toggle labels on the page
   document.querySelectorAll('.nl-enrich-toggle').forEach(el => {
     el.classList.toggle('active', window._nlEnrichImages);
     const cb = el.querySelector('input[type="checkbox"]');
@@ -8442,24 +8332,20 @@ async function _enrichNlText(text, templateId) {
   try {
     const payload = { text };
     if (templateId) payload.template_id = templateId;
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 30000); // 30s timeout
     const resp = await fetch('/api/newsletter/enrich-images', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: ctrl.signal,
     });
-    clearTimeout(timeout);
     const data = await resp.json();
     if (data.error) { console.warn('[NL enrich] error:', data.error); return text; }
     if (data.images_generated > 0) {
-      // debug: NL enrich images logged
+      console.log(`[NL enrich] Added ${data.images_generated} AI images`);
       toast(`🖼️ ${data.images_generated} immagini AI generate e inserite`);
     }
     return data.text || text;
   } catch (err) {
-    console.warn('[NL enrich] skipped:', err.name === 'AbortError' ? 'timeout (30s)' : err.message);
+    console.warn('[NL enrich] failed:', err);
     return text; // non-fatal: return original
   }
 }
@@ -8531,12 +8417,12 @@ async function autoRenderNlPreview() {
   }
   // Show loading
   const enriching = window._nlEnrichImages;
-  const nlTplId = (window._selectedGenTemplates || {}).newsletter;
   container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:30px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">${enriching ? '🖼️ Generando immagini AI e rendering...' : 'Rendering newsletter con template...'}</span></div>`;
   try {
-    // Optionally enrich text with AI-generated images before rendering
+    const nlTplId = (window._selectedGenTemplates || {}).newsletter;
+    // Optionally enrich text with AI-generated images
     let nlText = ta.value;
-    if (window._nlEnrichImages) {
+    if (enriching) {
       nlText = await _enrichNlText(nlText, nlTplId);
     }
     const nlPayload = { text: nlText };
@@ -8587,7 +8473,7 @@ async function autoRenderNlPreviewsCrea(nlItems) {
       }
       const nlPayload = { text: finalNlText };
       if (nlTplId) nlPayload.template_id = nlTplId;
-      // debug: NL preview fetch logged
+      console.log('[NL preview] fetching HTML, text length:', finalNlText.length, 'template:', nlTplId || 'none', 'enriched:', window._nlEnrichImages);
       const resp = await fetch('/api/newsletter/html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -8622,7 +8508,7 @@ async function autoRenderNlPreviewsCrea(nlItems) {
           }
         } catch(e) {}
       };
-      // debug: NL preview rendered
+      console.log('[NL preview] rendered successfully for idx', idx);
     } catch (err) {
       console.error('[NL preview] error:', err);
       container.innerHTML = `<p style="padding:20px;text-align:center;color:#e74c3c;font-size:13px;">Errore rendering: ${err.message}</p>`;
@@ -8719,8 +8605,6 @@ let _persPlan = 'free';
 let _persLimit = 1;
 let _persCount = 0;
 let _persPreviewMode = 'visual';
-let _persActiveSlide = 'cover';   // currently shown slide tab (cover/content/list/cta)
-let _persParsedTemplates = {};    // cached parsed template slides for tab switching
 let _persNavigating = false; // guard against double-click race conditions
 let _persSending = false;    // guard for sendTemplateMessage
 // Cached preview URLs: { templateId: { cover: url, content: url, ... } }
@@ -8797,7 +8681,7 @@ function renderPersHome() {
         e.preventDefault();
         const action = btn.dataset.action;
         const id = btn.dataset.id;
-        // debug: pers-grid action logged
+        console.log('[pers-grid] action:', action, 'id:', id);
         if (action === 'edit') {
           openTemplateChat(id);
         } else if (action === 'delete') {
@@ -9021,8 +8905,6 @@ async function openTemplateChat(templateId) {
     _persCurrentType = tpl.template_type;
     _persCurrentRatio = tpl.aspect_ratio || '1:1';
     _persCurrentHtml = tpl.html_content || '';
-    _persActiveSlide = 'cover';
-    _persParsedTemplates = {};
 
     // Reset upload state
     removeTemplateUpload();
@@ -9051,9 +8933,6 @@ async function openTemplateChat(templateId) {
 
     // Update preview
     updateTemplatePreview();
-
-    // Show style rules if available
-    renderStyleRulesPanel(tpl.style_rules || null);
 
     showPersScreen('pers-chat');
   } catch(e) { hideLoading(); toast('Errore nel caricamento'); }
@@ -9137,103 +9016,6 @@ async function _uploadTemplateFiles() {
   return urls;
 }
 
-// ---- Style Rules Panel ----
-let _styleRulesOpen = false;
-
-function toggleStyleRulesPanel() {
-  _styleRulesOpen = !_styleRulesOpen;
-  const body = document.getElementById('pers-style-rules-body');
-  const actions = document.getElementById('pers-style-rules-actions');
-  const chevron = document.getElementById('pers-style-rules-chevron');
-  if (body) body.style.display = _styleRulesOpen ? '' : 'none';
-  if (actions) actions.style.display = _styleRulesOpen ? '' : 'none';
-  if (chevron) chevron.style.transform = _styleRulesOpen ? 'rotate(180deg)' : '';
-}
-
-function renderStyleRulesPanel(rules) {
-  const panel = document.getElementById('pers-style-rules-panel');
-  const body = document.getElementById('pers-style-rules-body');
-  if (!panel || !body) return;
-  if (!rules || Object.keys(rules).length === 0) {
-    panel.style.display = 'none';
-    return;
-  }
-  panel.style.display = '';
-  let html = '';
-
-  // Visual style
-  const vs = rules.visual_style;
-  if (vs) {
-    html += '<div class="sr-section"><div class="sr-section-title">🎨 Stile Visivo</div>';
-    if (vs.mood) html += `<div class="sr-row"><span class="sr-label">Mood</span><span class="sr-value">${esc(vs.mood.substring(0, 50))}</span></div>`;
-    if (vs.aesthetic) html += `<div class="sr-row"><span class="sr-label">Estetica</span><span class="sr-value">${esc(vs.aesthetic.substring(0, 50))}</span></div>`;
-    if (vs.color_palette && vs.color_palette.length) {
-      html += '<div class="sr-colors">';
-      vs.color_palette.forEach(c => { html += `<div class="sr-swatch" style="background:${c}" title="${c}"></div>`; });
-      html += '</div>';
-    }
-    html += '</div>';
-  }
-
-  // Typography
-  const typo = rules.typography;
-  if (typo) {
-    html += '<div class="sr-section"><div class="sr-section-title">✏️ Tipografia</div>';
-    for (const [zone, cfg] of Object.entries(typo)) {
-      const label = zone.replace(/_/g, ' ');
-      const mc = cfg.max_chars || cfg.max_chars_per_line || '';
-      const fs = cfg.max_font_size_px || cfg.font_size || '';
-      let desc = '';
-      if (mc) desc += `max ${mc} car`;
-      if (fs) desc += `${desc ? ', ' : ''}${fs}px`;
-      if (cfg.max_lines) desc += `, ${cfg.max_lines} righe`;
-      if (cfg.max_items) desc += `max ${cfg.max_items} items`;
-      if (desc) html += `<div class="sr-row"><span class="sr-label">${esc(label)}</span><span class="sr-value">${esc(desc)}</span></div>`;
-    }
-    html += '</div>';
-  }
-
-  // Image style
-  const img = rules.image_style;
-  if (img) {
-    html += '<div class="sr-section"><div class="sr-section-title">🖼️ Stile Immagini</div>';
-    if (img.description) html += `<div class="sr-row"><span class="sr-label">Stile</span><span class="sr-value">${esc(img.description.substring(0, 60))}</span></div>`;
-    if (img.preferred_aspect_ratio) html += `<div class="sr-row"><span class="sr-label">Aspect</span><span class="sr-value">${esc(img.preferred_aspect_ratio)}</span></div>`;
-    html += '</div>';
-  }
-
-  // Content rules
-  const cr = rules.content_rules;
-  if (cr) {
-    html += '<div class="sr-section"><div class="sr-section-title">📏 Regole Contenuto</div>';
-    if (cr.recommended_slides) html += `<div class="sr-row"><span class="sr-label">Slide consigliate</span><span class="sr-value">${esc(cr.recommended_slides)}</span></div>`;
-    if (cr.max_sections) html += `<div class="sr-row"><span class="sr-label">Max sezioni</span><span class="sr-value">${cr.max_sections}</span></div>`;
-    html += '</div>';
-  }
-
-  body.innerHTML = html;
-}
-
-async function regenerateStyleRules() {
-  if (!_persCurrentId) return;
-  const btn = document.querySelector('#pers-style-rules-actions .btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Rigenerando...'; }
-  try {
-    const resp = await fetch(`/api/templates/${_persCurrentId}/extract-rules`, { method: 'POST' });
-    const data = await resp.json();
-    if (data.style_rules) {
-      renderStyleRulesPanel(data.style_rules);
-      toast('Regole stile rigenerate!');
-    } else {
-      toast('Errore: ' + (data.error || 'estrazione fallita'));
-    }
-  } catch(e) {
-    toast('Errore: ' + e.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🔄 Rigenera regole'; }
-  }
-}
-
 async function sendTemplateMessage() {
   if (_persSending) return; // prevent double-send
   const input = document.getElementById('pers-chat-input');
@@ -9314,19 +9096,6 @@ async function sendTemplateMessage() {
       errBubble.textContent = data.error || 'Errore nella risposta';
       msgContainer.appendChild(errBubble);
     } else {
-      // Show orchestrator log messages (AI image generation steps)
-      if (data.orchestrator_log && data.orchestrator_log.length) {
-        const logDiv = document.createElement('div');
-        logDiv.className = 'pers-orchestrator-log';
-        data.orchestrator_log.forEach(msg => {
-          const line = document.createElement('div');
-          line.className = 'pers-orchestrator-msg';
-          line.textContent = msg;
-          logDiv.appendChild(line);
-        });
-        msgContainer.appendChild(logDiv);
-      }
-
       const botBubble = document.createElement('div');
       botBubble.className = 'pers-chat-bubble bot';
       botBubble.textContent = data.reply || 'Template aggiornato!';
@@ -9335,10 +9104,6 @@ async function sendTemplateMessage() {
       if (data.html_content) {
         _persCurrentHtml = data.html_content;
         updateTemplatePreview();
-      }
-      // Update style rules panel if new rules were extracted
-      if (data.style_rules) {
-        renderStyleRulesPanel(data.style_rules);
       }
     }
   } catch(e) {
@@ -9356,7 +9121,99 @@ async function sendTemplateMessage() {
   input.focus();
 }
 
-// ── Preview Content ──
+// ── AI Image Generation ──
+function _toggleImageGen(show) {
+  const bar = document.getElementById('pers-imagegen-bar');
+  if (!bar) return;
+  if (show === undefined) show = bar.style.display === 'none';
+  bar.style.display = show ? 'flex' : 'none';
+  if (show) document.getElementById('pers-imagegen-input').focus();
+}
+
+async function _submitImageGen() {
+  const input = document.getElementById('pers-imagegen-input');
+  const prompt = (input.value || '').trim();
+  if (!prompt || !_persCurrentId) return;
+  input.value = '';
+  _toggleImageGen(false);
+
+  const msgContainer = document.getElementById('pers-chat-messages');
+
+  // User bubble showing the image request
+  const userBubble = document.createElement('div');
+  userBubble.className = 'pers-chat-bubble user';
+  userBubble.innerHTML = `🖼️ <em>Genera immagine:</em> ${esc(prompt)}`;
+  msgContainer.appendChild(userBubble);
+
+  // Loading bubble
+  const loadBubble = document.createElement('div');
+  loadBubble.className = 'pers-chat-bubble bot loading';
+  loadBubble.innerHTML = 'Generazione immagine AI in corso <span class="typing-dots"><span></span><span></span><span></span></span>';
+  msgContainer.appendChild(loadBubble);
+  msgContainer.scrollTop = msgContainer.scrollHeight;
+
+  try {
+    // Step 1: Generate the image
+    const genRes = await fetch(`/api/templates/${_persCurrentId}/generate-image`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ prompt })
+    });
+    const genData = await genRes.json();
+
+    if (!genRes.ok || !genData.url) {
+      loadBubble.remove();
+      const errBubble = document.createElement('div');
+      errBubble.className = 'pers-chat-bubble bot';
+      errBubble.textContent = genData.error || 'Generazione immagine fallita. Riprova.';
+      msgContainer.appendChild(errBubble);
+      return;
+    }
+
+    // Show generated image in chat
+    loadBubble.innerHTML = `<img class="bubble-img-large" src="${genData.url}" alt="${esc(prompt)}"><br><span style="font-size:11px;color:var(--muted);">Immagine generata — invio al designer...</span> <span class="typing-dots"><span></span><span></span><span></span></span>`;
+
+    // Step 2: Send the image URL + context to the template chat AI
+    // The AI designer will position the image optimally in the HTML
+    const chatPayload = {
+      message: `Inserisci questa immagine nel template. L'immagine rappresenta: "${prompt}". Posizionala nel modo più efficace per la UX/UI.`,
+      image_urls: [genData.url]
+    };
+    const chatRes = await fetch(`/api/templates/${_persCurrentId}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(chatPayload)
+    });
+    const chatData = await chatRes.json();
+    loadBubble.remove();
+
+    if (!chatRes.ok) {
+      const errBubble = document.createElement('div');
+      errBubble.className = 'pers-chat-bubble bot';
+      errBubble.textContent = chatData.error || 'Errore nel posizionamento immagine.';
+      msgContainer.appendChild(errBubble);
+    } else {
+      const botBubble = document.createElement('div');
+      botBubble.className = 'pers-chat-bubble bot';
+      botBubble.innerHTML = `<img class="bubble-img-large" src="${genData.url}" alt="${esc(prompt)}"><br>${esc(chatData.reply || 'Immagine inserita nel template!')}`;
+      msgContainer.appendChild(botBubble);
+
+      if (chatData.html_content) {
+        _persCurrentHtml = chatData.html_content;
+        updateTemplatePreview();
+      }
+    }
+  } catch(e) {
+    loadBubble.remove();
+    const errBubble = document.createElement('div');
+    errBubble.className = 'pers-chat-bubble bot';
+    errBubble.textContent = 'Errore di connessione nella generazione immagine.';
+    msgContainer.appendChild(errBubble);
+  }
+
+  msgContainer.scrollTop = msgContainer.scrollHeight;
+}
+
 // Example content for IG preview placeholders (matches backend's render_template_preview)
 const _previewSampleContent = {
   cover: { COVER_TITLE: '5 Strategie di Marketing', COVER_SUBTITLE: 'che Cambieranno il Tuo Business nel 2026' },
@@ -9381,24 +9238,10 @@ function _fillPreviewPlaceholders(html, slideType) {
   html = html.split('{{BRAND_HANDLE}}').join('@tuobrand');
   // Legacy fallback
   html = html.split('{{SLIDE_CONTENT}}').join(Object.values(sample).join('<br>'));
-  // Safety: inject overflow protection in case AI omitted it
-  // This prevents text overflow/repetition in scaled-down preview iframes
-  const overflowCSS = '<style>body{overflow:hidden!important;max-height:1080px!important;}</style>';
-  if (html.includes('</head>')) {
-    html = html.replace('</head>', overflowCSS + '</head>');
-  } else if (html.includes('<body')) {
-    html = html.replace('<body', overflowCSS + '<body');
-  }
   return html;
 }
 
-let _previewDebounceTimer = null;
 async function updateTemplatePreview() {
-  // Debounce: prevent rapid re-renders that can freeze the browser
-  if (_previewDebounceTimer) clearTimeout(_previewDebounceTimer);
-  _previewDebounceTimer = setTimeout(_doUpdateTemplatePreview, 300);
-}
-async function _doUpdateTemplatePreview() {
   const container = document.getElementById('pers-preview-container');
   if (!container || !_persCurrentId) return;
 
@@ -9420,101 +9263,89 @@ async function _doUpdateTemplatePreview() {
     return;
   }
 
-  // Safety: reject excessively large HTML to prevent browser freeze
-  if (_persCurrentHtml.length > 200000) {
-    container.innerHTML = '<div class="pers-preview-empty">HTML troppo grande per la preview. Usa la vista codice.</div>';
-    return;
-  }
-
-  // For IG: parse template JSON and render ONE slide at a time (tabbed)
+  // For IG: render all 4 slide types as client-side iframes
   let templates = {};
   try {
     const parsed = JSON.parse(_persCurrentHtml);
     if (parsed && typeof parsed === 'object') templates = parsed;
   } catch(e) {
-    // Invalid JSON — show error, do NOT attempt raw HTML rendering
-    container.innerHTML = '<div class="pers-preview-empty">⚠️ Formato template non valido. Riprova a inviare un messaggio in chat.</div>';
-    return;
+    templates = { cover: _persCurrentHtml, content: _persCurrentHtml, list: _persCurrentHtml, cta: _persCurrentHtml };
   }
 
   const types = ['cover', 'content', 'list', 'cta'];
-  const availableTypes = types.filter(t => templates[t] && templates[t].trim());
+  const hasSlides = types.some(t => templates[t] && templates[t].trim());
 
-  if (!availableTypes.length) {
+  if (!hasSlides) {
     container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile — template vuoto</div>';
     return;
-  }
-
-  // Per-slide size check: reject slides > 100KB to prevent browser freeze
-  for (const t of availableTypes) {
-    if (templates[t].length > 100000) {
-      container.innerHTML = `<div class="pers-preview-empty">⚠️ Slide "${_slideTypeLabels[t]}" troppo grande (${Math.round(templates[t].length / 1000)}KB). Riprova con un design più semplice.</div>`;
-      return;
-    }
-  }
-
-  // Default to cover, or preserve previous selection if still available
-  if (!_persActiveSlide || !availableTypes.includes(_persActiveSlide)) {
-    _persActiveSlide = availableTypes[0];
   }
 
   // Determine ratio CSS class from _persCurrentRatio
   const ratioCls = _persCurrentRatio === '4:3' ? 'ratio-4-3' : _persCurrentRatio === '3:4' ? 'ratio-3-4' : '';
 
-  // Build tab bar + single iframe container
-  container.innerHTML = `
-    <div class="pers-slide-tabs">
-      ${availableTypes.map(t => `<button class="pers-slide-tab${t === _persActiveSlide ? ' active' : ''}" data-slide-type="${t}" onclick="_switchPreviewSlide('${t}')">${_slideTypeLabels[t]}</button>`).join('')}
-    </div>
-    <div class="pers-preview-single ${ratioCls ? 'gallery-' + ratioCls : ''}">
-      <div class="pers-preview-iframe-wrap ${ratioCls}">
-        <iframe sandbox="allow-same-origin" id="pers-single-preview-iframe" data-slide-type="${_persActiveSlide}"></iframe>
-      </div>
-    </div>`;
+  container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
+    ${types.map(t => templates[t] ? `
+      <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
+        <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
+        <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
+      </div>` : '').join('')}
+  </div>`;
 
-  // Store parsed templates for tab switching without re-parsing
-  _persParsedTemplates = templates;
+  // Fill placeholders with sample content and set srcdoc
+  container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]').forEach(iframe => {
+    const st = iframe.dataset.slideType;
+    if (templates[st]) {
+      iframe.srcdoc = _fillPreviewPlaceholders(templates[st], st);
+    }
+  });
 
-  // Render active slide
-  const iframe = document.getElementById('pers-single-preview-iframe');
-  if (iframe && templates[_persActiveSlide]) {
-    iframe.srcdoc = _fillPreviewPlaceholders(templates[_persActiveSlide], _persActiveSlide);
-  }
-
-  // Calculate scale using rAF (non-blocking)
-  requestAnimationFrame(_recalcPreviewScale);
+  // Calculate dynamic scale based on container width
+  setTimeout(_recalcPreviewScale, 50);
 }
 
 function _recalcPreviewScale() {
-  // Dynamically compute CSS scale for iframe wrapper based on rendered width
-  // Uses rAF to batch reads and avoid forced synchronous reflows
-  const wrap = document.querySelector('.pers-preview-single .pers-preview-iframe-wrap');
-  if (!wrap) return;
-  const w = wrap.clientWidth;
-  if (!w) return;
-  const scale = w / 1080;
-  wrap.style.setProperty('--iframe-scale', `scale(${scale.toFixed(4)})`);
+  // Dynamically compute CSS scale for iframe wrappers based on their rendered width
+  document.querySelectorAll('.pers-preview-iframe-wrap').forEach(wrap => {
+    const w = wrap.clientWidth;
+    if (!w) return;
+    const scale = w / 1080;
+    wrap.style.setProperty('--iframe-scale', `scale(${scale.toFixed(4)})`);
+    // Expanded scale: item takes full gallery width so use the gallery container width
+    const gallery = wrap.closest('.pers-preview-gallery');
+    const expandedW = gallery ? (gallery.clientWidth - 24) : w * 2; // subtract padding
+    const expandedScale = expandedW / 1080;
+    wrap.style.setProperty('--iframe-scale-expanded', `scale(${expandedScale.toFixed(4)})`);
+  });
 }
 
-function _switchPreviewSlide(type) {
-  // Switch to a different slide tab — renders only ONE iframe at a time
-  if (!_persParsedTemplates[type]) return;
-  _persActiveSlide = type;
+function _expandPreviewSlide(type, el) {
+  // Toggle: click a slide to expand it full-size, click again to go back to gallery
+  const container = document.getElementById('pers-preview-container');
+  const gallery = container.querySelector('.pers-preview-gallery');
+  if (!gallery) return;
 
-  // Update tab active state
-  document.querySelectorAll('.pers-slide-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.slideType === type);
-  });
-
-  // Update iframe content (single iframe, no simultaneous rendering)
-  const iframe = document.getElementById('pers-single-preview-iframe');
-  if (iframe) {
-    iframe.dataset.slideType = type;
-    iframe.srcdoc = _fillPreviewPlaceholders(_persParsedTemplates[type], type);
+  // If already expanded, collapse back
+  if (el.classList.contains('expanded')) {
+    gallery.style.gridTemplateColumns = '1fr 1fr';
+    gallery.querySelectorAll('.pers-preview-gallery-item').forEach(item => {
+      item.style.display = '';
+      item.classList.remove('expanded');
+    });
+    setTimeout(_recalcPreviewScale, 50);
+    return;
   }
 
-  // Recalc scale after content loads
-  requestAnimationFrame(_recalcPreviewScale);
+  // Expand: hide others, make this one full width
+  gallery.querySelectorAll('.pers-preview-gallery-item').forEach(item => {
+    if (item === el) {
+      item.classList.add('expanded');
+      item.style.display = '';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+  gallery.style.gridTemplateColumns = '1fr';
+  setTimeout(_recalcPreviewScale, 50);
 }
 
 function persPreviewMode(mode, btn) {
@@ -9525,11 +9356,14 @@ function persPreviewMode(mode, btn) {
 }
 
 async function deleteTemplate(id, name) {
+  console.log('[deleteTemplate] called with id:', id, 'name:', name);
   const confirmed = confirm('Eliminare il template "' + (name || 'Senza nome') + '"?');
+  console.log('[deleteTemplate] confirm result:', confirmed);
   if (!confirmed) return;
 
   // Find the card and apply blur effect immediately for perceived speed
   const card = document.querySelector('.pers-card[data-template-id="' + id + '"]');
+  console.log('[deleteTemplate] found card:', !!card);
   if (card) {
     card.style.transition = 'filter 0.3s, opacity 0.3s, transform 0.3s';
     card.style.filter = 'blur(3px)';
@@ -9539,7 +9373,9 @@ async function deleteTemplate(id, name) {
   }
 
   try {
+    console.log('[deleteTemplate] calling DELETE /api/templates/' + id);
     const res = await fetch('/api/templates/' + id, { method: 'DELETE' });
+    console.log('[deleteTemplate] response status:', res.status, 'ok:', res.ok);
     if (res.ok) {
       // Animate card removal
       if (card) {
@@ -9600,7 +9436,7 @@ async function deleteCurrentTemplate() {
     if (res.ok) {
       toast('Template eliminato');
       _persCurrentId = null;
-      showPersScreen('pers-home');
+      showPersHome();
       loadPersonalizzazione();
     } else {
       const data = await res.json().catch(() => ({}));

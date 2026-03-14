@@ -9,8 +9,6 @@ import hashlib
 import time
 import logging
 import requests as http_requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
@@ -20,12 +18,11 @@ LOG_DIR = Path(__file__).parent / "data"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 log = logging.getLogger(__name__)
-_log_level = getattr(logging, os.getenv("VIDEO_LOG_LEVEL", "INFO").upper(), logging.INFO)
-log.setLevel(_log_level)
+log.setLevel(logging.DEBUG)
 
 # File handler — always log to data/video.log
 _fh = logging.FileHandler(LOG_DIR / "video.log")
-_fh.setLevel(_log_level)
+_fh.setLevel(logging.DEBUG)
 _fh.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-5s | %(message)s", datefmt="%H:%M:%S"))
 log.addHandler(_fh)
 
@@ -35,47 +32,6 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 OUTPUT_DIR = Path(__file__).parent / "static" / "video_output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# Retry session for LLM calls + simple circuit breaker
-def _make_retry_session(retries=3, backoff_factor=0.5):
-    s = http_requests.Session()
-    retry = Retry(total=retries, backoff_factor=backoff_factor,
-                  status_forcelist=[502, 503, 504], allowed_methods=["POST"])
-    adapter = HTTPAdapter(max_retries=retry)
-    s.mount("https://", adapter)
-    s.mount("http://", adapter)
-    return s
-
-_http = _make_retry_session()
-
-# Simple circuit breaker: track consecutive failures
-_cb_failures = 0
-_cb_max_failures = 5
-_cb_reset_time = 0.0
-_cb_cooldown = 60  # seconds
-
-
-def _cb_check():
-    """Check circuit breaker state. Raises RuntimeError if circuit is open."""
-    global _cb_failures, _cb_reset_time
-    if _cb_failures >= _cb_max_failures:
-        if time.time() < _cb_reset_time:
-            raise RuntimeError(f"Circuit breaker open: LLM service unavailable (cooldown {_cb_cooldown}s)")
-        # Half-open: allow one attempt
-        _cb_failures = _cb_max_failures - 1
-
-
-def _cb_success():
-    global _cb_failures
-    _cb_failures = 0
-
-
-def _cb_fail():
-    global _cb_failures, _cb_reset_time
-    _cb_failures += 1
-    if _cb_failures >= _cb_max_failures:
-        _cb_reset_time = time.time() + _cb_cooldown
-        log.warning(f"Circuit breaker OPEN after {_cb_failures} consecutive LLM failures (cooldown {_cb_cooldown}s)")
 
 AVATAR_DIR = Path(__file__).parent / "static" / "avatars"
 AVATAR_DIR.mkdir(parents=True, exist_ok=True)
@@ -236,13 +192,12 @@ def _prepare_audio_script(text: str) -> dict:
         return {"script": text, "original_length": len(text), "prepared_length": len(text)}
 
     try:
-        _cb_check()
         log.info(f"Preparing audio script ({len(text)} chars) via LLM...")
 
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": os.getenv("APP_BASE_URL", "http://localhost:5001"),
+            "HTTP-Referer": "http://localhost:5001",
             "X-Title": "Content Dashboard - TTS Prep",
         }
         payload = {
@@ -254,7 +209,7 @@ def _prepare_audio_script(text: str) -> dict:
             "temperature": 0.3,
         }
 
-        resp = _http.post(
+        resp = http_requests.post(
             f"{OPENROUTER_BASE}/chat/completions",
             headers=headers,
             json=payload,
@@ -268,12 +223,8 @@ def _prepare_audio_script(text: str) -> dict:
             log.warning(f"LLM audio prep error: {err_msg}")
             return {"script": text, "original_length": len(text), "prepared_length": len(text), "error": err_msg}
 
-        choices = data.get("choices", [])
-        if not choices:
-            raise RuntimeError("LLM returned no choices")
-        prepared = choices[0].get("message", {}).get("content", "").strip()
+        prepared = data["choices"][0]["message"]["content"].strip()
 
-        _cb_success()
         log.info(f"Audio script prepared: {len(text)} → {len(prepared)} chars")
         return {
             "script": prepared,
@@ -282,7 +233,6 @@ def _prepare_audio_script(text: str) -> dict:
         }
 
     except Exception as e:
-        _cb_fail()
         log.warning(f"Audio script preparation failed, using original text: {e}")
         return {"script": text, "original_length": len(text), "prepared_length": len(text), "error": str(e)}
 
