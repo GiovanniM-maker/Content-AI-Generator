@@ -5497,8 +5497,9 @@ function renderGeneratedContent() {
         <div class="carousel-actions">
           <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
           <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${i})">🎨 Rigenera img</button>
-          <label class="ig-enrich-toggle ${window._igEnrichImages ? 'active' : ''}" onclick="toggleIgEnrichImages(this)" title="Genera sfondi AI per le slide del carousel">
-            <input type="checkbox" ${window._igEnrichImages ? 'checked' : ''}><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
+          <!-- BETA: Sfondi AI toggle hidden — carousel image enrichment disabled in beta -->
+          <label class="ig-enrich-toggle" style="display:none;" title="Non disponibile in beta">
+            <input type="checkbox" disabled><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
           </label>
         </div>
         <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
@@ -5615,8 +5616,9 @@ function renderGeneratedContent() {
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyNlHtml()">Copia HTML</button>
           <button class="btn btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="openNlPreview()">👁 Anteprima completa</button>
-          <label class="nl-enrich-toggle ${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI e inseriscile nella newsletter">
-            <input type="checkbox" ${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
+          <!-- BETA: Immagini AI toggle hidden — newsletter enrichment disabled in beta -->
+          <label class="nl-enrich-toggle" style="display:none;" title="Non disponibile in beta">
+            <input type="checkbox" disabled><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
           </label>
           <button class="btn btn-approve btn-small ${nlApproved ? 'approved' : ''}" onclick="approveContent('newsletter', this)">${nlApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
@@ -7529,8 +7531,9 @@ function renderCreaResults(results) {
           <div class="carousel-actions">
             <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
             <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${idx})">🎨 Rigenera img</button>
-            <label class="ig-enrich-toggle ${window._igEnrichImages ? 'active' : ''}" onclick="toggleIgEnrichImages(this)" title="Genera sfondi AI per le slide del carousel">
-              <input type="checkbox" ${window._igEnrichImages ? 'checked' : ''}><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
+            <!-- BETA: Sfondi AI toggle hidden — carousel image enrichment disabled in beta -->
+            <label class="ig-enrich-toggle" style="display:none;" title="Non disponibile in beta">
+              <input type="checkbox" disabled><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
             </label>
           </div>
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
@@ -7574,8 +7577,9 @@ function renderCreaResults(results) {
             <button class="btn btn-secondary btn-small" onclick="copyNlHtmlCrea(${idx})">📋 Copia HTML</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">📄 Copia testo</button>
             <button class="btn btn-secondary btn-small" onclick="toggleNlSource(${idx})">🔧 Mostra sorgente</button>
-            <label class="nl-enrich-toggle ${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI nella newsletter">
-              <input type="checkbox" ${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
+            <!-- BETA: Immagini AI toggle hidden — newsletter enrichment disabled in beta -->
+            <label class="nl-enrich-toggle" style="display:none;" title="Non disponibile in beta">
+              <input type="checkbox" disabled><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
             </label>
             <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
           </div>
