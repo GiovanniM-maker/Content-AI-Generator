@@ -3346,6 +3346,13 @@ function getAccessToken() {
   return data ? data.access_token : null;
 }
 
+// Reusable fetch timeout helper
+function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 // Wrap native fetch to auto-inject Authorization header
 const _originalFetch = window.fetch;
 window.fetch = function(url, options = {}) {
@@ -3697,6 +3704,11 @@ async function doLogin() {
 
   if (!email || !password) {
     errDiv.textContent = 'Inserisci email e password';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    errDiv.textContent = 'Formato email non valido';
     errDiv.style.display = 'block';
     return;
   }
@@ -4282,8 +4294,10 @@ function updateSidebarUser(user) {
   if (!el) return;
   el.style.display = 'flex';
   const name = user.full_name || user.email || '?';
-  document.getElementById('user-name').textContent = name.split(' ')[0] || name; // Show first name only in topbar
-  document.getElementById('user-avatar').textContent = (name[0] || '?').toUpperCase();
+  const userNameEl = document.getElementById('user-name');
+  if (userNameEl) userNameEl.textContent = name.split(' ')[0] || name; // Show first name only in topbar
+  const userAvatarEl = document.getElementById('user-avatar');
+  if (userAvatarEl) userAvatarEl.textContent = (name[0] || '?').toUpperCase();
   // Load usage after updating user
   loadUsageBar();
 }
@@ -4923,11 +4937,13 @@ function toast(msg) {
 // ---- Global loading helpers ----
 function showLoading(msg) {
   const el = document.getElementById('global-loader');
-  document.getElementById('gl-text').textContent = msg || '';
-  el.classList.add('active');
+  const glText = document.getElementById('gl-text');
+  if (glText) glText.textContent = msg || '';
+  if (el) el.classList.add('active');
 }
 function hideLoading() {
-  document.getElementById('global-loader').classList.remove('active');
+  const el = document.getElementById('global-loader');
+  if (el) el.classList.remove('active');
 }
 /** Set a button into loading state; returns a restore function */
 function btnLoading(btn, loadingText) {
@@ -5256,13 +5272,18 @@ async function generateAll() {
   function updateProgress(label) {
     completed++;
     const pct = Math.round((completed / totalCalls) * 100);
-    document.getElementById('gen-status').textContent = label;
-    document.getElementById('gen-bar').style.width = pct + '%';
+    const genStatusEl = document.getElementById('gen-status');
+    if (genStatusEl) genStatusEl.textContent = label;
+    const genBarEl = document.getElementById('gen-bar');
+    if (genBarEl) genBarEl.style.width = pct + '%';
     if (percentEl) percentEl.textContent = pct + '%';
     // Update overlay progress
-    document.getElementById('gen-overlay-bar').style.width = pct + '%';
-    document.getElementById('gen-overlay-pct').textContent = pct + '%';
-    document.getElementById('gen-overlay-status').textContent = label;
+    const overlayBarEl = document.getElementById('gen-overlay-bar');
+    if (overlayBarEl) overlayBarEl.style.width = pct + '%';
+    const overlayPctEl = document.getElementById('gen-overlay-pct');
+    if (overlayPctEl) overlayPctEl.textContent = pct + '%';
+    const overlayStatusEl = document.getElementById('gen-overlay-status');
+    if (overlayStatusEl) overlayStatusEl.textContent = label;
     // Calculate remaining ETA based on actual elapsed time
     if (etaEl) {
       const elapsed = (Date.now() - _genStartTime) / 1000;
@@ -5272,7 +5293,8 @@ async function generateAll() {
         etaEl.textContent = '✅ Completato!';
       } else {
         etaEl.textContent = remaining > 0 ? `⏱ ~${remaining}s rimanenti` : '⏱ Quasi fatto...';
-        document.getElementById('gen-overlay-sub').textContent = `⏱ ~${remaining}s rimanenti`;
+        const overlaySubEl = document.getElementById('gen-overlay-sub');
+        if (overlaySubEl) overlaySubEl.textContent = `⏱ ~${remaining}s rimanenti`;
       }
     }
   }
@@ -5404,9 +5426,10 @@ function parseCarousel(text) {
 }
 
 function renderGeneratedContent() {
-  document.getElementById('gen-progress').style.display = 'none';
+  const genProgressEl = document.getElementById('gen-progress');
+  if (genProgressEl) genProgressEl.style.display = 'none';
   const results = document.getElementById('gen-results');
-  results.style.display = 'block';
+  if (results) results.style.display = 'block';
   // Show post-generation action buttons
   const creaActions = document.getElementById('crea-results-actions');
   if (creaActions) creaActions.style.display = 'flex';
@@ -5753,7 +5776,8 @@ async function downloadCarousel(key) {
   if (!images || !images.length) { toast('Nessuna immagine da scaricare'); return; }
   showLoading(`Scaricando ${images.length} slide...`);
   for (let i = 0; i < images.length; i++) {
-    document.getElementById('gl-text').textContent = `Scaricando slide ${i+1}/${images.length}...`;
+    const glTextEl = document.getElementById('gl-text');
+    if (glTextEl) glTextEl.textContent = `Scaricando slide ${i+1}/${images.length}...`;
     const resp = await fetch(images[i]);
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
@@ -7434,10 +7458,13 @@ async function generateFromCrea() {
 
   // Show progress UI
   const resultsSection = document.getElementById('crea-results');
-  resultsSection.style.display = 'block';
-  document.getElementById('gen-progress').style.display = 'block';
-  document.getElementById('gen-results').innerHTML = '';
-  document.getElementById('btn-crea-generate').disabled = true;
+  if (resultsSection) resultsSection.style.display = 'block';
+  const genProgressSetup = document.getElementById('gen-progress');
+  if (genProgressSetup) genProgressSetup.style.display = 'block';
+  const genResultsSetup = document.getElementById('gen-results');
+  if (genResultsSetup) genResultsSetup.innerHTML = '';
+  const btnCreaGen = document.getElementById('btn-crea-generate');
+  if (btnCreaGen) btnCreaGen.disabled = true;
   window._isGenerating = true;
   const genOverlay = document.getElementById('gen-overlay');
   genOverlay.classList.add('active');

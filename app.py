@@ -16,6 +16,8 @@ from urllib.parse import urlparse
 
 import feedparser
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context, g, make_response
 
@@ -101,6 +103,18 @@ def _is_admin() -> bool:
     return getattr(g, "user_email", "") == ADMIN_EMAIL
 BEEHIIV_PUB_ID = os.getenv("BEEHIIV_PUB_ID", "")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://content-ai-generator-1.onrender.com")
+
+# HTTP session with retry logic for transient errors on external APIs
+def _make_retry_session(retries=3, backoff_factor=0.3):
+    s = requests.Session()
+    retry = Retry(total=retries, backoff_factor=backoff_factor,
+                  status_forcelist=[502, 503, 504], allowed_methods=["GET", "POST"])
+    adapter = HTTPAdapter(max_retries=retry)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+    return s
+
+_http = _make_retry_session()
 
 DEFAULT_RSS_FEEDS = [
     "https://huggingface.co/blog/feed.xml",
@@ -342,7 +356,7 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
         "X-Title": "Content Dashboard",
     }
     payload = {"model": model, "messages": messages, "temperature": temperature}
-    resp = requests.post(
+    resp = _http.post(
         f"{OPENROUTER_BASE}/chat/completions",
         headers=headers, json=payload, timeout=240,
     )
@@ -385,7 +399,7 @@ def _generate_image(prompt: str, aspect_ratio: str = "1:1",
         payload["image_config"] = {"aspect_ratio": aspect_ratio}
 
     try:
-        resp = requests.post(
+        resp = _http.post(
             f"{OPENROUTER_BASE}/chat/completions",
             headers=headers, json=payload, timeout=120,
         )
@@ -785,7 +799,7 @@ def _send_ntfy(title: str, message: str, url: str | None = None, tags: str = "lo
         }
         if url:
             payload["click"] = url
-        resp = requests.post("https://ntfy.sh/", json=payload, timeout=10)
+        resp = _http.post("https://ntfy.sh/", json=payload, timeout=10)
         resp.raise_for_status()
         _log_pipeline("info", f"ntfy notification sent: {title}")
         return True
@@ -2137,7 +2151,7 @@ IG_VARIANT_ANGLES = [
 def _serper_search(query: str, num_results: int = 10) -> list[dict]:
     if not SERPER_API_KEY:
         raise ValueError("SERPER_API_KEY not configured in .env")
-    resp = requests.post(
+    resp = _http.post(
         "https://google.serper.dev/search",
         headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
         json={"q": query, "num": num_results, "gl": "it", "hl": "it"},
@@ -3085,6 +3099,8 @@ def get_schedule():
 def create_schedule():
     user_id = _get_user_id()
     body = request.json
+    if not body or not body.get("platform") or not body.get("scheduled_at"):
+        return jsonify({"error": "platform and scheduled_at are required"}), 400
     item = db.insert_schedule(user_id, body)
     _update_weekly_status(item.get("platform", ""), "scheduled")
     _log_pipeline("info", f"Content scheduled: {item.get('platform', '')} at {item.get('scheduled_at', '')}")
@@ -3189,6 +3205,8 @@ def get_sessions():
 def save_session():
     user_id = _get_user_id()
     body = request.json
+    if not body or not body.get("session_id"):
+        return jsonify({"error": "session_id is required"}), 400
     session = db.insert_session(user_id, body)
     return jsonify(session)
 
