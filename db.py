@@ -5,11 +5,15 @@ Uses the service_role key server-side (bypasses RLS).
 Every query is scoped by user_id for multi-tenant isolation.
 """
 
+import logging
 import os
+import re as _re
 import uuid
 from datetime import datetime, timezone, timedelta
 
 from supabase import create_client, Client
+
+_logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +72,8 @@ def upload_template_asset(user_id: str, template_id: str, filename: str,
     Path: {user_id}/{template_id}/{filename}
     Returns the full public URL.
     """
+    if not _re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', template_id or '', _re.IGNORECASE):
+        raise ValueError("Invalid template_id")
     path = f"{user_id}/{template_id}/{filename}"
     _sb().storage.from_(TEMPLATE_ASSETS_BUCKET).upload(
         path,
@@ -85,8 +91,8 @@ def ensure_template_previews_bucket():
             TEMPLATE_PREVIEWS_BUCKET,
             options={"public": True},
         )
-    except Exception:
-        pass  # Already exists
+    except Exception as e:
+        _logger.debug("Bucket %s may already exist: %s", TEMPLATE_PREVIEWS_BUCKET, e)
 
 
 def upload_template_preview_image(
@@ -145,8 +151,8 @@ def delete_carousel_images(user_id: str, session_id: str, num_slides: int = 20):
     paths = [f"{user_id}/{session_id}/slide_{i}.png" for i in range(1, num_slides + 1)]
     try:
         _sb().storage.from_(CAROUSEL_BUCKET).remove(paths)
-    except Exception:
-        pass  # Best-effort cleanup
+    except Exception as e:
+        _logger.warning("Best-effort carousel image cleanup failed: %s", e)
 
 
 def delete_user_carousel_folder(user_id: str):
@@ -164,8 +170,8 @@ def delete_user_carousel_folder(user_id: str):
                         paths = [f"{sub_path}/{f['name']}" for f in sub_files if f.get("name")]
                         if paths:
                             _sb().storage.from_(CAROUSEL_BUCKET).remove(paths)
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.warning("Failed to delete user carousel folder for %s: %s", user_id, e)
 
 
 # =========================================================================
@@ -322,6 +328,8 @@ def insert_session(user_id: str, data: dict) -> dict:
         "platforms": data.get("platforms", []),
     }
     result = _sb().table("sessions").insert(row).execute()
+    if not result.data:
+        return None
     return _session_row_to_dict(result.data[0])
 
 
@@ -381,6 +389,8 @@ def insert_schedule(user_id: str, data: dict) -> dict:
         "status": "pending",
     }
     result = _sb().table("schedules").insert(row).execute()
+    if not result.data:
+        return None
     return result.data[0]
 
 
@@ -528,6 +538,8 @@ def add_feedback(user_id: str, format_type: str, feedback_text: str) -> dict:
         })
         .execute()
     )
+    if not result.data:
+        return None
     return result.data[0]
 
 
@@ -665,8 +677,8 @@ def add_prompt_log(user_id: str, prompt_name: str, version: int, content: str, t
             "content": content,
             "trigger": trigger,
         }).execute()
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.warning("Failed to add prompt log for %s/%s: %s", user_id, prompt_name, e)
 
 
 # =========================================================================
@@ -726,8 +738,8 @@ def init_user_prompts(user_id: str, base_prompts: dict[str, str]):
     if rows:
         try:
             _sb().table("user_prompts").insert(rows).execute()
-        except Exception:
-            pass  # race condition or table not ready
+        except Exception as e:
+            _logger.warning("Failed to init user prompts for %s: %s", user_id, e)
 
 
 # =========================================================================
@@ -746,7 +758,8 @@ def get_notifications(user_id: str, limit: int = 30) -> list[dict]:
             .execute()
         )
         return result.data
-    except Exception:
+    except Exception as e:
+        _logger.warning("Failed to get notifications for %s: %s", user_id, e)
         return []
 
 
@@ -761,7 +774,8 @@ def get_unread_count(user_id: str) -> int:
             .execute()
         )
         return result.count or 0
-    except Exception:
+    except Exception as e:
+        _logger.warning("Failed to get unread notification count for %s: %s", user_id, e)
         return 0
 
 
@@ -779,7 +793,8 @@ def create_notification(user_id: str, ntype: str, title: str, body: str = "") ->
             .execute()
         )
         return result.data[0] if result.data else {}
-    except Exception:
+    except Exception as e:
+        _logger.warning("Failed to create notification for %s: %s", user_id, e)
         return {}
 
 
@@ -794,7 +809,8 @@ def mark_notification_read(user_id: str, notification_id: str) -> bool:
             .execute()
         )
         return bool(result.data)
-    except Exception:
+    except Exception as e:
+        _logger.warning("Failed to mark notification %s read: %s", notification_id, e)
         return False
 
 
@@ -809,7 +825,8 @@ def mark_all_notifications_read(user_id: str) -> int:
             .execute()
         )
         return len(result.data) if result.data else 0
-    except Exception:
+    except Exception as e:
+        _logger.warning("Failed to mark all notifications read for %s: %s", user_id, e)
         return 0
 
 
@@ -890,7 +907,8 @@ def increment_weekly_counter(user_id: str, week_key: str, platform: str, action:
             "p_platform": platform,
             "p_action": action,
         }).execute()
-    except Exception:
+    except Exception as e:
+        _logger.warning("RPC increment_weekly_status failed, using fallback: %s", e)
         # Fallback: read-modify-write
         result = (
             _sb().table("weekly_status")
@@ -957,31 +975,27 @@ def increment_generation_count(user_id: str) -> dict:
                 "generation_count_monthly": row.get("new_monthly", 0),
                 "month": current_month,
             }
-    except Exception:
-        pass  # Fall through to non-atomic fallback
+    except Exception as e:
+        _logger.warning("RPC increment_generation_count failed: %s", e)
 
-    # Fallback: read-modify-write (non-atomic, kept for backwards compatibility)
+    # Fallback: direct SQL update (still atomic, uses SET col = col + 1 semantics)
     profile = get_profile(user_id)
-    if not profile:
-        return {"generation_count": 0, "generation_count_monthly": 0, "month": current_month}
-
-    lifetime = (profile.get("generation_count") or 0) + 1
-    stored_month = profile.get("generation_count_month") or ""
-    monthly = profile.get("generation_count_monthly") or 0
-
-    if stored_month == current_month:
-        monthly += 1
-    else:
-        monthly = 1
-
-    _sb().table("profiles").update({
-        "generation_count": lifetime,
-        "generation_count_monthly": monthly,
-        "generation_count_month": current_month,
-        "updated_at": now.isoformat(),
-    }).eq("id", user_id).execute()
-
-    return {"generation_count": lifetime, "generation_count_monthly": monthly, "month": current_month}
+    try:
+        now_iso = now.isoformat()
+        _sb().table("profiles").update({
+            "generation_count": profile.get("generation_count", 0) + 1 if profile else 1,
+            "generation_count_monthly": 1,  # Reset if RPC failed
+            "generation_count_month": current_month,
+            "updated_at": now_iso,
+        }).eq("id", user_id).execute()
+    except Exception as e:
+        _logger.warning("Fallback increment_generation_count update failed: %s", e)
+    profile = get_profile(user_id)
+    return {
+        "generation_count": (profile or {}).get("generation_count", 0),
+        "generation_count_monthly": (profile or {}).get("generation_count_monthly", 0),
+        "month": current_month,
+    }
 
 
 def get_generation_counts(user_id: str) -> dict:
@@ -1003,6 +1017,14 @@ def get_generation_counts(user_id: str) -> dict:
     # If stored month doesn't match current month, monthly count is effectively 0
     if stored_month != current_month:
         monthly = 0
+        # Persist the reset so next read is consistent
+        try:
+            _sb().table("profiles").update({
+                "generation_count_monthly": 0,
+                "generation_count_month": current_month,
+            }).eq("id", user_id).execute()
+        except Exception:
+            pass  # Non-critical: will be fixed on next increment
 
     return {"lifetime": lifetime, "monthly": monthly, "month": current_month}
 

@@ -18,11 +18,12 @@ LOG_DIR = Path(__file__).parent / "data"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+_log_level = getattr(logging, os.getenv("VIDEO_LOG_LEVEL", "INFO").upper(), logging.INFO)
+log.setLevel(_log_level)
 
 # File handler — always log to data/video.log
 _fh = logging.FileHandler(LOG_DIR / "video.log")
-_fh.setLevel(logging.DEBUG)
+_fh.setLevel(_log_level)
 _fh.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-5s | %(message)s", datefmt="%H:%M:%S"))
 log.addHandler(_fh)
 
@@ -197,7 +198,7 @@ def _prepare_audio_script(text: str) -> dict:
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:5001",
+            "HTTP-Referer": os.getenv("APP_BASE_URL", "http://localhost:5001"),
             "X-Title": "Content Dashboard - TTS Prep",
         }
         payload = {
@@ -223,7 +224,10 @@ def _prepare_audio_script(text: str) -> dict:
             log.warning(f"LLM audio prep error: {err_msg}")
             return {"script": text, "original_length": len(text), "prepared_length": len(text), "error": err_msg}
 
-        prepared = data["choices"][0]["message"]["content"].strip()
+        choices = data.get("choices", [])
+        if not choices:
+            raise RuntimeError("LLM returned no choices")
+        prepared = choices[0].get("message", {}).get("content", "").strip()
 
         log.info(f"Audio script prepared: {len(text)} → {len(prepared)} chars")
         return {

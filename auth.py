@@ -8,11 +8,22 @@ Provides:
 """
 
 import functools
+import logging
 import os
+import re as _re
 import time
 
 import requests
 from flask import request, jsonify, g
+
+_log = logging.getLogger(__name__)
+
+_EMAIL_RE = _re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+
+def _is_valid_email(email: str) -> bool:
+    """Basic email format validation."""
+    return bool(_EMAIL_RE.match(email)) if email else False
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -97,7 +108,8 @@ def verify_token(token: str) -> dict | None:
                 "user_metadata": user_data.get("user_metadata", {}),
             }
         return None
-    except Exception:
+    except Exception as e:
+        _log.warning("Token verification failed: %s", e)
         return None
 
 
@@ -170,6 +182,12 @@ def signup(email: str, password: str, full_name: str = "") -> dict:
     Returns dict with 'user' and 'session' keys on success.
     Raises RuntimeError on failure.
     """
+    if not _is_valid_email(email):
+        return {"error": "Formato email non valido"}, 400
+
+    if len(password) < 8:
+        return {"error": "La password deve essere di almeno 8 caratteri"}, 400
+
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/signup",
         headers={
@@ -210,6 +228,9 @@ def login(email: str, password: str) -> dict:
     Returns dict with access_token, refresh_token, user info.
     Raises RuntimeError on failure.
     """
+    if not _is_valid_email(email):
+        return {"error": "Formato email non valido"}, 400
+
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
         headers={
@@ -292,7 +313,8 @@ def logout_server(access_token: str) -> bool:
             timeout=10,
         )
         return resp.status_code < 400
-    except Exception:
+    except Exception as e:
+        _log.warning("Server-side logout failed: %s", e)
         return False
 
 
@@ -310,7 +332,8 @@ def get_user_from_token(access_token: str) -> dict | None:
         if resp.status_code == 200:
             return resp.json()
         return None
-    except Exception:
+    except Exception as e:
+        _log.warning("Failed to get user from token: %s", e)
         return None
 
 
@@ -579,5 +602,6 @@ def check_user_exists(email: str) -> bool:
             if u.get("email", "").lower() == email.lower():
                 return True
         return False
-    except Exception:
+    except Exception as e:
+        _log.warning("User existence check failed: %s", e)
         return False

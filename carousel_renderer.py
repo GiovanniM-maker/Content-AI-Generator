@@ -360,7 +360,7 @@ def _cta_html(text: str, slide_num: int, total_slides: int, palette: dict,
 
 
 def _html_esc(text: str) -> str:
-    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", "&#39;")
 
 
 def _html_esc_keep_tags(text: str) -> str:

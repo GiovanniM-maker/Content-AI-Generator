@@ -10,6 +10,7 @@ Provides:
 """
 
 import base64
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -20,6 +21,8 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from cryptography.fernet import Fernet
+
+_log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -216,10 +219,15 @@ def init_security_headers(app: Flask):
             "form-action 'self'",
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
+        response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
 
         # Cache-control for API responses
+        if request.path.startswith("/api/"):
+            response.headers.setdefault(
+                "Cache-Control",
+                "no-store, no-cache, must-revalidate, max-age=0",
+            )
         if request.path.startswith("/api/") or request.path.startswith("/auth/"):
-            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
             response.headers["Pragma"] = "no-cache"
 
         return response
@@ -247,6 +255,7 @@ def _get_fernet() -> Fernet | None:
         _fernet = Fernet(key.encode())
         return _fernet
     except Exception:
+        _log.warning("Failed to initialize Fernet encryption — invalid ENCRYPTION_KEY", exc_info=True)
         return None
 
 
@@ -270,6 +279,7 @@ def encrypt_api_key(plaintext: str) -> str | None:
     try:
         return f.encrypt(plaintext.encode()).decode()
     except Exception:
+        _log.warning("Failed to encrypt API key", exc_info=True)
         return None
 
 
@@ -284,6 +294,7 @@ def decrypt_api_key(ciphertext: str) -> str | None:
     try:
         return f.decrypt(ciphertext.encode()).decode()
     except Exception:
+        _log.warning("Failed to decrypt API key", exc_info=True)
         return None
 
 
@@ -313,6 +324,7 @@ def send_email(to: str, subject: str, html: str) -> bool:
         })
         return True
     except Exception:
+        _log.warning("Failed to send email to %s via Resend", to, exc_info=True)
         return False
 
 

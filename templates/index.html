@@ -3317,7 +3317,7 @@ body::after {
         if (ov) { ov.style.display = 'none'; ov.classList.add('hidden'); }
       }
     }
-  } catch(e) {}
+  } catch(e) { console.warn('Auth init error:', e); }
 })();
 
 // ========================================================
@@ -4250,7 +4250,7 @@ function onAuthSuccess(user) {
   hideAuthOverlay();
   updateSidebarUser(user);
   // Admin detection
-  isAdmin = (user && user.email === ADMIN_EMAIL);
+  isAdmin = !!(user && user.is_admin);
   applyAdminGating();
   // Reload data for the new user
   loadWeeklyBanner();
@@ -4335,7 +4335,7 @@ function initAuth() {
         return resp.json().then(me => {
           hideAuthOverlay();
           updateSidebarUser(me.user);
-          isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
+          isAdmin = !!(me.user && me.user.is_admin);
           applyAdminGating();
           loadDashboard();
           startNotifPolling();
@@ -4353,7 +4353,7 @@ function initAuth() {
             }).then(r => r.ok ? r.json() : null).then(me => {
               if (me) {
                 updateSidebarUser(me.user);
-                isAdmin = (me.user && me.user.email === ADMIN_EMAIL);
+                isAdmin = !!(me.user && me.user.is_admin);
                 applyAdminGating();
                 loadDashboard();
                 startNotifPolling();
@@ -4653,8 +4653,7 @@ function playNotificationSound() {
   } catch(e) {}
 }
 
-// Admin system
-const ADMIN_EMAIL = 'giovanni.mavilla.grz@gmail.com';
+// Admin system — determined server-side via /auth/me response
 let isAdmin = false;
 
 // ---- Source Mode ----
@@ -5175,7 +5174,9 @@ function renderArticleList(articles) {
 }
 
 function toggleArticle(el, encoded) {
-  const article = JSON.parse(decodeURIComponent(atob(encoded)));
+  let article;
+  try { article = JSON.parse(decodeURIComponent(atob(encoded))); }
+  catch(e) { toast('Errore nel caricamento dell\'articolo'); return; }
   const idx = selectedArticles.findIndex(s => s.article.url === article.url);
   if (idx >= 0) {
     selectedArticles.splice(idx, 1);
@@ -5669,7 +5670,7 @@ async function renderSingleCarouselImages(key, text, paletteIdx, artIdx) {
         clearTimeout(enrichTimeout);
         if (enrichResp.images && Object.keys(enrichResp.images).length > 0) {
           payload.slide_images = enrichResp.images;
-          console.log('[IG enrich] AI decided:', enrichResp.count, 'images for carousel');
+          // debug: IG enrich count logged
         }
       } catch (enrichErr) {
         console.warn('[IG enrich] Image enrichment skipped:', enrichErr.name === 'AbortError' ? 'timeout' : enrichErr.message);
@@ -7471,7 +7472,7 @@ function renderCreaResults(results) {
   let hasInstagram = false;
 
   for (const [platform, items] of Object.entries(results)) {
-    console.log('[renderCrea] platform:', platform, 'items:', items?.length);
+    // debug: renderCrea platform logged
     html += `<div class="content-section"><h2>${platformNames[platform] || platform}</h2><div class="content-grid">`;
     items.forEach((item, idx) => {
       const key = platform + '_' + idx;
@@ -7589,7 +7590,7 @@ function renderCreaResults(results) {
   // Trigger newsletter HTML preview rendering
   const nlItems = results.newsletter || results.Newsletter || [];
   if (nlItems.length > 0) {
-    console.log('[renderCrea] triggering NL preview for', nlItems.length, 'items');
+    // debug: NL preview trigger logged
     autoRenderNlPreviewsCrea(nlItems);
   }
 }
@@ -8412,7 +8413,7 @@ async function _enrichNlText(text, templateId) {
     const data = await resp.json();
     if (data.error) { console.warn('[NL enrich] error:', data.error); return text; }
     if (data.images_generated > 0) {
-      console.log(`[NL enrich] Added ${data.images_generated} AI images`);
+      // debug: NL enrich images logged
       toast(`🖼️ ${data.images_generated} immagini AI generate e inserite`);
     }
     return data.text || text;
@@ -8545,7 +8546,7 @@ async function autoRenderNlPreviewsCrea(nlItems) {
       }
       const nlPayload = { text: finalNlText };
       if (nlTplId) nlPayload.template_id = nlTplId;
-      console.log('[NL preview] fetching HTML, text length:', finalNlText.length, 'template:', nlTplId || 'none', 'enriched:', window._nlEnrichImages);
+      // debug: NL preview fetch logged
       const resp = await fetch('/api/newsletter/html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -8580,7 +8581,7 @@ async function autoRenderNlPreviewsCrea(nlItems) {
           }
         } catch(e) {}
       };
-      console.log('[NL preview] rendered successfully for idx', idx);
+      // debug: NL preview rendered
     } catch (err) {
       console.error('[NL preview] error:', err);
       container.innerHTML = `<p style="padding:20px;text-align:center;color:#e74c3c;font-size:13px;">Errore rendering: ${err.message}</p>`;
@@ -8753,7 +8754,7 @@ function renderPersHome() {
         e.preventDefault();
         const action = btn.dataset.action;
         const id = btn.dataset.id;
-        console.log('[pers-grid] action:', action, 'id:', id);
+        // debug: pers-grid action logged
         if (action === 'edit') {
           openTemplateChat(id);
         } else if (action === 'delete') {
@@ -9346,7 +9347,13 @@ function _fillPreviewPlaceholders(html, slideType) {
   return html;
 }
 
+let _previewDebounceTimer = null;
 async function updateTemplatePreview() {
+  // Debounce: prevent rapid re-renders that can freeze the browser
+  if (_previewDebounceTimer) clearTimeout(_previewDebounceTimer);
+  _previewDebounceTimer = setTimeout(_doUpdateTemplatePreview, 300);
+}
+async function _doUpdateTemplatePreview() {
   const container = document.getElementById('pers-preview-container');
   if (!container || !_persCurrentId) return;
 
@@ -9368,13 +9375,26 @@ async function updateTemplatePreview() {
     return;
   }
 
+  // Safety: reject excessively large HTML to prevent browser freeze
+  if (_persCurrentHtml.length > 200000) {
+    container.innerHTML = '<div class="pers-preview-empty">HTML troppo grande per la preview. Usa la vista codice.</div>';
+    return;
+  }
+
   // For IG: render all 4 slide types as client-side iframes
   let templates = {};
   try {
     const parsed = JSON.parse(_persCurrentHtml);
     if (parsed && typeof parsed === 'object') templates = parsed;
   } catch(e) {
-    templates = { cover: _persCurrentHtml, content: _persCurrentHtml, list: _persCurrentHtml, cta: _persCurrentHtml };
+    // Do NOT duplicate raw HTML into all 4 slots — show error instead
+    if (_persCurrentHtml.includes('<!DOCTYPE') || _persCurrentHtml.includes('<html')) {
+      // Single raw HTML slide — put it in cover only
+      templates = { cover: _persCurrentHtml };
+    } else {
+      container.innerHTML = '<div class="pers-preview-empty">Formato template non riconosciuto. Riprova a inviare un messaggio in chat.</div>';
+      return;
+    }
   }
 
   const types = ['cover', 'content', 'list', 'cta'];
@@ -9392,20 +9412,22 @@ async function updateTemplatePreview() {
     ${types.map(t => templates[t] ? `
       <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
         <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
-        <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
+        <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" loading="lazy" data-slide-type="${t}"></iframe></div>
       </div>` : '').join('')}
   </div>`;
 
-  // Fill placeholders with sample content and set srcdoc
-  container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]').forEach(iframe => {
+  // Fill placeholders with sample content and set srcdoc (staggered to avoid overwhelming the browser)
+  const iframes = container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]');
+  iframes.forEach((iframe, idx) => {
     const st = iframe.dataset.slideType;
     if (templates[st]) {
-      iframe.srcdoc = _fillPreviewPlaceholders(templates[st], st);
+      // Stagger iframe loading to prevent simultaneous rendering freeze
+      setTimeout(() => { iframe.srcdoc = _fillPreviewPlaceholders(templates[st], st); }, idx * 100);
     }
   });
 
-  // Calculate dynamic scale based on container width
-  setTimeout(_recalcPreviewScale, 50);
+  // Calculate dynamic scale based on container width (delay accounts for staggered loading)
+  setTimeout(_recalcPreviewScale, 100 + iframes.length * 100);
 }
 
 function _recalcPreviewScale() {
@@ -9461,14 +9483,11 @@ function persPreviewMode(mode, btn) {
 }
 
 async function deleteTemplate(id, name) {
-  console.log('[deleteTemplate] called with id:', id, 'name:', name);
   const confirmed = confirm('Eliminare il template "' + (name || 'Senza nome') + '"?');
-  console.log('[deleteTemplate] confirm result:', confirmed);
   if (!confirmed) return;
 
   // Find the card and apply blur effect immediately for perceived speed
   const card = document.querySelector('.pers-card[data-template-id="' + id + '"]');
-  console.log('[deleteTemplate] found card:', !!card);
   if (card) {
     card.style.transition = 'filter 0.3s, opacity 0.3s, transform 0.3s';
     card.style.filter = 'blur(3px)';
@@ -9478,9 +9497,7 @@ async function deleteTemplate(id, name) {
   }
 
   try {
-    console.log('[deleteTemplate] calling DELETE /api/templates/' + id);
     const res = await fetch('/api/templates/' + id, { method: 'DELETE' });
-    console.log('[deleteTemplate] response status:', res.status, 'ok:', res.ok);
     if (res.ok) {
       // Animate card removal
       if (card) {

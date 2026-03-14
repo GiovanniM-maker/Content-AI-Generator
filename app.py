@@ -93,7 +93,7 @@ NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 
 # Admin email — full access, bypasses all plan limits
-ADMIN_EMAIL = "giovanni.mavilla.grz@gmail.com"
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
 
 
 def _is_admin() -> bool:
@@ -338,7 +338,7 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5001",
+        "HTTP-Referer": APP_BASE_URL,
         "X-Title": "Content Dashboard",
     }
     payload = {"model": model, "messages": messages, "temperature": temperature}
@@ -356,7 +356,10 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
         err_msg = data["error"].get("message", str(data["error"]))
         _log_pipeline("error", f"LLM API error: {err_msg}", {"model": model})
         raise RuntimeError(f"OpenRouter API error: {err_msg}")
-    return data["choices"][0]["message"]["content"]
+    choices = data.get("choices", [])
+    if not choices:
+        raise RuntimeError("OpenRouter returned no choices in response")
+    return choices[0].get("message", {}).get("content", "")
 
 
 def _generate_image(prompt: str, aspect_ratio: str = "1:1",
@@ -369,7 +372,7 @@ def _generate_image(prompt: str, aspect_ratio: str = "1:1",
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5001",
+        "HTTP-Referer": APP_BASE_URL,
         "X-Title": "Content Dashboard",
     }
     payload = {
@@ -392,7 +395,11 @@ def _generate_image(prompt: str, aspect_ratio: str = "1:1",
             _log_pipeline("error", f"Image gen error: {data['error']}")
             return None
         # Extract base64 image from response
-        msg = data.get("choices", [{}])[0].get("message", {})
+        choices = data.get("choices", [])
+        if not choices:
+            _log_pipeline("warn", "Image gen returned no choices")
+            return None
+        msg = choices[0].get("message", {})
         images = msg.get("images", [])
         if images:
             return images[0].get("image_url", {}).get("url")
@@ -959,7 +966,6 @@ def auth_signup():
         return jsonify({"error": "La password deve avere almeno 8 caratteri"}), 400
 
     # Password strength validation
-    import re
     if not re.search(r"[A-Z]", password):
         return jsonify({"error": "La password deve contenere almeno una lettera maiuscola"}), 400
     if not re.search(r"[a-z]", password):
@@ -1056,6 +1062,7 @@ def auth_me():
             "full_name": (profile or {}).get("full_name", ""),
             "avatar_url": (profile or {}).get("avatar_url", ""),
             "plan": (profile or {}).get("plan", "free"),
+            "is_admin": _is_admin(),
         },
         "subscription": {
             "plan": (subscription or {}).get("plan", "free"),
@@ -1094,7 +1101,6 @@ def auth_update_password():
     if len(new_password) < 8:
         return jsonify({"error": "La password deve avere almeno 8 caratteri"}), 400
 
-    import re
     if not re.search(r"[A-Z]", new_password):
         return jsonify({"error": "La password deve contenere almeno una lettera maiuscola"}), 400
     if not re.search(r"[a-z]", new_password):
@@ -1862,13 +1868,14 @@ Return ONLY a valid JSON array, no markdown, no explanation.
             result = result.strip()
             # Strip markdown code fences if present
             if result.startswith("```"):
-                result = result.split("\n", 1)[1]
-                result = result.rsplit("```", 1)[0]
+                parts = result.split("\n", 1)
+                result = parts[1] if len(parts) > 1 else parts[0]
+                parts = result.rsplit("```", 1)
+                result = parts[0]
             # Try direct parse first; if it fails, extract JSON array via regex
             try:
                 parsed = json.loads(result)
             except json.JSONDecodeError:
-                import re
                 match = re.search(r'\[.*\]', result, re.DOTALL)
                 if match:
                     parsed = json.loads(match.group(0))
@@ -2156,7 +2163,7 @@ def web_search():
     query = body.get("query", "").strip()
     if not query:
         return jsonify({"error": "Query required"}), 400
-    num = min(body.get("num_results", 10), 20)
+    num = max(1, min(body.get("num_results", 10), 20))
     try:
         results = _serper_search(query, num)
         _log_pipeline("info", f"Web search: '{query}' → {len(results)} results")
@@ -2429,10 +2436,15 @@ def assemble_newsletter_html(markdown_text: str, layout_html: str, components: d
             lambda m: f'<em style="{_style("em")}">{m.group(1)}</em>',
             text
         )
-        # Links: [text](url)
+        # Links: [text](url) — only allow http/https URLs to prevent javascript: XSS
+        def _safe_link(m):
+            url = m.group(2).strip()
+            if not url.startswith(("http://", "https://", "mailto:")):
+                return m.group(1)  # Strip unsafe URLs, keep text only
+            return f'<a href="{url}" style="{_style("a")}">{m.group(1)}</a>'
         text = _re.sub(
             r'\[([^\]]+)\]\(([^)]+)\)',
-            lambda m: f'<a href="{m.group(2)}" style="{_style("a")}">{m.group(1)}</a>',
+            _safe_link,
             text
         )
         # Inline code: `code`
@@ -3248,7 +3260,7 @@ def notify_completion():
             <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px;">
               <h2 style="color:#111;">Generazione completata!</h2>
               <p>I contenuti per <strong>{platform_list or 'le piattaforme selezionate'}</strong> sono stati generati con successo.</p>
-              <p><a href="{os.getenv('APP_URL', 'https://content-ai-generator.onrender.com')}/app"
+              <p><a href="{APP_BASE_URL}/app"
                      style="display:inline-block;background:#111;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">
                 Vai ai tuoi contenuti →
               </a></p>

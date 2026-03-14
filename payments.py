@@ -7,11 +7,14 @@ Provides:
 - Plan limits and feature gating
 """
 
+import logging
 import os
 import time
 
 import stripe
 from flask import request, jsonify, g
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -233,15 +236,17 @@ def verify_webhook(payload: bytes, sig_header: str) -> dict | None:
     Returns None if verification fails.
     """
     if not STRIPE_WEBHOOK_SECRET:
-        # No webhook secret configured
         if os.getenv("FLASK_ENV") == "production":
             return None  # NEVER accept unverified webhooks in production
-        # Dev-only fallback (skip verification)
+        if os.getenv("STRIPE_SKIP_WEBHOOK_VERIFY", "").lower() != "true":
+            return None  # Require explicit opt-in for dev webhook bypass
+        # Explicit dev-only fallback
         try:
             return stripe.Event.construct_from(
                 stripe.util.json.loads(payload), stripe.api_key
             )
         except Exception:
+            logger.warning("Failed to parse webhook payload in dev fallback mode")
             return None
 
     try:
@@ -250,8 +255,10 @@ def verify_webhook(payload: bytes, sig_header: str) -> dict | None:
         )
         return event
     except stripe.error.SignatureVerificationError:
+        logger.warning("Stripe webhook signature verification failed")
         return None
     except Exception:
+        logger.warning("Unexpected error verifying Stripe webhook", exc_info=True)
         return None
 
 
@@ -299,7 +306,7 @@ def _find_user_by_customer(customer_id: str) -> str | None:
         if result.data:
             return result.data[0]["id"]
     except Exception:
-        pass
+        logger.warning("Failed to look up user by Stripe customer ID %s", customer_id, exc_info=True)
     return None
 
 
@@ -322,8 +329,10 @@ def _handle_checkout_completed(session: dict) -> dict:
         sub = stripe.Subscription.retrieve(subscription_id)
         period_start = sub.current_period_start
         period_end = sub.current_period_end
-        price_id = sub["items"]["data"][0]["price"]["id"] if sub.get("items") else ""
+        items_data = sub.get("items", {}).get("data", [])
+        price_id = items_data[0].get("price", {}).get("id", "") if items_data else ""
     except Exception:
+        logger.warning("Failed to retrieve subscription %s from Stripe", subscription_id, exc_info=True)
         period_start = None
         period_end = None
         price_id = ""
@@ -354,7 +363,7 @@ def _handle_checkout_completed(session: dict) -> dict:
     try:
         db.add_pipeline_log(user_id, "info", f"Subscription activated: {plan}")
     except Exception:
-        pass
+        logger.warning("Failed to log subscription activation for user %s", user_id, exc_info=True)
 
     return {"status": "ok", "action": "subscription_activated", "plan": plan}
 
@@ -436,7 +445,7 @@ def _handle_subscription_deleted(subscription: dict) -> dict:
     try:
         db.add_pipeline_log(user_id, "info", "Subscription canceled — reverted to free plan")
     except Exception:
-        pass
+        logger.warning("Failed to log subscription cancellation for user %s", user_id, exc_info=True)
 
     return {"status": "ok", "action": "subscription_canceled"}
 
@@ -468,7 +477,7 @@ def _handle_invoice_paid(invoice: dict) -> dict:
             }
             db.upsert_subscription(user_id, sub_data)
         except Exception:
-            pass
+            logger.warning("Failed to update subscription period for user %s", user_id, exc_info=True)
 
     return {"status": "ok", "action": "invoice_paid"}
 
@@ -487,6 +496,6 @@ def _handle_invoice_failed(invoice: dict) -> dict:
     try:
         db.add_pipeline_log(user_id, "warning", "Payment failed — subscription is past due")
     except Exception:
-        pass
+        logger.warning("Failed to log payment failure for user %s", user_id, exc_info=True)
 
     return {"status": "ok", "action": "payment_failed_marked"}
