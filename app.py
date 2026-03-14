@@ -3413,7 +3413,12 @@ def _detect_image_intent(message: str) -> dict | None:
     """Detect if the user message contains explicit image generation intent.
 
     Returns None if no intent detected, or:
-        {"target": "background"|"cover", "context": "<relevant part of message>"}
+        {"target": "background"|"cover", "context": "<relevant part of message>",
+         "image_only": True|False}
+
+    image_only=True means the message is PRIMARILY about adding an image,
+    with no substantial design change requests. In this case the existing
+    design_spec should be preserved as the base (patch strategy).
     """
     lower = message.lower().strip()
 
@@ -3430,7 +3435,19 @@ def _detect_image_intent(message: str) -> dict | None:
     is_cover = any(kw in lower for kw in _COVER_TARGET_KEYWORDS)
     target = "cover" if is_cover else "background"
 
-    return {"target": target, "context": message.strip()}
+    # Detect if this is an image-only request (no design change intent)
+    # If the message contains NON-image design keywords, it's a mixed request
+    _DESIGN_CHANGE_KEYWORDS = [
+        "colore", "colori", "font", "titolo", "testo", "gradiente",
+        "padding", "spaziatura", "layout", "dimensione", "peso",
+        "grassetto", "tema", "theme",
+        "rounded", "orb", "counter", "footer", "brand", "slide_layouts",
+        "cambia il", "rendi il", "rendi più", "modifica il",
+    ]
+    has_design_change = any(kw in lower for kw in _DESIGN_CHANGE_KEYWORDS)
+    image_only = not has_design_change
+
+    return {"target": target, "context": message.strip(), "image_only": image_only}
 
 
 def _build_image_prompt(user_message: str, design_spec: dict, target: str) -> str:
@@ -3769,15 +3786,24 @@ REGOLE:
         parsed = _try_parse_response(raw_response)
 
         if template_type == "instagram":
+            # ── Check for image intent BEFORE processing LLM spec ──
+            image_intent = _detect_image_intent(user_message)
+
             # ── New architecture: extract design_spec (NOT html) ──
             if parsed and "design_spec" in parsed and isinstance(parsed["design_spec"], dict):
                 reply_text = parsed.get("reply", "Design aggiornato!")
                 try:
-                    new_design_spec = validate_design_spec(parsed["design_spec"])
-                    spec_changed = True
+                    # For image-only requests: keep current spec as base,
+                    # ignore LLM's full rewrite to prevent design corruption
+                    if image_intent and image_intent["image_only"] and current_design_spec:
+                        new_design_spec = validate_design_spec(current_design_spec)
+                        _log_pipeline("info",
+                            f"Template chat: image-only request for {template_id}, "
+                            f"preserving existing design_spec")
+                    else:
+                        new_design_spec = validate_design_spec(parsed["design_spec"])
 
                     # ── Phase 1C: image generation if user explicitly asked ──
-                    image_intent = _detect_image_intent(user_message)
                     if image_intent:
                         try:
                             from services.image_generator import generate_image
@@ -3801,23 +3827,36 @@ REGOLE:
                             reply_text += f"\n\n🖼️ Immagine generata e applicata come {'copertina' if image_intent['target'] == 'cover' else 'sfondo'}."
                             _log_pipeline("info",
                                 f"Template chat: image generated for {template_id} → {img_result['url']}")
+                            spec_changed = True
                         except Exception as img_err:
                             _log_pipeline("error",
                                 f"Template chat: image generation failed for {template_id}: {img_err}")
-                            reply_text += "\n\n⚠️ Non sono riuscito a generare l'immagine. Il design è stato aggiornato senza immagine."
+                            if image_intent["image_only"]:
+                                # Image-only request failed → preserve everything
+                                reply_text = parsed.get("reply", "") + \
+                                    "\n\n⚠️ Non sono riuscito a generare l'immagine. Ho mantenuto il design precedente."
+                                # Don't set spec_changed or html_changed — nothing saved
+                            else:
+                                # Mixed request: design changes go through, only image skipped
+                                reply_text += "\n\n⚠️ Non sono riuscito a generare l'immagine. Il design è stato aggiornato senza immagine."
+                                spec_changed = True
+                    else:
+                        # No image intent — normal design update
+                        spec_changed = True
 
-                    # Generate HTML deterministically from the validated spec
-                    preview_htmls = render_preview_slides(
-                        new_design_spec, aspect_ratio=aspect_ratio,
-                    )
-                    # Store rendered HTML as JSON (backward compat with render-carousel)
-                    new_html = json.dumps({
-                        "cover": preview_htmls["cover"],
-                        "content": preview_htmls["content"],
-                        "list": preview_htmls["list"],
-                        "cta": preview_htmls["cta"],
-                    })
-                    html_changed = True
+                    # Generate HTML only if spec actually changed
+                    if spec_changed:
+                        preview_htmls = render_preview_slides(
+                            new_design_spec, aspect_ratio=aspect_ratio,
+                        )
+                        # Store rendered HTML as JSON (backward compat with render-carousel)
+                        new_html = json.dumps({
+                            "cover": preview_htmls["cover"],
+                            "content": preview_htmls["content"],
+                            "list": preview_htmls["list"],
+                            "cta": preview_htmls["cta"],
+                        })
+                        html_changed = True
                 except ValueError as ve:
                     reply_text += f"\n\n⚠️ Errore nella validazione del design: {ve}"
                     _log_pipeline("warn", f"Template chat: design_spec validation failed: {ve}")
