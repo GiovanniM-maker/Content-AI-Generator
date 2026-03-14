@@ -2239,7 +2239,9 @@ Score da 1 a 10 (10 = perfetto per content su AI/automazione business)."""
 
 @app.route("/api/generate", methods=["POST"])
 def generate_content():
-    body = request.json
+    body = request.json if request.is_json else None
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     article = body.get("article", {})
     opinion = body.get("opinion", "")
     format_type = body.get("format")
@@ -3472,7 +3474,9 @@ Solo JSON, niente altro."""
 
 @app.route("/api/render-carousel", methods=["POST"])
 def render_carousel_images():
-    body = request.json
+    body = request.json if request.is_json else None
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     text = body.get("text", "")
     palette_idx = body.get("palette", 0)
     template_id = body.get("template_id")
@@ -3484,7 +3488,7 @@ def render_carousel_images():
 
     # Check platform access — Instagram carousel requires Pro+
     if not _is_admin():
-        user_plan = _get_plan()
+        user_plan = _get_user_plan()
         plan_details = payments.PLANS.get(user_plan, payments.PLANS["free"])
         if "instagram" not in plan_details.get("platforms", []):
             return jsonify({
