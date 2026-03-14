@@ -3470,17 +3470,21 @@ Il design_spec ha queste sezioni:
 
 6. **images** (object):
    - logo_url: URL del logo (stringa vuota "" se non presente, DEVE essere https://)
-   - background_image_url: URL immagine sfondo (stringa vuota "" se non presente)
+   - background_image_url: URL immagine sfondo condiviso su TUTTE le slide (stringa vuota "" se non presente)
+   - slide_images (object): immagini specifiche per slide
+     - cover: URL immagine specifica per la slide di copertina (stringa vuota "" se non presente)
 
 ═══ IMMAGINI E LOGO ═══
 - Se l'utente allega immagini, il messaggio conterrà "[Immagine allegata: URL]"
 - Per usare un'immagine come logo: imposta images.logo_url = "URL_ESATTO"
-- Per usare come sfondo: imposta images.background_image_url = "URL_ESATTO"
+- Per usare come sfondo su TUTTE le slide: imposta images.background_image_url = "URL_ESATTO"
+- Per usare come immagine solo sulla copertina: imposta images.slide_images.cover = "URL_ESATTO"
 - Usa gli URL ESATTI delle immagini allegate senza modificarli
 - Se l'utente chiede uno sfondo senza allegare immagine, usa un URL da Unsplash:
   https://images.unsplash.com/photo-XXXXX?w=1080&q=80
   Scegli una foto coerente con la richiesta (es. marmo, natura, città, texture)
 - L'immagine di sfondo appare come overlay semitrasparente dietro il contenuto
+- L'immagine cover appare con maggiore prominenza solo sulla slide di copertina
 
 ═══ FORMATO RISPOSTA (SOLO JSON, OBBLIGATORIO) ═══
 {{{{
@@ -3615,7 +3619,7 @@ REGOLE:
             urls = re.findall(r'\[Immagine allegata:\s*(https?://[^\]]+)\]', msg["content"])
             image_urls_in_history.extend(urls)
     if image_urls_in_history:
-        img_ctx = "IMMAGINI CARICATE DALL'UTENTE (usa questi URL per logo_url/background_image_url nel design_spec):\n"
+        img_ctx = "IMMAGINI CARICATE DALL'UTENTE (usa questi URL per logo_url/background_image_url/slide_images.cover nel design_spec):\n"
         for i, url in enumerate(image_urls_in_history, 1):
             img_ctx += f"  {i}. {url}\n"
         messages.append({"role": "system", "content": img_ctx})
@@ -3632,7 +3636,7 @@ REGOLE:
             user_content.append({"type": "text", "text": user_message})
         # Add text notes with all URLs so the model can reference them in HTML
         urls_text = "\n".join(f"  {i+1}. {url}" for i, url in enumerate(image_urls))
-        user_content.append({"type": "text", "text": f"[Immagini caricate ({len(image_urls)}):\n{urls_text}\n] — usa questi URL per logo_url o background_image_url nel design_spec"})
+        user_content.append({"type": "text", "text": f"[Immagini caricate ({len(image_urls)}):\n{urls_text}\n] — usa questi URL per logo_url, background_image_url o slide_images.cover nel design_spec"})
         # Add each image as a visual attachment for the multimodal model
         for url in image_urls:
             user_content.append({
