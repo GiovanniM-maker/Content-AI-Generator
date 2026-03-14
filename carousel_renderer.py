@@ -402,29 +402,36 @@ def render_carousel(text: str, palette_idx: int = 0,
         raise RuntimeError("Playwright non è installato. Installa con: pip install playwright && playwright install chromium")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],
+        )
         page = browser.new_page(viewport={"width": 1080, "height": 1080})
+        page.set_default_navigation_timeout(10000)  # 10s max per slide
 
-        for i, slide in enumerate(slides_text):
-            # Choose template based on position
-            if i == 0:
-                html = _cover_html(slide, palette, total,
-                                   brand_name=brand_name, brand_handle=brand_handle)
-            elif i == total - 1 and total > 2:
-                html = _cta_html(slide, i + 1, total, palette,
-                                 brand_name=brand_name, brand_handle=brand_handle)
-            else:
-                html = _content_html(slide, i + 1, total, palette,
+        try:
+            for i, slide in enumerate(slides_text):
+                # Choose template based on position
+                if i == 0:
+                    html = _cover_html(slide, palette, total,
+                                       brand_name=brand_name, brand_handle=brand_handle)
+                elif i == total - 1 and total > 2:
+                    html = _cta_html(slide, i + 1, total, palette,
                                      brand_name=brand_name, brand_handle=brand_handle)
+                else:
+                    html = _content_html(slide, i + 1, total, palette,
+                                         brand_name=brand_name, brand_handle=brand_handle)
 
-            page.set_content(html, wait_until="networkidle")
-            # Small wait for fonts to load
-            page.wait_for_timeout(500)
+                try:
+                    page.set_content(html, wait_until="networkidle")
+                except Exception:
+                    page.set_content(html, wait_until="domcontentloaded")
+                page.wait_for_timeout(300)  # reduced from 500ms
 
-            png_bytes = page.screenshot(type="png")
-            slides_bytes.append(png_bytes)
-
-        browser.close()
+                png_bytes = page.screenshot(type="png")
+                slides_bytes.append(png_bytes)
+        finally:
+            browser.close()
 
     return {"slides_bytes": slides_bytes, "caption": caption}
 
@@ -661,24 +668,32 @@ def render_carousel_from_template(
         raise RuntimeError("Playwright non è installato. Installa con: pip install playwright && playwright install chromium")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],
+        )
         page = browser.new_page(viewport={"width": width, "height": height})
+        page.set_default_navigation_timeout(10000)  # 10s max per slide
 
-        for i, slide_text in enumerate(slides_text):
-            slide_type = _detect_slide_type(slide_text, i, total)
-            template = templates.get(slide_type, templates["content"])
+        try:
+            for i, slide_text in enumerate(slides_text):
+                slide_type = _detect_slide_type(slide_text, i, total)
+                template = templates.get(slide_type, templates["content"])
 
-            html = _prepare_slide_html(
-                template, slide_text, slide_type, i, total, brand_name, brand_handle
-            )
+                html = _prepare_slide_html(
+                    template, slide_text, slide_type, i, total, brand_name, brand_handle
+                )
 
-            page.set_content(html, wait_until="networkidle")
-            page.wait_for_timeout(500)
+                try:
+                    page.set_content(html, wait_until="networkidle")
+                except Exception:
+                    page.set_content(html, wait_until="domcontentloaded")
+                page.wait_for_timeout(300)  # reduced from 500ms
 
-            png_bytes = page.screenshot(type="png")
-            slides_bytes.append(png_bytes)
-
-        browser.close()
+                png_bytes = page.screenshot(type="png")
+                slides_bytes.append(png_bytes)
+        finally:
+            browser.close()
 
     return {"slides_bytes": slides_bytes, "caption": caption}
 
@@ -722,28 +737,38 @@ def render_template_preview(
         raise RuntimeError("Playwright non è installato")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],
+        )
         page = browser.new_page(viewport={"width": width, "height": height})
+        # Set a navigation timeout to prevent hanging on networkidle
+        page.set_default_navigation_timeout(10000)  # 10s max per slide
 
-        for slide_type in ("cover", "content", "list", "cta"):
-            template = templates.get(slide_type, templates.get("content", ""))
-            if not template:
-                continue
+        try:
+            for slide_type in ("cover", "content", "list", "cta"):
+                template = templates.get(slide_type, templates.get("content", ""))
+                if not template:
+                    continue
 
-            html = _prepare_slide_html(
-                template,
-                example_content[slide_type],
-                slide_type,
-                index={"cover": 0, "content": 1, "list": 2, "cta": 3}[slide_type],
-                total=4,
-                brand_name=brand_name,
-                brand_handle=brand_handle,
-            )
+                html = _prepare_slide_html(
+                    template,
+                    example_content[slide_type],
+                    slide_type,
+                    index={"cover": 0, "content": 1, "list": 2, "cta": 3}[slide_type],
+                    total=4,
+                    brand_name=brand_name,
+                    brand_handle=brand_handle,
+                )
 
-            page.set_content(html, wait_until="networkidle")
-            page.wait_for_timeout(500)
-            result[slide_type] = page.screenshot(type="png")
-
-        browser.close()
+                try:
+                    page.set_content(html, wait_until="networkidle")
+                except Exception:
+                    # Fallback: load without waiting for network (fonts may not load)
+                    page.set_content(html, wait_until="domcontentloaded")
+                page.wait_for_timeout(300)  # reduced from 500ms
+                result[slide_type] = page.screenshot(type="png")
+        finally:
+            browser.close()
 
     return result

@@ -8519,7 +8519,16 @@ let _persPreviewMode = 'visual';
 let _persNavigating = false; // guard against double-click race conditions
 let _persSending = false;    // guard for sendTemplateMessage
 // Cached preview URLs: { templateId: { cover: url, content: url, ... } }
+// Capped at 50 entries to prevent unbounded memory growth.
 const _cachedPreviewUrls = {};
+const _PREVIEW_CACHE_MAX = 50;
+function _setCachedPreview(id, data) {
+  const keys = Object.keys(_cachedPreviewUrls);
+  if (keys.length >= _PREVIEW_CACHE_MAX && !_cachedPreviewUrls[id]) {
+    delete _cachedPreviewUrls[keys[0]]; // evict oldest
+  }
+  _cachedPreviewUrls[id] = data;
+}
 // For template selection callback in Crea flow
 let _templateSelectCallback = null;
 
@@ -8636,7 +8645,7 @@ function renderPersHome() {
       try {
         const urls = typeof p.thumbnail_url === 'string' ? JSON.parse(p.thumbnail_url) : p.thumbnail_url;
         if (urls && typeof urls === 'object' && Object.keys(urls).length) {
-          _cachedPreviewUrls[p.id] = urls;
+          _setCachedPreview(p.id, urls);
         }
       } catch(e) { /* ignore bad JSON */ }
     }
@@ -8727,7 +8736,7 @@ function _loadCardGalleries() {
       .then(data => {
         if (data.type === 'gallery' && data.slides) {
           // Cache the URLs for future use within this session
-          _cachedPreviewUrls[tplId] = data.slides;
+          _setCachedPreview(tplId, data.slides);
           ['cover', 'content', 'list', 'cta'].forEach(t => {
             const slot = gal.querySelector(`.pers-gallery-slot[data-type="${t}"]`);
             if (slot && data.slides[t]) {
@@ -9059,7 +9068,17 @@ function _fillPreviewPlaceholders(html, slideType) {
   return html;
 }
 
+// Debounce guard for updateTemplatePreview — prevents rapid-fire iframe creation
+let _previewDebounceTimer = null;
+let _previewUpdateVersion = 0; // monotonic counter to cancel stale updates
+
 async function updateTemplatePreview() {
+  // Debounce: cancel any pending update and wait 300ms before rendering
+  if (_previewDebounceTimer) clearTimeout(_previewDebounceTimer);
+  const version = ++_previewUpdateVersion;
+  await new Promise(resolve => { _previewDebounceTimer = setTimeout(resolve, 300); });
+  if (version !== _previewUpdateVersion) return; // stale — a newer update superseded this one
+
   const container = document.getElementById('pers-preview-container');
   if (!container || !_persCurrentId) return;
 
@@ -9109,13 +9128,21 @@ async function updateTemplatePreview() {
       </div>` : '').join('')}
   </div>`;
 
-  // Fill placeholders with sample content and set srcdoc
-  container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]').forEach(iframe => {
+  // Fill placeholders with sample content — load iframes sequentially to avoid
+  // overwhelming the browser with 4 simultaneous heavy HTML document renders
+  const iframes = container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]');
+  for (const iframe of iframes) {
+    if (version !== _previewUpdateVersion) return; // cancel if stale
     const st = iframe.dataset.slideType;
     if (templates[st]) {
       iframe.srcdoc = _fillPreviewPlaceholders(templates[st], st);
+      // Wait for iframe to finish loading before starting the next one
+      await new Promise(resolve => {
+        iframe.onload = resolve;
+        setTimeout(resolve, 2000); // safety timeout — don't wait forever
+      });
     }
-  });
+  }
 
   // Calculate dynamic scale based on container width
   setTimeout(_recalcPreviewScale, 50);
