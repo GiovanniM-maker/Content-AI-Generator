@@ -3070,12 +3070,64 @@ def render_carousel_images():
             tpl = db.get_user_template_by_id(user_id, template_id)
             if not tpl:
                 return jsonify({"error": "Template non trovato"}), 404
-            from carousel_renderer import render_carousel_from_template_async
-            result = render_carousel_from_template_async(
-                text,
-                template_html=tpl["html_content"],
-                aspect_ratio=tpl.get("aspect_ratio", "1:1"),
-            )
+
+            design_spec = tpl.get("design_spec") or None
+            if design_spec:
+                # New architecture: design_spec → deterministic HTML → Playwright
+                from services.template_renderer import (
+                    parse_carousel_text_to_content, render_instagram_slide,
+                )
+                slides_content = parse_carousel_text_to_content(text)
+                if not slides_content:
+                    return jsonify({"error": "Nessuna slide trovata nel testo"}), 400
+
+                aspect_ratio = tpl.get("aspect_ratio", "1:1")
+                brand_name = body.get("brand_name", "")
+                brand_handle = body.get("brand_handle", "")
+                if not brand_name:
+                    try:
+                        profile = db.get_profile(user_id)
+                        if profile:
+                            brand_name = profile.get("full_name") or ""
+                    except Exception:
+                        pass
+
+                # Render each slide's HTML, then use Playwright
+                total = len(slides_content)
+                slide_htmls = []
+                for i, slide in enumerate(slides_content):
+                    slide_type = slide.get("type", "content")
+                    content = {k: v for k, v in slide.items() if k != "type"}
+                    html = render_instagram_slide(
+                        design_spec, slide_type, content,
+                        aspect_ratio=aspect_ratio,
+                        slide_num=i + 1, total_slides=total,
+                        brand_name=brand_name, brand_handle=brand_handle,
+                    )
+                    slide_htmls.append(html)
+
+                # Use Playwright to render HTML → PNG
+                from carousel_renderer import render_carousel_from_template_async
+                # Build a template JSON that maps each slide to its pre-rendered HTML
+                template_json = json.dumps({
+                    "cover": slide_htmls[0] if len(slide_htmls) > 0 else "",
+                    "content": slide_htmls[1] if len(slide_htmls) > 1 else slide_htmls[0],
+                    "list": slide_htmls[2] if len(slide_htmls) > 2 else slide_htmls[0],
+                    "cta": slide_htmls[-1] if len(slide_htmls) > 1 else slide_htmls[0],
+                })
+                result = render_carousel_from_template_async(
+                    text,
+                    template_html=template_json,
+                    aspect_ratio=aspect_ratio,
+                )
+            else:
+                # Legacy path: use html_content directly
+                from carousel_renderer import render_carousel_from_template_async
+                result = render_carousel_from_template_async(
+                    text,
+                    template_html=tpl["html_content"],
+                    aspect_ratio=tpl.get("aspect_ratio", "1:1"),
+                )
         else:
             # Default rendering (original palette-based)
             # Get user brand info for slide branding
@@ -3319,7 +3371,12 @@ def delete_template(template_id):
 
 @app.route("/api/templates/<template_id>/chat", methods=["POST"])
 def template_chat(template_id):
-    """Chat with the AI to iteratively build/modify a template's HTML."""
+    """Chat with the AI to iteratively build/modify a template.
+
+    For Instagram templates: LLM returns a structured design_spec (JSON) instead
+    of raw HTML. A deterministic renderer then generates HTML from the spec.
+    For Newsletter templates: LLM returns layout HTML + component CSS styles (unchanged).
+    """
     user_id = _get_user_id()
     tpl = db.get_user_template_by_id(user_id, template_id)
     if not tpl:
@@ -3343,98 +3400,95 @@ def template_chat(template_id):
     chat_history = tpl.get("chat_history", []) or []
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
     current_components = tpl.get("components", {}) or {}
+    current_design_spec = tpl.get("design_spec") or None
 
     # Build system prompt based on template type
     if template_type == "instagram":
-        dimensions = {"1:1": "1080x1080", "4:3": "1080x810", "3:4": "1080x1440"}.get(aspect_ratio, "1080x1080")
-        w, h = dimensions.split("x")
-        system_prompt = f"""Sei un designer HTML/CSS esperto specializzato in slide Instagram. Crei template HTML che verranno renderizzati in immagini PNG da Playwright (browser headless).
+        from services.template_renderer import (
+            DEFAULT_DESIGN_SPEC, ALLOWED_FONTS, ALLOWED_SLIDE_LAYOUTS,
+            validate_design_spec, render_preview_slides,
+        )
 
-═══ VIEWPORT E DIMENSIONI ═══
-- Dimensione esatta: {w}px × {h}px (aspect ratio {aspect_ratio})
-- Il tuo HTML verrà visualizzato in un browser a queste dimensioni esatte
-- Usa SOLO unità px per sizing — NO vh, vw, %, em, rem
-- Tutto il testo e gli elementi devono stare dentro {w}×{h}px senza scrolling
+        allowed_fonts_str = ", ".join(ALLOWED_FONTS)
+        cover_layouts = ", ".join(ALLOWED_SLIDE_LAYOUTS["cover"])
+        content_layouts = ", ".join(ALLOWED_SLIDE_LAYOUTS["content"])
+        list_layouts = ", ".join(ALLOWED_SLIDE_LAYOUTS["list"])
+        cta_layouts = ", ".join(ALLOWED_SLIDE_LAYOUTS["cta"])
 
-═══ STRUTTURA HTML OBBLIGATORIA ═══
-Ogni slide DEVE seguire questa struttura:
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=NomeFontScelto:wght@400;600;700;800;900&display=swap');
-    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-    body {{ width: {w}px; height: {h}px; overflow: hidden; font-family: 'NomeFontScelto', sans-serif; }}
-    /* ... il tuo CSS ... */
-  </style>
-</head>
-<body>
-  <!-- contenuto slide -->
-</body>
-</html>
-```
+        system_prompt = f"""Sei un designer esperto di slide Instagram. Il tuo compito è creare e modificare un design_spec JSON strutturato che descrive lo stile visivo delle slide.
 
-═══ I 4 TIPI DI SLIDE ═══
-1. **cover** — Prima slide, titolo grande.
-   Placeholder: {{{{COVER_TITLE}}}}, {{{{COVER_SUBTITLE}}}}
-2. **content** — Slide con testo (header + paragrafo).
-   Placeholder: {{{{CONTENT_HEADER}}}}, {{{{CONTENT_BODY}}}}
-3. **list** — Slide con elenco.
-   Placeholder: {{{{LIST_HEADER}}}}, {{{{LIST_ITEMS}}}} (sarà HTML: <li>punto 1</li><li>punto 2</li>)
-4. **cta** — Ultima slide, call-to-action.
-   Placeholder: {{{{CTA_TEXT}}}}, {{{{CTA_BUTTON}}}}
+═══ STRUTTURA design_spec ═══
+Il design_spec ha queste sezioni:
 
-Placeholder comuni: {{{{SLIDE_NUM}}}}, {{{{TOTAL_SLIDES}}}}, {{{{BRAND_NAME}}}}, {{{{BRAND_HANDLE}}}}
-Usa SOLO questi placeholder — non inventarne di nuovi.
+1. **theme_name** (string): nome del tema (es. "Minimal Industrial", "Warm Corporate")
 
-═══ FONT ═══
-- Carica i font con @import di Google Fonts dentro il <style>
-- Specifica i pesi che usi (400, 600, 700, 800, 900)
-- Applica il font su body e su tutti gli elementi
+2. **colors** (object):
+   - background: colore o gradiente CSS (es. "#0f0f0f" oppure "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)")
+   - primary_text: colore testo principale (es. "#ffffff")
+   - secondary_text: colore testo secondario (es. "rgba(255,255,255,0.7)")
+   - accent: colore accento primario (es. "#7c5ce7")
+   - accent2: colore accento secondario (es. "#a29bfe")
+   - card_bg: sfondo card/box (es. "rgba(255,255,255,0.06)")
 
-═══ ICONE E SVG ═══
-Se devi inserire icone (cuore, segnalibro, freccia, stella, ecc.), usa SVG inline:
-- OBBLIGATORIO: aggiungi SEMPRE xmlns="http://www.w3.org/2000/svg" nel tag <svg>
-- Esempio cuore: <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-- Esempio segnalibro: <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
-- NON usare emoji come icone — non renderizzano bene in Playwright
-- NON usare icon font (FontAwesome, Material Icons) — non sono disponibili
+3. **typography** (object):
+   - heading_font: font titoli — DEVE essere uno di: {allowed_fonts_str}
+   - body_font: font corpo testo — DEVE essere uno di: {allowed_fonts_str}
+   - heading_weight: peso titoli (100-900, multipli di 100)
+   - body_weight: peso corpo (100-900)
+   - heading_size_px: dimensione titoli in px (24-120)
+   - body_size_px: dimensione corpo in px (14-60)
+   - line_height: altezza riga (0.8-2.5)
+
+4. **layout** (object):
+   - padding_px: padding esterno in px (20-160)
+   - corner_radius_px: arrotondamento angoli (0-60)
+   - show_slide_counter: true/false — mostra "1/N" in alto a destra
+   - show_brand_footer: true/false — mostra nome brand in basso
+   - accent_line: true/false — linea decorativa sotto titolo
+   - accent_line_width_px: larghezza linea accento (0-200)
+   - decorative_orbs: true/false — cerchi sfocati decorativi sullo sfondo
+   - brand_position: "bottom", "top", o "none"
+
+5. **slide_layouts** (object):
+   - cover: layout slide copertina — {cover_layouts}
+   - content: layout slide contenuto — {content_layouts}
+   - list: layout slide elenco — {list_layouts}
+   - cta: layout slide CTA — {cta_layouts}
+
+6. **images** (object):
+   - logo_url: URL del logo (stringa vuota "" se non presente, DEVE essere https://)
+   - background_image_url: URL immagine sfondo (stringa vuota "" se non presente)
 
 ═══ IMMAGINI E LOGO ═══
-L'utente può allegare fino a 5 immagini per messaggio:
-- Le immagini vengono caricate su Supabase Storage — URL nel formato: https://fepljzntmbtcucbymtgq.supabase.co/storage/v1/object/public/template-assets/...
-- GUARDA il messaggio utente: se c'è scritto "[Immagine allegata: URL]", quell'URL è l'immagine caricata
-- Per inserire il logo: <img src="QUELL_URL_ESATTO" style="height: 50px; width: auto;"> — usa l'URL ESATTO, non modificarlo
-- Se l'utente allega più immagini, potrebbe volerle usare per cose diverse (logo, sfondo, icone) — chiedi o deduci dal contesto
-- Se l'utente dice "metti il logo", cerca nei messaggi precedenti l'URL dell'immagine allegata e usalo
+- Se l'utente allega immagini, il messaggio conterrà "[Immagine allegata: URL]"
+- Per usare un'immagine come logo: imposta images.logo_url = "URL_ESATTO"
+- Per usare come sfondo: imposta images.background_image_url = "URL_ESATTO"
+- Usa gli URL ESATTI senza modificarli
 
-═══ CONSIGLI DI DESIGN ═══
-- Font grandi: titoli almeno 60-90px, body almeno 32-40px per {w}x{h}
-- Padding generoso: almeno 60-80px ai lati
-- Colori: sfondo pieno + testo contrastante (NO trasparenze complicate)
-- Decorazioni: cerchi, linee, forme geometriche via CSS (border-radius, gradients)
-- Tutto il testo DEVE essere visibile — se è bianco lo sfondo DEVE essere scuro e viceversa
-
-═══ FORMATO RISPOSTA (OBBLIGATORIO — SOLO JSON) ═══
+═══ FORMATO RISPOSTA (SOLO JSON, OBBLIGATORIO) ═══
 {{{{
   "reply": "Breve messaggio in italiano (max 2-3 frasi)",
-  "html": {{{{
-    "cover": "<!DOCTYPE html><html>...</html>",
-    "content": "<!DOCTYPE html><html>...</html>",
-    "list": "<!DOCTYPE html><html>...</html>",
-    "cta": "<!DOCTYPE html><html>...</html>"
+  "design_spec": {{{{
+    "theme_name": "...",
+    "colors": {{{{ ... }}}},
+    "typography": {{{{ ... }}}},
+    "layout": {{{{ ... }}}},
+    "slide_layouts": {{{{ ... }}}},
+    "images": {{{{ ... }}}}
   }}}}
 }}}}
 
-REGOLE FINALI:
-1. SEMPRE ritorna JSON con "reply" + "html" (oggetto con 4 chiavi)
-2. Ogni modifica → rigenera TUTTI e 4 i tipi con il JSON completo
-3. Rispondi in italiano — il reply deve essere BREVE
-4. NON dire "ho fatto" se non hai effettivamente cambiato l'HTML — l'utente vede la preview
-5. Se qualcosa non è chiaro, chiedi — ma metti comunque il campo "html" con lo stato attuale"""
-    else:  # newsletter
+═══ REGOLE ═══
+1. SEMPRE ritorna JSON con "reply" + "design_spec"
+2. Ogni modifica → ritorna il design_spec COMPLETO (non solo i campi modificati)
+3. Rispondi in italiano — il reply deve essere BREVE (max 2-3 frasi)
+4. Se l'utente chiede qualcosa di vago ("più moderno", "più professionale"), interpreta e aggiorna i valori
+5. Se qualcosa non è chiaro, chiedi — ma metti comunque il campo "design_spec" con lo stato attuale
+6. NON generare HTML — genera SOLO il design_spec JSON
+7. I font DEVONO essere nella lista consentita: {allowed_fonts_str}
+8. I valori numerici hanno limiti — il sistema li correggerà automaticamente se fuori range"""
+
+    else:  # newsletter — unchanged architecture (layout HTML + components CSS)
         components_json = json.dumps(current_components, indent=2) if current_components else "{}"
 
         system_prompt = """Sei un designer HTML esperto di email marketing. Crei template newsletter con un sistema a 2 livelli: LAYOUT + COMPONENTI.
@@ -3517,20 +3571,25 @@ REGOLE:
     # Build conversation messages (keep last 14 messages = ~7 exchanges)
     messages = [{"role": "system", "content": system_prompt}]
 
-    # Add current HTML context if exists
-    if current_html.strip():
-        if template_type == "instagram":
-            try:
-                slides = json.loads(current_html)
-                ctx = "JSON ATTUALE DEL TEMPLATE (4 tipi di slide):\n```json\n" + json.dumps(slides, indent=2) + "\n```"
-            except (json.JSONDecodeError, TypeError):
-                ctx = f"HTML ATTUALE DEL TEMPLATE:\n```html\n{current_html}\n```"
+    # Add current template context
+    if template_type == "instagram":
+        # New architecture: inject current design_spec (not HTML)
+        if current_design_spec:
+            ctx = "DESIGN_SPEC ATTUALE:\n```json\n" + json.dumps(current_design_spec, indent=2) + "\n```"
+        elif current_html.strip():
+            ctx = ("NOTA: Questo template ha un design precedente (legacy HTML). "
+                   "Crea un nuovo design_spec basandoti sulla conversazione. "
+                   "Il vecchio HTML verrà sostituito.")
         else:
-            # Newsletter: include both layout HTML and components
+            ctx = "Nessun design_spec esistente — crea il primo design da zero."
+        messages.append({"role": "system", "content": ctx})
+    else:
+        # Newsletter: inject layout HTML + components (unchanged)
+        if current_html.strip():
             ctx = f"LAYOUT HTML ATTUALE:\n```html\n{current_html}\n```"
             if current_components:
-                ctx += f"\n\nCOMPONENTI ATTUALI:\n```json\n{components_json}\n```"
-        messages.append({"role": "system", "content": ctx})
+                ctx += f"\n\nCOMPONENTI ATTUALI:\n```json\n{json.dumps(current_components, indent=2)}\n```"
+            messages.append({"role": "system", "content": ctx})
 
     # Extract image URLs from full chat history for context persistence
     image_urls_in_history = []
@@ -3539,7 +3598,7 @@ REGOLE:
             urls = re.findall(r'\[Immagine allegata:\s*(https?://[^\]]+)\]', msg["content"])
             image_urls_in_history.extend(urls)
     if image_urls_in_history:
-        img_ctx = "IMMAGINI CARICATE DALL'UTENTE (usa questi URL esatti per <img src=\"...\">):\n"
+        img_ctx = "IMMAGINI CARICATE DALL'UTENTE (usa questi URL per logo_url/background_image_url nel design_spec):\n"
         for i, url in enumerate(image_urls_in_history, 1):
             img_ctx += f"  {i}. {url}\n"
         messages.append({"role": "system", "content": img_ctx})
@@ -3556,7 +3615,7 @@ REGOLE:
             user_content.append({"type": "text", "text": user_message})
         # Add text notes with all URLs so the model can reference them in HTML
         urls_text = "\n".join(f"  {i+1}. {url}" for i, url in enumerate(image_urls))
-        user_content.append({"type": "text", "text": f"[Immagini caricate ({len(image_urls)}):\n{urls_text}\n] — usa questi URL esatti per <img src>"})
+        user_content.append({"type": "text", "text": f"[Immagini caricate ({len(image_urls)}):\n{urls_text}\n] — usa questi URL per logo_url o background_image_url nel design_spec"})
         # Add each image as a visual attachment for the multimodal model
         for url in image_urls:
             user_content.append({
@@ -3575,60 +3634,86 @@ REGOLE:
 
         # Parse JSON response from LLM
         reply_text = ""
-        new_html = current_html
-        new_components = current_components if template_type == "newsletter" else None
+        spec_changed = False
         html_changed = False
+        new_html = current_html
+        new_design_spec = current_design_spec
+        new_components = current_components if template_type == "newsletter" else None
         components_changed = False
 
         def _try_parse_response(text):
             """Try multiple strategies to extract JSON from the LLM response."""
             cleaned = _strip_fences(text)
-            # Strategy 1: Direct JSON parse
             try:
-                parsed = json.loads(cleaned)
-                return parsed
+                return json.loads(cleaned)
             except json.JSONDecodeError:
                 pass
-            # Strategy 2: Find JSON object in text (between first { and last })
             first_brace = cleaned.find("{")
             last_brace = cleaned.rfind("}")
             if first_brace != -1 and last_brace > first_brace:
                 try:
-                    parsed = json.loads(cleaned[first_brace:last_brace + 1])
-                    return parsed
+                    return json.loads(cleaned[first_brace:last_brace + 1])
                 except json.JSONDecodeError:
                     pass
             return None
 
         parsed = _try_parse_response(raw_response)
 
-        if parsed and "html" in parsed:
-            reply_text = parsed.get("reply", "Template aggiornato!")
-            raw_html = parsed["html"]
-            if isinstance(raw_html, dict):
-                new_html = json.dumps(raw_html)
+        if template_type == "instagram":
+            # ── New architecture: extract design_spec (NOT html) ──
+            if parsed and "design_spec" in parsed and isinstance(parsed["design_spec"], dict):
+                reply_text = parsed.get("reply", "Design aggiornato!")
+                try:
+                    new_design_spec = validate_design_spec(parsed["design_spec"])
+                    spec_changed = True
+                    # Generate HTML deterministically from the validated spec
+                    preview_htmls = render_preview_slides(
+                        new_design_spec, aspect_ratio=aspect_ratio,
+                    )
+                    # Store rendered HTML as JSON (backward compat with render-carousel)
+                    new_html = json.dumps({
+                        "cover": preview_htmls["cover"],
+                        "content": preview_htmls["content"],
+                        "list": preview_htmls["list"],
+                        "cta": preview_htmls["cta"],
+                    })
+                    html_changed = True
+                except ValueError as ve:
+                    reply_text += f"\n\n⚠️ Errore nella validazione del design: {ve}"
+                    _log_pipeline("warn", f"Template chat: design_spec validation failed: {ve}")
+            elif parsed and "reply" in parsed:
+                reply_text = parsed["reply"]
+                _log_pipeline("warn", "Template chat: model returned JSON without 'design_spec'")
             else:
-                new_html = raw_html
-            html_changed = True
-            # Extract components for newsletter templates
-            if template_type == "newsletter" and "components" in parsed and isinstance(parsed["components"], dict):
-                new_components = parsed["components"]
-                components_changed = True
-        elif parsed and "reply" in parsed:
-            # Got JSON but no html field — model responded conversationally
-            reply_text = parsed["reply"]
-            _log_pipeline("warn", "Template chat: model returned JSON without 'html' field")
-        else:
-            # No valid JSON — try to find raw HTML
-            cleaned = _strip_fences(raw_response)
-            html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
-            if html_match:
-                new_html = html_match.group(1)
-                reply_text = cleaned[:cleaned.find("<!DOCTYPE")].strip() or "Ecco il template aggiornato."
-                html_changed = True
-            else:
+                cleaned = _strip_fences(raw_response)
                 reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
-                _log_pipeline("warn", f"Template chat: failed to parse JSON response")
+                _log_pipeline("warn", "Template chat: failed to parse JSON response")
+        else:
+            # ── Newsletter: unchanged architecture (layout HTML + components) ──
+            if parsed and "html" in parsed:
+                reply_text = parsed.get("reply", "Template aggiornato!")
+                raw_html = parsed["html"]
+                if isinstance(raw_html, dict):
+                    new_html = json.dumps(raw_html)
+                else:
+                    new_html = raw_html
+                html_changed = True
+                if "components" in parsed and isinstance(parsed["components"], dict):
+                    new_components = parsed["components"]
+                    components_changed = True
+            elif parsed and "reply" in parsed:
+                reply_text = parsed["reply"]
+                _log_pipeline("warn", "Template chat: model returned JSON without 'html' field")
+            else:
+                cleaned = _strip_fences(raw_response)
+                html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
+                if html_match:
+                    new_html = html_match.group(1)
+                    reply_text = cleaned[:cleaned.find("<!DOCTYPE")].strip() or "Ecco il template aggiornato."
+                    html_changed = True
+                else:
+                    reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
+                    _log_pipeline("warn", "Template chat: failed to parse JSON response")
 
         # Update chat history (store text only — images referenced by URL in message)
         history_user_content = user_message
@@ -3638,7 +3723,7 @@ REGOLE:
         chat_history.append({"role": "user", "content": history_user_content})
         chat_history.append({"role": "assistant", "content": reply_text})
 
-        # Save updated template (only update html/components if actually changed)
+        # Save updated template
         db.update_user_template(
             template_id=template_id,
             user_id=user_id,
@@ -3646,19 +3731,23 @@ REGOLE:
             chat_history=chat_history,
             name=None,
             components=new_components if components_changed else None,
+            design_spec=new_design_spec if spec_changed else None,
         )
 
-        # Invalidate in-memory preview cache if HTML changed
-        if html_changed:
+        # Invalidate in-memory preview cache if design changed
+        if html_changed or spec_changed:
             stale_keys = [k for k in _preview_cache if k.startswith(template_id)]
             for k in stale_keys:
                 del _preview_cache[k]
 
-        _log_pipeline("info", f"Template chat: updated {template_id} (html_changed={html_changed})")
-        return jsonify({
-            "reply": reply_text,
-            "html_content": new_html if html_changed else None,
-        })
+        _log_pipeline("info", f"Template chat: updated {template_id} (spec_changed={spec_changed}, html_changed={html_changed})")
+
+        response_data = {"reply": reply_text}
+        if spec_changed:
+            response_data["design_spec"] = new_design_spec
+        if html_changed:
+            response_data["html_content"] = new_html
+        return jsonify(response_data)
 
     except Exception as e:
         _log_pipeline("error", f"Template chat error: {e}")
@@ -3716,10 +3805,13 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
 
     # For Instagram — render all 4 slide types as mini-gallery
     aspect_ratio = tpl.get("aspect_ratio", "1:1")
+    design_spec = tpl.get("design_spec") or None
 
     # ── Fast path: in-memory cache (keyed on content hash) ──
     import hashlib
-    content_hash = hashlib.md5(html_content.encode()).hexdigest()[:12]
+    # Cache key based on design_spec (new) or html_content (legacy)
+    cache_source = json.dumps(design_spec, sort_keys=True) if design_spec else html_content
+    content_hash = hashlib.md5(cache_source.encode()).hexdigest()[:12]
     cache_key = f"{template_id}_{content_hash}"
     cached = _preview_cache.get(cache_key)
     if cached:
@@ -3728,14 +3820,35 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
     # ── Slow path: render via Playwright ──
     try:
         import base64
-        from carousel_renderer import render_template_preview
+        brand_name = request.json.get("brand_name", "Il Tuo Brand") if request.json else "Il Tuo Brand"
+        brand_handle = request.json.get("brand_handle", "@tuobrand") if request.json else "@tuobrand"
 
-        result = render_template_preview(
-            template_html=html_content,
-            aspect_ratio=aspect_ratio,
-            brand_name=request.json.get("brand_name", "Il Tuo Brand") if request.json else "Il Tuo Brand",
-            brand_handle=request.json.get("brand_handle", "@tuobrand") if request.json else "@tuobrand",
-        )
+        if design_spec:
+            # New architecture: deterministic renderer → HTML → Playwright
+            from services.template_renderer import render_preview_slides as render_spec_preview
+            preview_htmls = render_spec_preview(
+                design_spec, aspect_ratio=aspect_ratio,
+                brand_name=brand_name, brand_handle=brand_handle,
+            )
+            # Render each HTML to PNG via Playwright
+            from carousel_renderer import render_template_preview
+            # render_template_preview expects template_html (JSON string of 4 slides)
+            template_json = json.dumps(preview_htmls)
+            result = render_template_preview(
+                template_html=template_json,
+                aspect_ratio=aspect_ratio,
+                brand_name=brand_name,
+                brand_handle=brand_handle,
+            )
+        else:
+            # Legacy path: use html_content directly
+            from carousel_renderer import render_template_preview
+            result = render_template_preview(
+                template_html=html_content,
+                aspect_ratio=aspect_ratio,
+                brand_name=brand_name,
+                brand_handle=brand_handle,
+            )
 
         gallery = {}
         for slide_type, png_bytes in result.items():
@@ -3885,6 +3998,7 @@ def clone_preset(preset_id):
         aspect_ratio=preset.get("aspect_ratio", "1:1"),
         chat_history=[],
         components=preset.get("components", {}),
+        design_spec=preset.get("design_spec"),
     )
     _log_pipeline("info", f"Cloned preset '{preset['name']}' as '{custom_name}'")
     return jsonify(tpl), 201
