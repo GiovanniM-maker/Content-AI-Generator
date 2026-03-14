@@ -3476,7 +3476,11 @@ Il design_spec ha queste sezioni:
 - Se l'utente allega immagini, il messaggio conterrà "[Immagine allegata: URL]"
 - Per usare un'immagine come logo: imposta images.logo_url = "URL_ESATTO"
 - Per usare come sfondo: imposta images.background_image_url = "URL_ESATTO"
-- Usa gli URL ESATTI senza modificarli
+- Usa gli URL ESATTI delle immagini allegate senza modificarli
+- Se l'utente chiede uno sfondo senza allegare immagine, usa un URL da Unsplash:
+  https://images.unsplash.com/photo-XXXXX?w=1080&q=80
+  Scegli una foto coerente con la richiesta (es. marmo, natura, città, texture)
+- L'immagine di sfondo appare come overlay semitrasparente dietro il contenuto
 
 ═══ FORMATO RISPOSTA (SOLO JSON, OBBLIGATORIO) ═══
 {{{{

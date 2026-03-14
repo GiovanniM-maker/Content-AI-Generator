@@ -277,6 +277,22 @@ def _google_fonts_import(spec: dict) -> str:
 # Base CSS generator (from design_spec)
 # ─────────────────────────────────────────────────────────────────────
 
+def _background_image_css(spec: dict) -> str:
+    """Generate CSS for background image overlay if present in spec."""
+    bg_url = spec.get("images", {}).get("background_image_url", "")
+    if not bg_url:
+        return ""
+    return f"""
+        body::before {{
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url('{bg_url}') center/cover no-repeat;
+            opacity: 0.25;
+            z-index: 0;
+        }}"""
+
+
 def _generate_base_css(spec: dict, width: int, height: int) -> str:
     """Generate the base CSS from a DesignSystemSpec."""
     colors = spec["colors"]
@@ -431,6 +447,7 @@ def _generate_base_css(spec: dict, width: int, height: int) -> str:
         }}
 
         {orb_css}
+        {_background_image_css(spec)}
     """
 
 
@@ -477,26 +494,12 @@ def _render_cover(spec: dict, content: dict, width: int, height: int,
     if logo_url:
         logo_html = f'<img src="{_esc(logo_url)}" style="height:50px;width:auto;margin-bottom:16px;" />'
 
-    bg_img_css = ""
-    bg_url = spec.get("images", {}).get("background_image_url", "")
-    if bg_url:
-        bg_img_css = f"""
-        body::before {{
-            content: '';
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: url('{bg_url}') center/cover no-repeat;
-            opacity: 0.3;
-            z-index: 0;
-        }}"""
-
     return f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <style>
 {_generate_base_css(spec, width, height)}
-{bg_img_css}
 .cover-content {{
     flex: 1;
     display: flex;
