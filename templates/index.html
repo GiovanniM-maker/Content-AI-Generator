@@ -2673,7 +2673,8 @@ body::after {
     <div class="topbar-tab" data-tab="crea" onclick="showTab('crea')">
       <span>✨</span> Crea <span id="crea-badge" class="crea-tab-badge" style="display:none;">0</span>
     </div>
-    <div class="topbar-tab" data-tab="pianifica" onclick="showTab('pianifica')">
+    <!-- BETA: Pianifica tab disabled — scheduling not in beta scope -->
+    <div class="topbar-tab" data-tab="pianifica" onclick="showTab('pianifica')" style="display:none;">
       <span>📅</span> Pianifica
     </div>
     <div class="topbar-tab" data-tab="libreria" onclick="showTab('libreria')">
@@ -2812,8 +2813,9 @@ body::after {
       <div class="crea-input-wrapper">
         <textarea id="crea-chat-input" class="crea-chat-box" placeholder="Scrivi qui cosa vuoi creare...&#10;&#10;Es: &quot;Un post LinkedIn sull'impatto dell'AI nel marketing&quot;&#10;Es: &quot;Una newsletter sulle ultime novità di OpenAI&quot;"></textarea>
         <div class="crea-input-footer">
-          <label class="crea-web-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2);">
-            <input type="checkbox" id="crea-web-search-toggle"> 🔍 Cerca sul web
+          <!-- BETA: Web search disabled — not in beta scope -->
+          <label class="crea-web-toggle" style="display:none;">
+            <input type="checkbox" id="crea-web-search-toggle" disabled> 🔍 Cerca sul web
           </label>
           <span style="font-size:11px;color:var(--text3);" id="crea-chat-count">0 caratteri</span>
         </div>
@@ -8390,7 +8392,7 @@ function renderPreferences() {
 }
 
 // ---- Instagram Carousel AI Image Enrichment ----
-window._igEnrichImages = false;
+window._igEnrichImages = false; // BETA: carousel image enrichment disabled
 
 function toggleIgEnrichImages(label) {
   window._igEnrichImages = !window._igEnrichImages;

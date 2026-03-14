@@ -1579,7 +1579,9 @@ def save_feeds_config():
 
 @app.route("/api/feeds/config/add", methods=["POST"])
 def add_feed():
-    body = request.json
+    body = request.json if request.is_json else None
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     category = body.get("category", "").strip()
     url = body.get("url", "").strip()
     name = body.get("name", "").strip()
@@ -1603,7 +1605,9 @@ def add_feed():
 
 @app.route("/api/feeds/config/remove", methods=["POST"])
 def remove_feed():
-    body = request.json
+    body = request.json if request.is_json else None
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     category = body.get("category", "").strip()
     url = body.get("url", "").strip()
     if not category or not url:
@@ -1620,7 +1624,9 @@ def remove_feed():
 
 @app.route("/api/feeds/config/add-category", methods=["POST"])
 def add_category():
-    body = request.json
+    body = request.json if request.is_json else None
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     category = body.get("category", "").strip()
     if not category:
         return jsonify({"error": "category name required"}), 400
@@ -1633,7 +1639,9 @@ def add_category():
 
 @app.route("/api/feeds/config/remove-category", methods=["POST"])
 def remove_category():
-    body = request.json
+    body = request.json if request.is_json else None
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     category = body.get("category", "").strip()
     if not category:
         return jsonify({"error": "category name required"}), 400
@@ -2173,6 +2181,7 @@ def _serper_search(query: str, num_results: int = 10) -> list[dict]:
 
 @app.route("/api/search", methods=["POST"])
 def web_search():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     query = body.get("query", "").strip()
     if not query:
@@ -2189,6 +2198,7 @@ def web_search():
 
 @app.route("/api/search/score", methods=["POST"])
 def search_score():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     results = body.get("results", [])
     if not results:
@@ -2369,21 +2379,31 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
             ],
             model=MODEL_SMART, temperature=0.7,
         )
-        _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
-        _update_weekly_status(format_type, "generated")
-        # Increment generation counter (for plan limits)
-        try:
-            db.increment_generation_count(user_id)
-        except Exception as e:
-            _log_pipeline("error", f"Failed to increment generation count for user {user_id}: {e}")
-        try:
-            db.create_notification(user_id, "generation", f"Contenuto {format_type} generato", article.get("title", "")[:120])
-        except Exception:
-            pass
-        return jsonify({"content": result, "format": format_type})
     except Exception as e:
         _log_pipeline("error", f"LLM generation error ({format_type}): {e}")
         return jsonify({"error": "Errore nella generazione del contenuto. Riprova tra poco."}), 500
+
+    # Content generated successfully — build response first, then do bookkeeping.
+    # Failures below must NOT destroy the generated content.
+    _log_pipeline("info", f"Generated {format_type} content", {"article": article.get("title", "")})
+    response = jsonify({"content": result, "format": format_type})
+
+    try:
+        _update_weekly_status(format_type, "generated")
+    except Exception as e:
+        _log_pipeline("error", f"Failed to update weekly status: {e}")
+
+    try:
+        db.increment_generation_count(user_id)
+    except Exception as e:
+        _log_pipeline("error", f"Failed to increment generation count for user {user_id}: {e}")
+
+    try:
+        db.create_notification(user_id, "generation", f"Contenuto {format_type} generato", article.get("title", "")[:120])
+    except Exception:
+        pass
+
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -2601,6 +2621,7 @@ def assemble_newsletter_html(markdown_text: str, layout_html: str, components: d
 
 @app.route("/api/generate-newsletter", methods=["POST"])
 def generate_newsletter():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     topics = body.get("topics", [])
     feedback = _sanitize_user_input(body.get("feedback", ""), max_length=1000)
@@ -2724,6 +2745,7 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
 
 @app.route("/api/newsletter/enrich-images", methods=["POST"])
 def newsletter_enrich_images():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     """AI Node: Analyze newsletter markdown text and generate images where appropriate.
 
     This is an intelligent intermediary node that:
@@ -2842,6 +2864,7 @@ Se il testo non beneficia di immagini, ritorna un array vuoto: []"""
 
 @app.route("/api/carousel/enrich-images", methods=["POST"])
 def carousel_enrich_images():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     """AI Node: Analyze carousel text and generate style-matching AI images.
 
     Two-phase pipeline:
@@ -2985,6 +3008,7 @@ Se nessuna slide beneficia di immagini, ritorna: []"""
 
 @app.route("/api/newsletter/html", methods=["POST"])
 def newsletter_to_html():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     body = request.json
     text = _sanitize_user_input((body.get("text") or ""), max_length=20000)
     template_id = body.get("template_id")
@@ -3092,6 +3116,7 @@ TESTO NEWSLETTER:
 
 @app.route("/api/schedule", methods=["GET"])
 def get_schedule():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     schedule = db.get_schedules(user_id)
     return jsonify(schedule)
@@ -3099,6 +3124,7 @@ def get_schedule():
 
 @app.route("/api/schedule", methods=["POST"])
 def create_schedule():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     body = request.json
     if not body or not body.get("platform") or not body.get("scheduled_at"):
@@ -3111,6 +3137,7 @@ def create_schedule():
 
 @app.route("/api/schedule/bulk", methods=["POST"])
 def create_schedule_bulk():
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     body = request.json
     items_data = body.get("items", [])
@@ -3126,6 +3153,7 @@ def create_schedule_bulk():
 
 @app.route("/api/schedule/<item_id>", methods=["DELETE"])
 def delete_schedule(item_id):
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     db.delete_schedule(user_id, item_id)
     return jsonify({"status": "ok"})
@@ -3133,6 +3161,7 @@ def delete_schedule(item_id):
 
 @app.route("/api/schedule/<item_id>/publish", methods=["POST"])
 def mark_published(item_id):
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     db.update_schedule(user_id, item_id, {
         "status": "published",
@@ -3147,6 +3176,7 @@ def mark_published(item_id):
 
 @app.route("/api/schedule/<item_id>/content")
 def get_schedule_content(item_id):
+    return jsonify({"error": "Funzionalità non disponibile in questa versione beta.", "code": "FEATURE_DISABLED"}), 403
     user_id = _get_user_id()
     item = db.get_schedule_item(user_id, item_id)
     if not item:
