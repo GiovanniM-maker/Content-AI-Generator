@@ -871,10 +871,10 @@ def render_preview_slides(
     Returns: {"cover": "<html>...", "content": "<html>...", "list": "<html>...", "cta": "<html>..."}
     """
     example_content = {
-        "cover": {"title": "5 Strategie di Marketing AI per il 2026", "subtitle": "Guida pratica per professionisti"},
-        "content": {"header": "Conosci il tuo pubblico", "body": "L'**analisi dei dati** è fondamentale per creare contenuti efficaci.\n\nIdentifica i bisogni, le sfide e gli obiettivi del tuo target.\n\nUsa strumenti AI per segmentare e personalizzare."},
-        "list": {"header": "Strumenti essenziali", "items": ["Google Analytics 4", "ChatGPT / Claude", "Canva AI", "Buffer / Hootsuite", "Notion AI"]},
-        "cta": {"text": "Ti è stato utile questo contenuto?\nSalvalo per dopo e condividilo!", "button": "Seguimi per altri tips"},
+        "cover": {"title": "Strategia di Marketing", "subtitle": "5 idee per crescere online"},
+        "content": {"header": "Perché funziona", "body": "Contenuti chiari e visivi migliorano\nl'engagement sui social."},
+        "list": {"header": "3 cose da fare", "items": ["Ottimizza il profilo", "Pubblica contenuti utili", "Usa CTA chiare"]},
+        "cta": {"text": "Seguici per altri contenuti", "button": "@tuobrand"},
     }
 
     result = {}
