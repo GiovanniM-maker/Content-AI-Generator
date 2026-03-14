@@ -2218,6 +2218,14 @@ body::after {
 .pers-preview-gallery-item.expanded .pers-preview-iframe-wrap.ratio-3-4 { padding-top: 133.33%; }
 .pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: var(--iframe-scale-expanded, scale(0.5)); }
 .pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; z-index: 2; }
+/* Slide tab bar for single-slide preview */
+.pers-slide-tabs { display: flex; gap: 4px; padding: 8px 12px; background: var(--surface, #f9f9f9); border-bottom: 1px solid var(--border, #e5e5e5); }
+.pers-slide-tab { padding: 6px 16px; border: 1px solid var(--border, #ddd); border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; color: var(--text-secondary, #666); }
+.pers-slide-tab:hover { border-color: var(--accent, #6c5ce7); color: var(--accent, #6c5ce7); }
+.pers-slide-tab.active { background: var(--accent, #6c5ce7); color: #fff; border-color: var(--accent, #6c5ce7); }
+/* Single-slide preview container */
+.pers-preview-single { padding: 12px; width: 100%; overflow-y: auto; }
+.pers-preview-single .pers-preview-iframe-wrap { max-width: 100%; margin: 0 auto; }
 
 /* Gallery in template-select modal */
 .tpl-select-card .pers-card-gallery { height: 100px; }
@@ -8711,6 +8719,8 @@ let _persPlan = 'free';
 let _persLimit = 1;
 let _persCount = 0;
 let _persPreviewMode = 'visual';
+let _persActiveSlide = 'cover';   // currently shown slide tab (cover/content/list/cta)
+let _persParsedTemplates = {};    // cached parsed template slides for tab switching
 let _persNavigating = false; // guard against double-click race conditions
 let _persSending = false;    // guard for sendTemplateMessage
 // Cached preview URLs: { templateId: { cover: url, content: url, ... } }
@@ -9011,6 +9021,8 @@ async function openTemplateChat(templateId) {
     _persCurrentType = tpl.template_type;
     _persCurrentRatio = tpl.aspect_ratio || '1:1';
     _persCurrentHtml = tpl.html_content || '';
+    _persActiveSlide = 'cover';
+    _persParsedTemplates = {};
 
     // Reset upload state
     removeTemplateUpload();
@@ -9414,98 +9426,95 @@ async function _doUpdateTemplatePreview() {
     return;
   }
 
-  // For IG: render all 4 slide types as client-side iframes
+  // For IG: parse template JSON and render ONE slide at a time (tabbed)
   let templates = {};
   try {
     const parsed = JSON.parse(_persCurrentHtml);
     if (parsed && typeof parsed === 'object') templates = parsed;
   } catch(e) {
-    // Do NOT duplicate raw HTML into all 4 slots — show error instead
-    if (_persCurrentHtml.includes('<!DOCTYPE') || _persCurrentHtml.includes('<html')) {
-      // Single raw HTML slide — put it in cover only
-      templates = { cover: _persCurrentHtml };
-    } else {
-      container.innerHTML = '<div class="pers-preview-empty">Formato template non riconosciuto. Riprova a inviare un messaggio in chat.</div>';
+    // Invalid JSON — show error, do NOT attempt raw HTML rendering
+    container.innerHTML = '<div class="pers-preview-empty">⚠️ Formato template non valido. Riprova a inviare un messaggio in chat.</div>';
+    return;
+  }
+
+  const types = ['cover', 'content', 'list', 'cta'];
+  const availableTypes = types.filter(t => templates[t] && templates[t].trim());
+
+  if (!availableTypes.length) {
+    container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile — template vuoto</div>';
+    return;
+  }
+
+  // Per-slide size check: reject slides > 100KB to prevent browser freeze
+  for (const t of availableTypes) {
+    if (templates[t].length > 100000) {
+      container.innerHTML = `<div class="pers-preview-empty">⚠️ Slide "${_slideTypeLabels[t]}" troppo grande (${Math.round(templates[t].length / 1000)}KB). Riprova con un design più semplice.</div>`;
       return;
     }
   }
 
-  const types = ['cover', 'content', 'list', 'cta'];
-  const hasSlides = types.some(t => templates[t] && templates[t].trim());
-
-  if (!hasSlides) {
-    container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile — template vuoto</div>';
-    return;
+  // Default to cover, or preserve previous selection if still available
+  if (!_persActiveSlide || !availableTypes.includes(_persActiveSlide)) {
+    _persActiveSlide = availableTypes[0];
   }
 
   // Determine ratio CSS class from _persCurrentRatio
   const ratioCls = _persCurrentRatio === '4:3' ? 'ratio-4-3' : _persCurrentRatio === '3:4' ? 'ratio-3-4' : '';
 
-  container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
-    ${types.map(t => templates[t] ? `
-      <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
-        <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
-        <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" loading="lazy" data-slide-type="${t}"></iframe></div>
-      </div>` : '').join('')}
-  </div>`;
+  // Build tab bar + single iframe container
+  container.innerHTML = `
+    <div class="pers-slide-tabs">
+      ${availableTypes.map(t => `<button class="pers-slide-tab${t === _persActiveSlide ? ' active' : ''}" data-slide-type="${t}" onclick="_switchPreviewSlide('${t}')">${_slideTypeLabels[t]}</button>`).join('')}
+    </div>
+    <div class="pers-preview-single ${ratioCls ? 'gallery-' + ratioCls : ''}">
+      <div class="pers-preview-iframe-wrap ${ratioCls}">
+        <iframe sandbox="allow-same-origin" id="pers-single-preview-iframe" data-slide-type="${_persActiveSlide}"></iframe>
+      </div>
+    </div>`;
 
-  // Fill placeholders with sample content and set srcdoc (staggered to avoid overwhelming the browser)
-  const iframes = container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]');
-  iframes.forEach((iframe, idx) => {
-    const st = iframe.dataset.slideType;
-    if (templates[st]) {
-      // Stagger iframe loading to prevent simultaneous rendering freeze
-      setTimeout(() => { iframe.srcdoc = _fillPreviewPlaceholders(templates[st], st); }, idx * 100);
-    }
-  });
+  // Store parsed templates for tab switching without re-parsing
+  _persParsedTemplates = templates;
 
-  // Calculate dynamic scale based on container width (delay accounts for staggered loading)
-  setTimeout(_recalcPreviewScale, 100 + iframes.length * 100);
+  // Render active slide
+  const iframe = document.getElementById('pers-single-preview-iframe');
+  if (iframe && templates[_persActiveSlide]) {
+    iframe.srcdoc = _fillPreviewPlaceholders(templates[_persActiveSlide], _persActiveSlide);
+  }
+
+  // Calculate scale using rAF (non-blocking)
+  requestAnimationFrame(_recalcPreviewScale);
 }
 
 function _recalcPreviewScale() {
-  // Dynamically compute CSS scale for iframe wrappers based on their rendered width
-  document.querySelectorAll('.pers-preview-iframe-wrap').forEach(wrap => {
-    const w = wrap.clientWidth;
-    if (!w) return;
-    const scale = w / 1080;
-    wrap.style.setProperty('--iframe-scale', `scale(${scale.toFixed(4)})`);
-    // Expanded scale: item takes full gallery width so use the gallery container width
-    const gallery = wrap.closest('.pers-preview-gallery');
-    const expandedW = gallery ? (gallery.clientWidth - 24) : w * 2; // subtract padding
-    const expandedScale = expandedW / 1080;
-    wrap.style.setProperty('--iframe-scale-expanded', `scale(${expandedScale.toFixed(4)})`);
-  });
+  // Dynamically compute CSS scale for iframe wrapper based on rendered width
+  // Uses rAF to batch reads and avoid forced synchronous reflows
+  const wrap = document.querySelector('.pers-preview-single .pers-preview-iframe-wrap');
+  if (!wrap) return;
+  const w = wrap.clientWidth;
+  if (!w) return;
+  const scale = w / 1080;
+  wrap.style.setProperty('--iframe-scale', `scale(${scale.toFixed(4)})`);
 }
 
-function _expandPreviewSlide(type, el) {
-  // Toggle: click a slide to expand it full-size, click again to go back to gallery
-  const container = document.getElementById('pers-preview-container');
-  const gallery = container.querySelector('.pers-preview-gallery');
-  if (!gallery) return;
+function _switchPreviewSlide(type) {
+  // Switch to a different slide tab — renders only ONE iframe at a time
+  if (!_persParsedTemplates[type]) return;
+  _persActiveSlide = type;
 
-  // If already expanded, collapse back
-  if (el.classList.contains('expanded')) {
-    gallery.style.gridTemplateColumns = '1fr 1fr';
-    gallery.querySelectorAll('.pers-preview-gallery-item').forEach(item => {
-      item.style.display = '';
-      item.classList.remove('expanded');
-    });
-    setTimeout(_recalcPreviewScale, 50);
-    return;
+  // Update tab active state
+  document.querySelectorAll('.pers-slide-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.slideType === type);
+  });
+
+  // Update iframe content (single iframe, no simultaneous rendering)
+  const iframe = document.getElementById('pers-single-preview-iframe');
+  if (iframe) {
+    iframe.dataset.slideType = type;
+    iframe.srcdoc = _fillPreviewPlaceholders(_persParsedTemplates[type], type);
   }
 
-  // Expand: hide others, make this one full width
-  gallery.querySelectorAll('.pers-preview-gallery-item').forEach(item => {
-    if (item === el) {
-      item.classList.add('expanded');
-      item.style.display = '';
-    } else {
-      item.style.display = 'none';
-    }
-  });
-  gallery.style.gridTemplateColumns = '1fr';
-  setTimeout(_recalcPreviewScale, 50);
+  // Recalc scale after content loads
+  requestAnimationFrame(_recalcPreviewScale);
 }
 
 function persPreviewMode(mode, btn) {

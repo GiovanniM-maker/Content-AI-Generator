@@ -4359,35 +4359,86 @@ REGOLE:
                     pass
             return None
 
+        # --- Diagnostic logging ---
+        _log_pipeline("info", f"Template chat LLM response: len={len(raw_response)}", extra={
+            "response_length": len(raw_response),
+            "template_id": template_id,
+        })
+
         parsed = _try_parse_response(raw_response)
 
+        # --- Log parse result ---
+        parse_ok = parsed is not None
+        used_fallback = False
+        _log_pipeline("info", f"Template chat parse: json_ok={parse_ok}, has_html={'html' in parsed if parsed else False}", extra={
+            "json_parse_ok": parse_ok,
+            "has_html_field": "html" in parsed if parsed else False,
+            "has_reply_field": "reply" in parsed if parsed else False,
+        })
+
+        # --- Size limit per HTML field (100KB per slide, 500KB total) ---
+        MAX_SLIDE_HTML_SIZE = 100_000  # 100KB per single slide/layout
+        MAX_TOTAL_HTML_SIZE = 500_000  # 500KB total for all slides combined
+
         if parsed and "html" in parsed:
-            reply_text = parsed.get("reply", "Template aggiornato!")
             raw_html = parsed["html"]
+
+            # Validate size limits
+            size_error = None
             if isinstance(raw_html, dict):
-                new_html = json.dumps(raw_html)
+                # Instagram: check each slide and total
+                total_size = 0
+                for slide_key, slide_html in raw_html.items():
+                    if not isinstance(slide_html, str):
+                        continue
+                    slide_size = len(slide_html)
+                    total_size += slide_size
+                    _log_pipeline("info", f"Template chat slide '{slide_key}': size={slide_size}")
+                    if slide_size > MAX_SLIDE_HTML_SIZE:
+                        size_error = f"Slide '{slide_key}' troppo grande ({slide_size // 1000}KB > {MAX_SLIDE_HTML_SIZE // 1000}KB)"
+                        break
+                if not size_error and total_size > MAX_TOTAL_HTML_SIZE:
+                    size_error = f"HTML totale troppo grande ({total_size // 1000}KB > {MAX_TOTAL_HTML_SIZE // 1000}KB)"
+            elif isinstance(raw_html, str):
+                # Newsletter: single HTML layout
+                html_size = len(raw_html)
+                _log_pipeline("info", f"Template chat newsletter HTML: size={html_size}")
+                if html_size > MAX_SLIDE_HTML_SIZE:
+                    size_error = f"HTML troppo grande ({html_size // 1000}KB > {MAX_SLIDE_HTML_SIZE // 1000}KB)"
+
+            if size_error:
+                _log_pipeline("warn", f"Template chat: size limit exceeded — {size_error}")
+                reply_text = f"⚠️ {size_error}. Riprova con un design più semplice."
             else:
-                new_html = raw_html
-            html_changed = True
-            # Extract components for newsletter templates
-            if template_type == "newsletter" and "components" in parsed and isinstance(parsed["components"], dict):
-                new_components = parsed["components"]
-                components_changed = True
+                reply_text = parsed.get("reply", "Template aggiornato!")
+                if isinstance(raw_html, dict):
+                    # Instagram: validate required slide keys
+                    expected_keys = {"cover", "content", "list", "cta"}
+                    present_keys = set(k for k, v in raw_html.items() if isinstance(v, str) and v.strip())
+                    if template_type == "instagram" and not present_keys.intersection(expected_keys):
+                        _log_pipeline("warn", f"Template chat: html dict has no valid slide keys: {list(raw_html.keys())}")
+                        reply_text = "⚠️ Il template generato non contiene slide valide (cover/content/list/cta). Riprova."
+                    else:
+                        new_html = json.dumps(raw_html)
+                        html_changed = True
+                else:
+                    new_html = raw_html
+                    html_changed = True
+
+                # Extract components for newsletter templates
+                if html_changed and template_type == "newsletter" and "components" in parsed and isinstance(parsed["components"], dict):
+                    new_components = parsed["components"]
+                    components_changed = True
+
         elif parsed and "reply" in parsed:
             # Got JSON but no html field — model responded conversationally
             reply_text = parsed["reply"]
             _log_pipeline("warn", "Template chat: model returned JSON without 'html' field")
         else:
-            # No valid JSON — try to find raw HTML
-            cleaned = _strip_fences(raw_response)
-            html_match = re.search(r'(<!DOCTYPE html>.*?</html>)', cleaned, re.DOTALL | re.IGNORECASE)
-            if html_match:
-                new_html = html_match.group(1)
-                reply_text = cleaned[:cleaned.find("<!DOCTYPE")].strip() or "Ecco il template aggiornato."
-                html_changed = True
-            else:
-                reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
-                _log_pipeline("warn", f"Template chat: failed to parse JSON response")
+            # No valid JSON — DO NOT attempt raw HTML fallback (causes garbage preview)
+            used_fallback = True
+            _log_pipeline("warn", f"Template chat: JSON parse failed completely, response_len={len(raw_response)}, first_200={raw_response[:200]!r}")
+            reply_text = "⚠️ Non sono riuscito a generare il template (risposta malformata). Riprova con istruzioni più specifiche."
 
         # Update chat history (store text only — images referenced by URL in message)
         history_user_content = user_message
