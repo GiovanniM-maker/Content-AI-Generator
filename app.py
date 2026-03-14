@@ -3284,7 +3284,17 @@ TEMPLATE_LIMITS = {"free": 1, "pro": 5, "business": 15}
 
 # In-memory preview cache for user templates (cleared on restart / HTML change)
 # Key: "{template_id}_{md5_12chars}"  Value: {"type":"gallery","slides":{...}}
+# Capped at 100 entries to prevent unbounded memory growth (base64 PNGs are large).
 _preview_cache: dict = {}
+_PREVIEW_CACHE_MAX = 100
+
+def _preview_cache_set(key: str, value: dict):
+    """Add to preview cache with LRU-style eviction when full."""
+    if len(_preview_cache) >= _PREVIEW_CACHE_MAX and key not in _preview_cache:
+        # Evict oldest entry
+        oldest = next(iter(_preview_cache))
+        del _preview_cache[oldest]
+    _preview_cache[key] = value
 
 
 def _get_user_plan() -> str:
@@ -3859,8 +3869,8 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
 
         response_data = {"type": "gallery", "slides": gallery}
 
-        # Store in memory cache
-        _preview_cache[cache_key] = response_data
+        # Store in memory cache (capped)
+        _preview_cache_set(cache_key, response_data)
 
         return jsonify(response_data)
     except Exception as e:
