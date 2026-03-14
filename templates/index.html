@@ -2194,6 +2194,16 @@ body::after {
 .pers-preview-gallery-item.expanded .pers-preview-iframe-wrap.ratio-3-4 { padding-top: 133.33%; }
 .pers-preview-gallery-item.expanded .pers-preview-iframe-wrap iframe { transform: var(--iframe-scale-expanded, scale(0.5)); }
 .pers-preview-gallery-item .gallery-type-label { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; z-index: 2; }
+/* Backend PNG preview wrappers (replace iframes for Instagram) */
+.pers-preview-loading .pers-loader-spinner { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.15); border-top-color: var(--accent, #7c5cfc); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.pers-preview-img-wrap { width: 100%; padding-top: 100%; overflow: hidden; position: relative; background: #1a1a2e; border-radius: 8px; }
+.pers-preview-img-wrap.ratio-4-3 { padding-top: 75%; }
+.pers-preview-img-wrap.ratio-3-4 { padding-top: 133.33%; }
+.pers-preview-img-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+.pers-preview-img-wrap .pers-preview-loading { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.pers-preview-gallery-item.expanded .pers-preview-img-wrap { padding-top: 100%; }
+.pers-preview-gallery-item.expanded .pers-preview-img-wrap.ratio-4-3 { padding-top: 75%; }
+.pers-preview-gallery-item.expanded .pers-preview-img-wrap.ratio-3-4 { padding-top: 133.33%; }
 
 /* Gallery in template-select modal */
 .tpl-select-card .pers-card-gallery { height: 100px; }
@@ -9023,6 +9033,8 @@ async function sendTemplateMessage() {
 
       if (data.html_content) {
         _persCurrentHtml = data.html_content;
+        // Invalidate cached preview so backend re-renders with new content
+        delete _cachedPreviewUrls[_persCurrentId];
         updateTemplatePreview();
       }
     }
@@ -9068,9 +9080,11 @@ function _fillPreviewPlaceholders(html, slideType) {
   return html;
 }
 
-// Debounce guard for updateTemplatePreview — prevents rapid-fire iframe creation
+// Debounce guard for updateTemplatePreview
 let _previewDebounceTimer = null;
 let _previewUpdateVersion = 0; // monotonic counter to cancel stale updates
+// In-flight AbortController for Instagram backend preview requests
+let _igPreviewAbort = null;
 
 async function updateTemplatePreview() {
   // Debounce: cancel any pending update and wait 300ms before rendering
@@ -9092,7 +9106,7 @@ async function updateTemplatePreview() {
     return;
   }
 
-  // For newsletter: show in iframe
+  // For newsletter: show in iframe (unchanged)
   if (_persCurrentType === 'newsletter') {
     container.innerHTML = '<iframe id="pers-preview-iframe"></iframe>';
     const iframe = document.getElementById('pers-preview-iframe');
@@ -9100,52 +9114,62 @@ async function updateTemplatePreview() {
     return;
   }
 
-  // For IG: render all 4 slide types as client-side iframes
-  let templates = {};
-  try {
-    const parsed = JSON.parse(_persCurrentHtml);
-    if (parsed && typeof parsed === 'object') templates = parsed;
-  } catch(e) {
-    templates = { cover: _persCurrentHtml, content: _persCurrentHtml, list: _persCurrentHtml, cta: _persCurrentHtml };
-  }
+  // ── Instagram: backend-only PNG gallery (no local iframe/srcdoc) ──
+  // Cancel any in-flight preview request for this template
+  if (_igPreviewAbort) { _igPreviewAbort.abort(); _igPreviewAbort = null; }
 
-  const types = ['cover', 'content', 'list', 'cta'];
-  const hasSlides = types.some(t => templates[t] && templates[t].trim());
-
-  if (!hasSlides) {
-    container.innerHTML = '<div class="pers-preview-empty">Preview non disponibile — template vuoto</div>';
-    return;
-  }
-
-  // Determine ratio CSS class from _persCurrentRatio
+  // Show loading state immediately
   const ratioCls = _persCurrentRatio === '4:3' ? 'ratio-4-3' : _persCurrentRatio === '3:4' ? 'ratio-3-4' : '';
-
+  const types = ['cover', 'content', 'list', 'cta'];
   container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
-    ${types.map(t => templates[t] ? `
-      <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
+    ${types.map(t => `
+      <div class="pers-preview-gallery-item" data-slide-type="${t}">
         <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
-        <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
-      </div>` : '').join('')}
+        <div class="pers-preview-img-wrap ${ratioCls}">
+          <div class="pers-preview-loading"><div class="pers-loader-spinner"></div></div>
+        </div>
+      </div>`).join('')}
   </div>`;
 
-  // Fill placeholders with sample content — load iframes sequentially to avoid
-  // overwhelming the browser with 4 simultaneous heavy HTML document renders
-  const iframes = container.querySelectorAll('.pers-preview-iframe-wrap iframe[data-slide-type]');
-  for (const iframe of iframes) {
-    if (version !== _previewUpdateVersion) return; // cancel if stale
-    const st = iframe.dataset.slideType;
-    if (templates[st]) {
-      iframe.srcdoc = _fillPreviewPlaceholders(templates[st], st);
-      // Wait for iframe to finish loading before starting the next one
-      await new Promise(resolve => {
-        iframe.onload = resolve;
-        setTimeout(resolve, 2000); // safety timeout — don't wait forever
-      });
-    }
-  }
+  // Fetch backend-rendered PNG gallery
+  const controller = new AbortController();
+  _igPreviewAbort = controller;
 
-  // Calculate dynamic scale based on container width
-  setTimeout(_recalcPreviewScale, 50);
+  try {
+    const res = await fetch(`/api/templates/${_persCurrentId}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
+    if (version !== _previewUpdateVersion) return; // stale
+    const data = await res.json();
+
+    if (!res.ok || !data.slides) {
+      container.innerHTML = '<div class="pers-preview-empty">Errore nella preview — riprova</div>';
+      return;
+    }
+
+    // Cache for gallery cards
+    _setCachedPreview(_persCurrentId, data.slides);
+
+    // Render PNG images into the gallery slots
+    container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
+      ${types.map(t => data.slides[t] ? `
+        <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
+          <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
+          <div class="pers-preview-img-wrap ${ratioCls}">
+            <img src="${data.slides[t]}" alt="${_slideTypeLabels[t]}" draggable="false">
+          </div>
+        </div>` : '').join('')}
+    </div>`;
+
+  } catch(e) {
+    if (e.name === 'AbortError') return; // cancelled — a newer request superseded this one
+    if (version !== _previewUpdateVersion) return;
+    container.innerHTML = '<div class="pers-preview-empty">Errore nella preview — riprova</div>';
+  } finally {
+    if (_igPreviewAbort === controller) _igPreviewAbort = null;
+  }
 }
 
 function _recalcPreviewScale() {
