@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Content Creation Dashboard — Flask backend (Supabase edition)."""
 
-import base64
 import ipaddress
 import json
 import os
@@ -87,7 +86,6 @@ MODEL_CHEAP = "google/gemini-2.0-flash-001"           # Cheapest: scoring, parsi
 MODEL_SMART = "google/gemini-3.1-pro-preview"          # Smart+affordable: generation, content ($2/M in, $12/M out)
 MODEL_FAST  = "google/gemini-2.5-flash"                # Fast+cheap: template chat, iterative HTML ($0.15/M in, $0.60/M out)
 MODEL_PREMIUM = "anthropic/claude-sonnet-4-5"          # Premium fallback only ($3/M in, $15/M out)
-MODEL_IMAGE = "black-forest-labs/flux.2-pro"           # Image generation: text→image (~$0.03/image, high quality)
 
 NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
@@ -357,86 +355,6 @@ def _llm_call(messages: list, model: str = MODEL_CHEAP, temperature: float = 0.3
         _log_pipeline("error", f"LLM API error: {err_msg}", {"model": model})
         raise RuntimeError(f"OpenRouter API error: {err_msg}")
     return data["choices"][0]["message"]["content"]
-
-
-def _generate_image(prompt: str, aspect_ratio: str = "1:1",
-                    model: str = MODEL_IMAGE) -> str | None:
-    """Generate an image via OpenRouter image generation API.
-
-    Returns base64 data URL (data:image/png;base64,...) or None on failure.
-    Uses the same OpenRouter API with modalities=["image"].
-    """
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5001",
-        "X-Title": "Content Dashboard",
-    }
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "modalities": ["image"],
-    }
-    # Add aspect ratio config if not default
-    if aspect_ratio and aspect_ratio != "1:1":
-        payload["image_config"] = {"aspect_ratio": aspect_ratio}
-
-    try:
-        resp = requests.post(
-            f"{OPENROUTER_BASE}/chat/completions",
-            headers=headers, json=payload, timeout=120,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if "error" in data:
-            _log_pipeline("error", f"Image gen error: {data['error']}")
-            return None
-        # Extract base64 image from response
-        msg = data.get("choices", [{}])[0].get("message", {})
-        images = msg.get("images", [])
-        if images:
-            return images[0].get("image_url", {}).get("url")
-        _log_pipeline("warn", "Image gen returned no images in response")
-        return None
-    except Exception as e:
-        _log_pipeline("error", f"Image generation failed: {e}")
-        return None
-
-
-def _generate_and_upload_image(prompt: str, user_id: str, template_id: str,
-                               aspect_ratio: str = "1:1",
-                               filename: str = None) -> str | None:
-    """Generate an image and upload it to Supabase Storage.
-
-    Returns the public URL of the uploaded image, or None on failure.
-    """
-    base64_url = _generate_image(prompt, aspect_ratio=aspect_ratio)
-    if not base64_url:
-        return None
-
-    try:
-        # Parse base64 data URL → raw bytes
-        # Format: data:image/png;base64,iVBORw0KGgo...
-        header, b64data = base64_url.split(",", 1)
-        img_bytes = base64.b64decode(b64data)
-        content_type = "image/png"
-        if "image/jpeg" in header:
-            content_type = "image/jpeg"
-        elif "image/webp" in header:
-            content_type = "image/webp"
-
-        ext = content_type.split("/")[1]
-        if not filename:
-            filename = f"ai_gen_{uuid.uuid4().hex[:8]}.{ext}"
-
-        public_url = db.upload_template_asset(
-            user_id, template_id, filename, img_bytes, content_type
-        )
-        _log_pipeline("info", f"AI image generated and uploaded: {filename}")
-        return public_url
-    except Exception as e:
-        _log_pipeline("error", f"Failed to upload generated image: {e}")
-        return None
 
 
 def _llm_call_validated(messages: list, model: str = MODEL_SMART,
@@ -2638,124 +2556,6 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
         return jsonify({"error": "Errore nella generazione della newsletter. Riprova tra poco."}), 500
 
 
-@app.route("/api/newsletter/enrich-images", methods=["POST"])
-def newsletter_enrich_images():
-    """AI Node: Analyze newsletter markdown text and generate images where appropriate.
-
-    This is an intelligent intermediary node that:
-    1. Reads the generated newsletter markdown text
-    2. Decides which sections benefit from images (max 3)
-    3. Generates image prompts optimized for the content
-    4. Generates images via FLUX.2 Pro
-    5. Returns the enriched markdown with ![description](url) tags inserted
-
-    Body: { "text": "markdown newsletter text", "template_id": "optional" }
-    Returns: { "text": "enriched markdown with images", "images_generated": 2 }
-    """
-    user_id = _get_user_id()
-    body = request.json or {}
-    text = body.get("text", "").strip()
-    template_id = body.get("template_id", "")
-    if not text:
-        return jsonify({"error": "Nessun testo fornito"}), 400
-
-    try:
-        # Step 1: AI decides where images should go and what they should depict
-        analysis_prompt = f"""Analizza questo testo di newsletter e decidi dove inserire immagini AI-generate per migliorare l'impatto visivo.
-
-TESTO NEWSLETTER:
-{text}
-
-REGOLE:
-- Massimo 3 immagini totali (meno è meglio se il testo è breve)
-- Scegli i punti dove un'immagine aggiunge valore (dopo il titolo, tra sezioni importanti, per illustrare un concetto)
-- Per ogni immagine, fornisci:
-  1. "after_line": il numero di riga (0-indexed) DOPO cui inserire l'immagine
-  2. "prompt": descrizione dettagliata dell'immagine da generare (in inglese, per il modello)
-  3. "alt": breve descrizione in italiano per l'alt text
-- NON inserire immagini in punti dove spezzerebbero il flusso (es. dentro una lista, in mezzo a un paragrafo)
-- Le immagini devono essere professionali, pertinenti al contenuto, senza testo
-
-Rispondi SOLO con un JSON array:
-[
-  {{"after_line": 3, "prompt": "professional modern office workspace with laptop and analytics dashboard, clean minimal style", "alt": "Workspace moderno con analytics"}},
-  ...
-]
-
-Se il testo non beneficia di immagini, ritorna un array vuoto: []"""
-
-        raw = _llm_call(
-            [{"role": "user", "content": analysis_prompt}],
-            model=MODEL_CHEAP, temperature=0.3,
-        )
-
-        # Parse the AI's image placement decisions
-        cleaned = _strip_fences(raw).strip()
-        try:
-            image_plan = json.loads(cleaned)
-        except json.JSONDecodeError:
-            first = cleaned.find("[")
-            last = cleaned.rfind("]")
-            if first != -1 and last > first:
-                image_plan = json.loads(cleaned[first:last + 1])
-            else:
-                image_plan = []
-
-        if not image_plan or not isinstance(image_plan, list):
-            return jsonify({"text": text, "images_generated": 0})
-
-        # Limit to 3 images max
-        image_plan = image_plan[:3]
-
-        # Step 2: Generate all images
-        lines = text.split("\n")
-        generated_images = []
-
-        for plan in image_plan:
-            prompt = plan.get("prompt", "")
-            alt = plan.get("alt", "Immagine")
-            after_line = plan.get("after_line", 0)
-
-            if not prompt:
-                continue
-
-            # Use a generic template_id for non-template newsletters
-            storage_tpl_id = template_id if template_id else f"nl_{uuid.uuid4().hex[:8]}"
-
-            url = _generate_and_upload_image(
-                prompt=f"Professional, high-quality image: {prompt}. Clean modern style, no text or watermarks.",
-                user_id=user_id,
-                template_id=storage_tpl_id,
-                aspect_ratio="16:9",  # Landscape for newsletter
-            )
-
-            if url:
-                generated_images.append({
-                    "after_line": min(after_line, len(lines) - 1),
-                    "markdown": f"\n![{alt}]({url})\n",
-                })
-
-        # Step 3: Insert images into the text (from bottom to top to preserve line numbers)
-        if generated_images:
-            generated_images.sort(key=lambda x: x["after_line"], reverse=True)
-            for img in generated_images:
-                insert_pos = img["after_line"] + 1
-                lines.insert(insert_pos, img["markdown"])
-
-        enriched_text = "\n".join(lines)
-        _log_pipeline("info", f"Newsletter enriched with {len(generated_images)} AI images")
-
-        return jsonify({
-            "text": enriched_text,
-            "images_generated": len(generated_images),
-        })
-
-    except Exception as e:
-        _log_pipeline("error", f"Newsletter image enrichment error: {e}")
-        # Non-fatal: return original text without images
-        return jsonify({"text": text, "images_generated": 0})
-
-
 @app.route("/api/newsletter/html", methods=["POST"])
 def newsletter_to_html():
     body = request.json
@@ -3603,13 +3403,12 @@ Se devi inserire icone (cuore, segnalibro, freccia, stella, ecc.), usa SVG inlin
 - NON usare icon font (FontAwesome, Material Icons) — non sono disponibili
 
 ═══ IMMAGINI E LOGO ═══
-L'utente può allegare fino a 5 immagini per messaggio, oppure può chiedere di GENERARE immagini con AI:
-- Le immagini (allegate o generate) vengono caricate su Supabase Storage — URL nel formato: https://fepljzntmbtcucbymtgq.supabase.co/storage/v1/object/public/template-assets/...
-- GUARDA il messaggio utente: se c'è scritto "[Immagine allegata: URL]" o "[Immagine AI generata: URL — Descrizione: ...]", quell'URL è l'immagine
-- Per inserire un'immagine: <img src="QUELL_URL_ESATTO" style="width: 100%; height: auto; ..."> — usa l'URL ESATTO, non modificarlo
+L'utente può allegare fino a 5 immagini per messaggio:
+- Le immagini vengono caricate su Supabase Storage — URL nel formato: https://fepljzntmbtcucbymtgq.supabase.co/storage/v1/object/public/template-assets/...
+- GUARDA il messaggio utente: se c'è scritto "[Immagine allegata: URL]", quell'URL è l'immagine caricata
+- Per inserire il logo: <img src="QUELL_URL_ESATTO" style="height: 50px; width: auto;"> — usa l'URL ESATTO, non modificarlo
 - Se l'utente allega più immagini, potrebbe volerle usare per cose diverse (logo, sfondo, icone) — chiedi o deduci dal contesto
 - Se l'utente dice "metti il logo", cerca nei messaggi precedenti l'URL dell'immagine allegata e usalo
-- Quando inserisci immagini, cura la UX: dimensioni proporzionate, border-radius, ombra, margini appropriati
 
 ═══ CONSIGLI DI DESIGN ═══
 - Font grandi: titoli almeno 60-90px, body almeno 32-40px per {w}x{h}
@@ -3676,12 +3475,11 @@ Chiavi supportate:
 - "img" — immagini inline
 
 ═══ IMMAGINI E LOGO ═══
-- L'utente può allegare fino a 5 immagini per messaggio, oppure chiedere di GENERARE immagini con AI
-- Se l'utente allega/genera immagini, il messaggio conterrà "[Immagine allegata: URL]" o "[Immagine AI generata: URL — Descrizione: ...]"
+- L'utente può allegare fino a 5 immagini per messaggio
+- Se l'utente allega immagini, il messaggio conterrà "[Immagine allegata: URL]" per ciascuna
 - Usa quegli URL ESATTI nei tag <img src="URL"> — non modificarli
 - Per logo nel layout: <img src="URL" style="height:40px;width:auto;">
 - Se più immagini, deduci dal contesto quale usare per cosa (logo, banner, sfondo, ecc.)
-- Quando inserisci immagini nel layout, cura la UX email: max-width:100%, alt text, margini, border-radius se appropriato
 
 ═══ FORMATO RISPOSTA (SOLO JSON, OBBLIGATORIO) ═══
 {
@@ -4056,48 +3854,6 @@ def template_upload_asset(template_id):
     except Exception as e:
         _log_pipeline("error", f"Template asset upload error: {e}")
         return jsonify({"error": "Errore nell'upload. Riprova."}), 500
-
-
-@app.route("/api/templates/<template_id>/generate-image", methods=["POST"])
-def template_generate_image(template_id):
-    """Generate an AI image from a text prompt and upload it to Storage.
-
-    Body: { "prompt": "description of the image", "aspect_ratio": "16:9" }
-    Returns: { "url": "https://...", "description": "..." }
-    """
-    user_id = _get_user_id()
-    tpl = db.get_user_template_by_id(user_id, template_id)
-    if not tpl:
-        return jsonify({"error": "Template non trovato"}), 404
-
-    body = request.json or {}
-    prompt = body.get("prompt", "").strip()
-    if not prompt:
-        return jsonify({"error": "Prompt immagine mancante"}), 400
-
-    # Use the template's aspect ratio by default for IG, 16:9 for NL
-    tpl_type = tpl.get("template_type", "instagram")
-    default_ratio = tpl.get("aspect_ratio", "1:1") if tpl_type == "instagram" else "16:9"
-    aspect_ratio = body.get("aspect_ratio", default_ratio)
-
-    # Enhance the prompt for better results
-    enhanced_prompt = f"Professional, high-quality image: {prompt}. Clean, modern style suitable for {'social media carousel' if tpl_type == 'instagram' else 'email newsletter'}. No text or watermarks."
-
-    try:
-        url = _generate_and_upload_image(
-            prompt=enhanced_prompt,
-            user_id=user_id,
-            template_id=template_id,
-            aspect_ratio=aspect_ratio,
-        )
-        if not url:
-            return jsonify({"error": "Generazione immagine fallita. Riprova."}), 500
-
-        _log_pipeline("info", f"AI image generated for template {template_id}: {prompt[:50]}")
-        return jsonify({"url": url, "description": prompt})
-    except Exception as e:
-        _log_pipeline("error", f"Image generation endpoint error: {e}")
-        return jsonify({"error": "Errore nella generazione immagine."}), 500
 
 
 @app.route("/api/templates/clone/<preset_id>", methods=["POST"])
