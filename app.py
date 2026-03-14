@@ -3831,21 +3831,29 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
         return jsonify(cached)
 
     # ── Slow path: render via Playwright ──
-    try:
-        import base64
-        brand_name = request.json.get("brand_name", "Il Tuo Brand") if request.json else "Il Tuo Brand"
-        brand_handle = request.json.get("brand_handle", "@tuobrand") if request.json else "@tuobrand"
+    import base64, traceback
+    brand_name = request.json.get("brand_name", "Il Tuo Brand") if request.json else "Il Tuo Brand"
+    brand_handle = request.json.get("brand_handle", "@tuobrand") if request.json else "@tuobrand"
 
-        if design_spec:
-            # New architecture: deterministic renderer → HTML → Playwright
+    # Step 1: generate preview HTML from design_spec (deterministic, no Playwright)
+    preview_htmls = None
+    if design_spec:
+        try:
             from services.template_renderer import render_preview_slides as render_spec_preview
             preview_htmls = render_spec_preview(
                 design_spec, aspect_ratio=aspect_ratio,
                 brand_name=brand_name, brand_handle=brand_handle,
             )
-            # Render each HTML to PNG via Playwright
-            from carousel_renderer import render_template_preview
-            # render_template_preview expects template_html (JSON string of 4 slides)
+        except Exception as e:
+            _log_pipeline("error", f"Template preview HTML generation failed for {template_id}: {e}\n{traceback.format_exc()}")
+            return jsonify({"error": "preview_render_failed", "message": f"Generazione HTML fallita: {e}"}), 500
+
+    # Step 2: try Playwright PNG rendering
+    try:
+        from carousel_renderer import render_template_preview
+
+        if preview_htmls:
+            # New architecture: deterministic renderer → HTML → Playwright
             template_json = json.dumps(preview_htmls)
             result = render_template_preview(
                 template_html=template_json,
@@ -3855,7 +3863,6 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
             )
         else:
             # Legacy path: use html_content directly
-            from carousel_renderer import render_template_preview
             result = render_template_preview(
                 template_html=html_content,
                 aspect_ratio=aspect_ratio,
@@ -3873,9 +3880,23 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
         _preview_cache_set(cache_key, response_data)
 
         return jsonify(response_data)
+
     except Exception as e:
-        _log_pipeline("error", f"Template preview render error: {e}")
-        return jsonify({"error": "Errore nel rendering della preview. Riprova."}), 500
+        _log_pipeline("error", f"Template preview Playwright render failed for {template_id} "
+                      f"(type={template_type}, has_spec={design_spec is not None}, "
+                      f"html_len={len(html_content)}): {e}\n{traceback.format_exc()}")
+
+        # ── Fallback: return HTML slides directly (no PNG) ──
+        # The frontend can render these in iframes as a degraded preview.
+        if preview_htmls:
+            _log_pipeline("info", f"Template preview {template_id}: falling back to HTML slides (Playwright unavailable)")
+            return jsonify({"type": "html_slides", "slides": preview_htmls})
+
+        # Legacy templates: return raw html_content as single iframe
+        if html_content.strip():
+            return jsonify({"type": "html", "html": html_content})
+
+        return jsonify({"error": "preview_render_failed", "message": "Playwright non disponibile e nessun fallback HTML"}), 500
 
 
 @app.route("/api/templates/preset/<preset_id>/preview", methods=["GET"])

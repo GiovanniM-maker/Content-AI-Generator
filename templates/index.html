@@ -9144,24 +9144,48 @@ async function updateTemplatePreview() {
     if (version !== _previewUpdateVersion) return; // stale
     const data = await res.json();
 
-    if (!res.ok || !data.slides) {
-      container.innerHTML = '<div class="pers-preview-empty">Errore nella preview — riprova</div>';
+    if (!res.ok || (!data.slides && data.type !== 'html_slides')) {
+      const msg = data.message || 'Errore nella preview — riprova';
+      container.innerHTML = `<div class="pers-preview-empty">${esc(msg)}</div>`;
       return;
     }
 
-    // Cache for gallery cards
-    _setCachedPreview(_persCurrentId, data.slides);
+    // Handle two response types:
+    // 1. "gallery" — base64 PNG images (normal path)
+    // 2. "html_slides" — raw HTML strings (fallback when Playwright unavailable)
+    if (data.type === 'html_slides' && data.slides) {
+      // Fallback: render HTML slides in iframes (degraded but functional)
+      container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
+        ${types.map(t => data.slides[t] ? `
+          <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
+            <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
+            <div class="pers-preview-iframe-wrap ${ratioCls}"><iframe sandbox="allow-same-origin" data-slide-type="${t}"></iframe></div>
+          </div>` : '').join('')}
+      </div>`;
+      container.querySelectorAll('iframe[data-slide-type]').forEach(iframe => {
+        const st = iframe.dataset.slideType;
+        if (data.slides[st]) iframe.srcdoc = data.slides[st];
+      });
+      setTimeout(_recalcPreviewScale, 100);
+      return;
+    }
 
-    // Render PNG images into the gallery slots
-    container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
-      ${types.map(t => data.slides[t] ? `
-        <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
-          <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
-          <div class="pers-preview-img-wrap ${ratioCls}">
-            <img src="${data.slides[t]}" alt="${_slideTypeLabels[t]}" draggable="false">
-          </div>
-        </div>` : '').join('')}
-    </div>`;
+    // Normal path: PNG gallery
+    if (data.slides) {
+      // Cache for gallery cards
+      _setCachedPreview(_persCurrentId, data.slides);
+
+      // Render PNG images into the gallery slots
+      container.innerHTML = `<div class="pers-preview-gallery ${ratioCls ? 'gallery-' + ratioCls : ''}">
+        ${types.map(t => data.slides[t] ? `
+          <div class="pers-preview-gallery-item" data-slide-type="${t}" onclick="_expandPreviewSlide('${t}', this)">
+            <span class="gallery-type-label">${_slideTypeLabels[t]}</span>
+            <div class="pers-preview-img-wrap ${ratioCls}">
+              <img src="${data.slides[t]}" alt="${_slideTypeLabels[t]}" draggable="false">
+            </div>
+          </div>` : '').join('')}
+      </div>`;
+    }
 
   } catch(e) {
     if (e.name === 'AbortError') return; // cancelled — a newer request superseded this one
