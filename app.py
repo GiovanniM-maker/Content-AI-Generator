@@ -3832,8 +3832,9 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
 
     # ── Slow path: render via Playwright ──
     import base64, traceback
-    brand_name = request.json.get("brand_name", "Il Tuo Brand") if request.json else "Il Tuo Brand"
-    brand_handle = request.json.get("brand_handle", "@tuobrand") if request.json else "@tuobrand"
+    body = request.get_json(silent=True) or {}
+    brand_name = body.get("brand_name", "Il Tuo Brand")
+    brand_handle = body.get("brand_handle", "@tuobrand")
 
     # Step 1: generate preview HTML from design_spec (deterministic, no Playwright)
     preview_htmls = None
