@@ -391,7 +391,76 @@
 
 ---
 
-## 9. RIEPILOGO STATISTICO
+## 9. PROBLEMI FRONTEND (templates/index.html — 9,719 righe)
+
+### 9.1 Memory leak — setInterval mai pulito al logout
+- **File:** `templates/index.html:3673`
+- **Codice:** `_notifPollTimer = setInterval(fetchNotifications, 60000);`
+- **Problema:** Il timer di polling notifiche (ogni 60s) non viene mai cancellato con `clearInterval` al logout o cambio pagina. Continua a fare richieste API anche dopo il logout.
+- **Severita:** MEDIA
+- **Fix suggerito:** Aggiungere `clearInterval(_notifPollTimer)` nella funzione di logout.
+
+### 9.2 Memory leak — Event listener accumulati senza removeEventListener
+- **File:** `templates/index.html:4675, 6281, 8634`
+- **Problema:** Event listener aggiunti con `addEventListener` senza corrispondente `removeEventListener`. Se la funzione viene chiamata piu' volte (es. re-render), i listener si accumulano e gli handler vengono eseguiti multiple volte.
+- **Severita:** MEDIA
+- **Fix suggerito:** Salvare il riferimento al listener e rimuoverlo prima di aggiungerne uno nuovo.
+
+### 9.3 JSON.parse senza try-catch nel frontend
+- **File:** `templates/index.html:3178, 5010, 5178`
+- **Codice:** `const article = JSON.parse(decodeURIComponent(atob(encoded)));` (senza try/catch)
+- **Problema:** Se il JSON e' malformato o il base64 corrotto, l'intera funzione crasha senza gestione dell'errore.
+- **Severita:** MEDIA-ALTA (crash frontend)
+- **Fix suggerito:** Wrappare in try-catch con fallback o messaggio d'errore.
+
+### 9.4 15+ catch block vuoti — errori silenziati
+- **File:** `templates/index.html:3320, 4653, 7232, 8191, 8581`
+- **Codice:** `} catch(e) {}` (nessun logging, nessun feedback utente)
+- **Problema:** Errori di rete, fallimenti API e errori di rendering vengono completamente ignorati. L'utente non sa che qualcosa e' andato storto.
+- **Severita:** MEDIA
+- **Fix suggerito:** Almeno `console.error(e)` o meglio un toast di errore.
+
+### 9.5 innerHTML usato per append — performance e DOM reflow
+- **File:** `templates/index.html:5022, 5028, 5033, 5104, 6391` (20+ punti)
+- **Codice:** `log.innerHTML += '<span class="log-done">...</span>';`
+- **Problema:** Ogni `innerHTML +=` ricostruisce l'intero albero DOM del contenitore, causando reflow completi. Con log lunghi, degrada le performance significativamente.
+- **Severita:** BASSA-MEDIA (performance)
+- **Fix suggerito:** Usare `createElement` + `appendChild` o `insertAdjacentHTML`.
+
+### 9.6 Nessun timeout sulle chiamate fetch
+- **File:** `templates/index.html:4299-4378` (initAuth) e altri
+- **Problema:** Le chiamate `fetch()` non hanno timeout configurato. Se il server non risponde, la richiesta resta appesa indefinitamente.
+- **Severita:** MEDIA
+- **Fix suggerito:** Usare `AbortController` con `setTimeout` per tutte le fetch critiche.
+
+### 9.7 Race condition nella generazione contenuti
+- **File:** `templates/index.html:5284-5351` (generateAll)
+- **Problema:** `selectedArticles` potrebbe cambiare durante l'esecuzione di `Promise.all(promises)` se l'utente interagisce con la UI. Gli indici degli articoli non sarebbero piu' corretti.
+- **Severita:** BASSA-MEDIA
+- **Fix suggerito:** Fare una copia di `selectedArticles` prima di lanciare le promesse.
+
+### 9.8 Messaggi di errore inconsistenti
+- **File:** `templates/index.html:4479, 4483, 4502` e altri
+- **Problema:** Gli errori vengono mostrati in modi diversi: a volte `alert()`, a volte `toast()`, a volte `showToast('...', 'error')`. L'esperienza utente e' incoerente.
+- **Severita:** BASSA
+- **Fix suggerito:** Standardizzare su un singolo metodo di notifica (es. `showToast`).
+
+### 9.9 Nessuna validazione email nel form di login
+- **File:** `templates/index.html:3691-3701` (doLogin)
+- **Problema:** Il form di login controlla solo che email e password non siano vuoti, ma non valida il formato dell'email. Email invalide vengono inviate al backend inutilmente.
+- **Severita:** BASSA
+- **Fix suggerito:** Aggiungere regex validation sull'email lato client.
+
+### 9.10 querySelector senza null check
+- **File:** `templates/index.html:4281` e molti altri punti
+- **Codice:** `document.getElementById('gen-status').textContent = label;`
+- **Problema:** Se l'elemento non esiste nel DOM, `.textContent` causa un errore TypeError. In diversi punti del codice manca il null check.
+- **Severita:** BASSA-MEDIA
+- **Fix suggerito:** `const el = document.getElementById('gen-status'); if (el) el.textContent = label;`
+
+---
+
+## 10. RIEPILOGO STATISTICO FINALE
 
 | Categoria | Conteggio |
 |-----------|-----------|
@@ -402,28 +471,29 @@
 | Problemi di performance | **4** |
 | Problemi di configurazione | **5** |
 | Dead code / code smells | **4** |
-| **TOTALE PROBLEMI** | **48** |
+| Problemi frontend (JS/HTML) | **10** |
+| **TOTALE PROBLEMI** | **58** |
 
 ### Distribuzione per severita'
 
 ```
-CRITICA  ██████████████████████████  9  (19%)
-ALTA     ████████████████████████    8  (17%)
-MEDIA    ████████████████████████████████████  12 (25%)
-BASSA    ██████████████████████████████████████████████  19 (39%)
+CRITICA  ██████████████████████████  9   (16%)
+ALTA     ████████████████████████    8   (14%)
+MEDIA    ████████████████████████████████████████████████  20  (34%)
+BASSA    ██████████████████████████████████████████████████  21  (36%)
 ```
 
 ### Top 10 priorita' di fix suggerite
 
-1. **Aggiungere bounds checking su `result.data[0]`** — 30 min, previene crash in 11+ punti
+1. **Aggiungere bounds checking su `result.data[0]`** — 30 min, previene crash in 11+ punti (backend + frontend)
 2. **Spostare ADMIN_EMAIL in env var** — 5 min, elimina rischio impersonation
 3. **Rimuovere fallback non-atomico nel contatore generazioni** — 15 min, previene abuso limiti piano
 4. **Validare webhook Stripe in tutti gli ambienti** — 10 min, previene upgrade piano fraudolento
 5. **Sanitizzare URL nel newsletter formatter** — 10 min, previene XSS
-6. **Aggiungere validazione UUID per template_id nei path** — 10 min, previene path traversal
-7. **Aggiungere validazione MIME type su file upload** — 20 min, previene upload file malevoli
-8. **Completare HTML escaping con apostrofo** — 2 min, previene XSS via attributi
-9. **Fix race condition in `_fetch_state`** — 15 min, previene data corruption
+6. **Aggiungere try-catch ai JSON.parse nel frontend** — 10 min, previene crash frontend
+7. **Aggiungere validazione UUID per template_id nei path** — 10 min, previene path traversal
+8. **Aggiungere validazione MIME type su file upload** — 20 min, previene upload file malevoli
+9. **Fix memory leak: clearInterval al logout** — 5 min, previene polling infinito
 10. **Aggiungere bounds checking su risposte API OpenRouter** — 20 min, previene crash
 
 ---
