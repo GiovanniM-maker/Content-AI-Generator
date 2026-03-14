@@ -60,6 +60,9 @@ DEFAULT_DESIGN_SPEC: dict[str, Any] = {
     "images": {
         "logo_url": "",
         "background_image_url": "",
+        "slide_images": {
+            "cover": "",
+        },
     },
 }
 
@@ -197,6 +200,15 @@ def validate_design_spec(spec: dict) -> dict[str, Any]:
                 if url == "" or (url.startswith("https://") and len(url) <= 2048):
                     clean["images"][key] = url
 
+        # Slide-specific images (MVP: cover only)
+        if "slide_images" in spec["images"] and isinstance(spec["images"]["slide_images"], dict):
+            src = spec["images"]["slide_images"]
+            for key in ("cover",):
+                if key in src and isinstance(src[key], str):
+                    url = src[key].strip()
+                    if url == "" or (url.startswith("https://") and len(url) <= 2048):
+                        clean["images"]["slide_images"][key] = url
+
     return clean
 
 
@@ -276,6 +288,22 @@ def _google_fonts_import(spec: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────
 # Base CSS generator (from design_spec)
 # ─────────────────────────────────────────────────────────────────────
+
+def _background_image_css(spec: dict) -> str:
+    """Generate CSS for background image overlay if present in spec."""
+    bg_url = spec.get("images", {}).get("background_image_url", "")
+    if not bg_url:
+        return ""
+    return f"""
+        body::before {{
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url('{bg_url}') center/cover no-repeat;
+            opacity: 0.25;
+            z-index: 0;
+        }}"""
+
 
 def _generate_base_css(spec: dict, width: int, height: int) -> str:
     """Generate the base CSS from a DesignSystemSpec."""
@@ -431,6 +459,7 @@ def _generate_base_css(spec: dict, width: int, height: int) -> str:
         }}
 
         {orb_css}
+        {_background_image_css(spec)}
     """
 
 
@@ -477,18 +506,28 @@ def _render_cover(spec: dict, content: dict, width: int, height: int,
     if logo_url:
         logo_html = f'<img src="{_esc(logo_url)}" style="height:50px;width:auto;margin-bottom:16px;" />'
 
-    bg_img_css = ""
-    bg_url = spec.get("images", {}).get("background_image_url", "")
-    if bg_url:
-        bg_img_css = f"""
-        body::before {{
-            content: '';
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: url('{bg_url}') center/cover no-repeat;
-            opacity: 0.3;
-            z-index: 0;
-        }}"""
+    # Cover-specific image (higher prominence than global background)
+    cover_image_css = ""
+    cover_img_url = spec.get("images", {}).get("slide_images", {}).get("cover", "")
+    if cover_img_url:
+        cover_image_css = f"""
+.cover-image {{
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: url('{cover_img_url}') center/cover no-repeat;
+    opacity: 0.35;
+    z-index: 0;
+}}
+.cover-image-gradient {{
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%);
+    z-index: 0;
+}}"""
+
+    cover_image_html = ""
+    if cover_img_url:
+        cover_image_html = '<div class="cover-image"></div><div class="cover-image-gradient"></div>'
 
     return f"""<!DOCTYPE html>
 <html>
@@ -496,7 +535,6 @@ def _render_cover(spec: dict, content: dict, width: int, height: int,
 <meta charset="UTF-8">
 <style>
 {_generate_base_css(spec, width, height)}
-{bg_img_css}
 .cover-content {{
     flex: 1;
     display: flex;
@@ -511,9 +549,11 @@ def _render_cover(spec: dict, content: dict, width: int, height: int,
     color: {colors["secondary_text"]};
     margin-top: 16px;
 }}
+{cover_image_css}
 </style>
 </head>
 <body>
+{cover_image_html}
 {orbs_html}
 {counter_html}
 <div class="slide-container">
@@ -1033,7 +1073,7 @@ PRESET_SPECS: dict[str, dict] = {
             "list": "header_bullets",
             "cta": "cta_centered",
         },
-        "images": {"logo_url": "", "background_image_url": ""},
+        "images": {"logo_url": "", "background_image_url": "", "slide_images": {"cover": ""}},
     },
     "warm_gradient": {
         "theme_name": "Warm Gradient",
@@ -1070,7 +1110,7 @@ PRESET_SPECS: dict[str, dict] = {
             "list": "header_bullets",
             "cta": "cta_centered",
         },
-        "images": {"logo_url": "", "background_image_url": ""},
+        "images": {"logo_url": "", "background_image_url": "", "slide_images": {"cover": ""}},
     },
     "teal_fresh": {
         "theme_name": "Teal Fresh",
@@ -1107,7 +1147,7 @@ PRESET_SPECS: dict[str, dict] = {
             "list": "header_bullets",
             "cta": "cta_centered",
         },
-        "images": {"logo_url": "", "background_image_url": ""},
+        "images": {"logo_url": "", "background_image_url": "", "slide_images": {"cover": ""}},
     },
     "clean_light": {
         "theme_name": "Clean Light",
@@ -1144,7 +1184,7 @@ PRESET_SPECS: dict[str, dict] = {
             "list": "header_bullets",
             "cta": "cta_centered",
         },
-        "images": {"logo_url": "", "background_image_url": ""},
+        "images": {"logo_url": "", "background_image_url": "", "slide_images": {"cover": ""}},
     },
     "bold_corporate": {
         "theme_name": "Bold Corporate",
@@ -1181,6 +1221,6 @@ PRESET_SPECS: dict[str, dict] = {
             "list": "header_bullets",
             "cta": "cta_centered",
         },
-        "images": {"logo_url": "", "background_image_url": ""},
+        "images": {"logo_url": "", "background_image_url": "", "slide_images": {"cover": ""}},
     },
 }

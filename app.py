@@ -3382,6 +3382,94 @@ def delete_template(template_id):
     return jsonify({"status": "ok"})
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Image intent detection for template chat (Phase 1C MVP)
+# ─────────────────────────────────────────────────────────────────────
+
+# Keywords that signal the user wants an AI-generated image
+_IMAGE_INTENT_KEYWORDS = [
+    "immagine", "sfondo", "background", "texture", "visual",
+    "hero image", "foto", "copertina visiva", "genera un'immagine",
+    "genera immagine", "aggiungi immagine", "aggiungi un'immagine",
+    "aggiungi sfondo", "aggiungi uno sfondo", "metti sfondo",
+    "crea immagine", "crea un'immagine", "genera sfondo",
+    "aggiungi texture", "usa texture", "metti texture",
+    "aggiungi visual", "usa un visual", "metti un visual",
+    "aggiungi foto", "usa una foto", "metti una foto",
+    "genera foto", "genera una foto",
+    "marmo", "marble", "legno", "wood", "cemento", "concrete",
+    "abstract", "astratto", "gradient", "pattern",
+]
+
+# Keywords that signal the image should go on the cover specifically
+_COVER_TARGET_KEYWORDS = [
+    "cover", "copertina", "hero", "prima slide", "slide 1",
+    "slide di copertina", "hero image", "immagine di copertina",
+    "immagine cover", "cover image",
+]
+
+
+def _detect_image_intent(message: str) -> dict | None:
+    """Detect if the user message contains explicit image generation intent.
+
+    Returns None if no intent detected, or:
+        {"target": "background"|"cover", "context": "<relevant part of message>"}
+    """
+    lower = message.lower().strip()
+
+    # Must match at least one image intent keyword
+    has_intent = any(kw in lower for kw in _IMAGE_INTENT_KEYWORDS)
+    if not has_intent:
+        return None
+
+    # Skip if user attached an image URL — they want to USE it, not generate one
+    if "[immagine allegata:" in lower or "https://" in lower:
+        return None
+
+    # Determine target
+    is_cover = any(kw in lower for kw in _COVER_TARGET_KEYWORDS)
+    target = "cover" if is_cover else "background"
+
+    return {"target": target, "context": message.strip()}
+
+
+def _build_image_prompt(user_message: str, design_spec: dict, target: str) -> str:
+    """Build a concise image generation prompt from user request + design context.
+
+    Keeps it short and reliable for Flux Schnell.
+    """
+    # Extract the user's descriptive words (the message itself is the best signal)
+    base = user_message.strip()
+
+    # Add style hints from the design spec
+    theme = design_spec.get("theme_name", "")
+    bg_color = design_spec.get("colors", {}).get("background", "")
+
+    # Determine if dark or light theme
+    is_dark = any(c in bg_color.lower() for c in ("#0", "#1", "#2", "rgb(0", "rgb(1", "rgb(2", "dark"))
+
+    style_hints = []
+    if is_dark:
+        style_hints.append("dark moody atmosphere")
+    else:
+        style_hints.append("clean bright atmosphere")
+
+    if target == "cover":
+        style_hints.append("hero image composition, editorial quality")
+    else:
+        style_hints.append("seamless background texture, subtle pattern")
+
+    style_hints.append("high resolution, professional photography style")
+
+    prompt = f"{base}, {', '.join(style_hints)}"
+
+    # Cap length for reliability
+    if len(prompt) > 300:
+        prompt = prompt[:300]
+
+    return prompt
+
+
 @app.route("/api/templates/<template_id>/chat", methods=["POST"])
 def template_chat(template_id):
     """Chat with the AI to iteratively build/modify a template.
@@ -3470,13 +3558,21 @@ Il design_spec ha queste sezioni:
 
 6. **images** (object):
    - logo_url: URL del logo (stringa vuota "" se non presente, DEVE essere https://)
-   - background_image_url: URL immagine sfondo (stringa vuota "" se non presente)
+   - background_image_url: URL immagine sfondo condiviso su TUTTE le slide (stringa vuota "" se non presente)
+   - slide_images (object): immagini specifiche per slide
+     - cover: URL immagine specifica per la slide di copertina (stringa vuota "" se non presente)
 
 ═══ IMMAGINI E LOGO ═══
 - Se l'utente allega immagini, il messaggio conterrà "[Immagine allegata: URL]"
 - Per usare un'immagine come logo: imposta images.logo_url = "URL_ESATTO"
-- Per usare come sfondo: imposta images.background_image_url = "URL_ESATTO"
-- Usa gli URL ESATTI senza modificarli
+- Per usare come sfondo su TUTTE le slide: imposta images.background_image_url = "URL_ESATTO"
+- Per usare come immagine solo sulla copertina: imposta images.slide_images.cover = "URL_ESATTO"
+- Usa gli URL ESATTI delle immagini allegate senza modificarli
+- Se l'utente chiede uno sfondo senza allegare immagine, usa un URL da Unsplash:
+  https://images.unsplash.com/photo-XXXXX?w=1080&q=80
+  Scegli una foto coerente con la richiesta (es. marmo, natura, città, texture)
+- L'immagine di sfondo appare come overlay semitrasparente dietro il contenuto
+- L'immagine cover appare con maggiore prominenza solo sulla slide di copertina
 
 ═══ FORMATO RISPOSTA (SOLO JSON, OBBLIGATORIO) ═══
 {{{{
@@ -3611,7 +3707,7 @@ REGOLE:
             urls = re.findall(r'\[Immagine allegata:\s*(https?://[^\]]+)\]', msg["content"])
             image_urls_in_history.extend(urls)
     if image_urls_in_history:
-        img_ctx = "IMMAGINI CARICATE DALL'UTENTE (usa questi URL per logo_url/background_image_url nel design_spec):\n"
+        img_ctx = "IMMAGINI CARICATE DALL'UTENTE (usa questi URL per logo_url/background_image_url/slide_images.cover nel design_spec):\n"
         for i, url in enumerate(image_urls_in_history, 1):
             img_ctx += f"  {i}. {url}\n"
         messages.append({"role": "system", "content": img_ctx})
@@ -3628,7 +3724,7 @@ REGOLE:
             user_content.append({"type": "text", "text": user_message})
         # Add text notes with all URLs so the model can reference them in HTML
         urls_text = "\n".join(f"  {i+1}. {url}" for i, url in enumerate(image_urls))
-        user_content.append({"type": "text", "text": f"[Immagini caricate ({len(image_urls)}):\n{urls_text}\n] — usa questi URL per logo_url o background_image_url nel design_spec"})
+        user_content.append({"type": "text", "text": f"[Immagini caricate ({len(image_urls)}):\n{urls_text}\n] — usa questi URL per logo_url, background_image_url o slide_images.cover nel design_spec"})
         # Add each image as a visual attachment for the multimodal model
         for url in image_urls:
             user_content.append({
@@ -3679,6 +3775,37 @@ REGOLE:
                 try:
                     new_design_spec = validate_design_spec(parsed["design_spec"])
                     spec_changed = True
+
+                    # ── Phase 1C: image generation if user explicitly asked ──
+                    image_intent = _detect_image_intent(user_message)
+                    if image_intent:
+                        try:
+                            from services.image_generator import generate_image
+                            img_prompt = _build_image_prompt(
+                                user_message, new_design_spec, image_intent["target"],
+                            )
+                            _log_pipeline("info",
+                                f"Template chat: generating image for {template_id}, "
+                                f"target={image_intent['target']}, prompt={img_prompt[:100]}...")
+                            img_result = generate_image(
+                                prompt=img_prompt,
+                                user_id=user_id,
+                                template_id=template_id,
+                                target=image_intent["target"],
+                            )
+                            # Inject URL into design_spec
+                            if image_intent["target"] == "cover":
+                                new_design_spec["images"]["slide_images"]["cover"] = img_result["url"]
+                            else:
+                                new_design_spec["images"]["background_image_url"] = img_result["url"]
+                            reply_text += f"\n\n🖼️ Immagine generata e applicata come {'copertina' if image_intent['target'] == 'cover' else 'sfondo'}."
+                            _log_pipeline("info",
+                                f"Template chat: image generated for {template_id} → {img_result['url']}")
+                        except Exception as img_err:
+                            _log_pipeline("error",
+                                f"Template chat: image generation failed for {template_id}: {img_err}")
+                            reply_text += "\n\n⚠️ Non sono riuscito a generare l'immagine. Il design è stato aggiornato senza immagine."
+
                     # Generate HTML deterministically from the validated spec
                     preview_htmls = render_preview_slides(
                         new_design_spec, aspect_ratio=aspect_ratio,
