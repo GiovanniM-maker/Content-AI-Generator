@@ -452,19 +452,3 @@ BEGIN
         ALTER TABLE public.preset_templates ADD COLUMN components JSONB DEFAULT '{}'::jsonb;
     END IF;
 END $$;
-
--- =====================================================
--- MIGRATION: Add style_rules JSONB column to templates
--- Stores extracted style constraints (typography limits,
--- visual style, image style, content rules) used by
--- text generation AI and image generation AI.
--- =====================================================
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_templates' AND column_name = 'style_rules') THEN
-        ALTER TABLE public.user_templates ADD COLUMN style_rules JSONB DEFAULT '{}'::jsonb;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'preset_templates' AND column_name = 'style_rules') THEN
-        ALTER TABLE public.preset_templates ADD COLUMN style_rules JSONB DEFAULT '{}'::jsonb;
-    END IF;
-END $$;

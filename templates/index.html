@@ -2126,28 +2126,6 @@ body::after {
 .pers-upload-preview span { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pers-upload-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 4px; }
 .pers-upload-remove:hover { color: #e74c3c; }
-/* Orchestrator status messages in chat */
-.pers-orchestrator-log { margin: 4px 0 8px 0; }
-.pers-orchestrator-msg { font-size: 11px; color: var(--text2); font-style: italic; padding: 2px 0; line-height: 1.5; }
-/* AI image enrichment toggles */
-.nl-enrich-toggle, .ig-enrich-toggle { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer; user-select:none; transition: all .2s; background: var(--card-bg); border: 1px solid var(--border); color: var(--text2); }
-.nl-enrich-toggle:hover, .ig-enrich-toggle:hover { border-color: var(--accent); }
-.nl-enrich-toggle.active, .ig-enrich-toggle.active { background: linear-gradient(135deg, rgba(108,92,231,0.12), rgba(0,206,209,0.12)); border-color: var(--accent); color: var(--fg); }
-.nl-enrich-toggle input, .ig-enrich-toggle input { display: none; }
-.nl-enrich-dot, .ig-enrich-dot { width:8px; height:8px; border-radius:50%; background:var(--border); transition: background .2s; }
-.nl-enrich-toggle.active .nl-enrich-dot, .ig-enrich-toggle.active .ig-enrich-dot { background: var(--accent); }
-.pers-style-rules-panel { margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); overflow: hidden; }
-.pers-style-rules-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); user-select: none; }
-.pers-style-rules-header:hover { color: var(--fg); }
-.pers-style-rules-body { padding: 10px 14px; font-size: 11px; color: var(--text2); line-height: 1.6; max-height: 300px; overflow-y: auto; }
-.pers-style-rules-body .sr-section { margin-bottom: 8px; }
-.pers-style-rules-body .sr-section-title { font-weight: 700; font-size: 11px; color: var(--fg); margin-bottom: 3px; }
-.pers-style-rules-body .sr-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid rgba(128,128,128,0.1); }
-.pers-style-rules-body .sr-label { color: var(--text2); }
-.pers-style-rules-body .sr-value { font-weight: 600; color: var(--accent); }
-.pers-style-rules-body .sr-colors { display: flex; gap: 4px; margin-top: 4px; }
-.pers-style-rules-body .sr-swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(128,128,128,0.3); }
-.pers-style-rules-actions { padding: 6px 14px 10px; }
 .pers-chat-bubble .bubble-img { max-width: 120px; border-radius: 6px; margin-top: 6px; display: block; }
 
 /* Preview */
@@ -2192,8 +2170,6 @@ body::after {
 .bubble-imgs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
 .bubble-imgs .bubble-img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); }
 .pers-chat-bubble.user .bubble-img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; }
-/* Large AI-generated image preview in bubble */
-.bubble-img-large { max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; margin-bottom: 6px; }
 
 /* Gallery preview in chat (all 4 slide types) */
 .pers-preview-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; width: 100%; height: 100%; overflow-y: auto; align-content: start; }
@@ -3200,17 +3176,6 @@ body::after {
           </div>
           <div id="pers-preview-container" class="pers-preview-container">
             <div class="pers-preview-empty">La preview apparirà qui dopo il primo messaggio</div>
-          </div>
-          <!-- Style Rules Panel (collapsible) -->
-          <div id="pers-style-rules-panel" class="pers-style-rules-panel" style="display:none;">
-            <div class="pers-style-rules-header" onclick="toggleStyleRulesPanel()">
-              <span>📐 Regole stile</span>
-              <span id="pers-style-rules-chevron" style="font-size:12px;transition:transform .2s;">▼</span>
-            </div>
-            <div id="pers-style-rules-body" class="pers-style-rules-body" style="display:none;"></div>
-            <div class="pers-style-rules-actions" style="display:none;" id="pers-style-rules-actions">
-              <button class="btn btn-sm btn-secondary" onclick="regenerateStyleRules()">🔄 Rigenera regole</button>
-            </div>
           </div>
         </div>
       </div>
@@ -5298,13 +5263,12 @@ async function generateAll() {
 
     // Instagram
     if (platforms.includes('instagram')) {
-      const igTplIdOld = (window._selectedGenTemplates || {}).instagram || '';
       selectedArticles.forEach((s, i) => {
         promises.push(
           fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'instagram', variant: 0, template_id: igTplIdOld }),
+            body: JSON.stringify({ article: s.article, opinion: s.opinion || '', format: 'instagram', variant: 0 }),
           }).then(safeJson).then(d => {
             if (d.error) throw new Error(d.error);
             currentContent['instagram_' + i] = d.content;
@@ -5352,11 +5316,10 @@ async function generateAll() {
 
     // Newsletter (sequential, needs all topics)
     if (platforms.includes('newsletter')) {
-      const nlTplIdOld = (window._selectedGenTemplates || {}).newsletter || '';
       const nlResp = await fetch('/api/generate-newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topics: selectedArticles, template_id: nlTplIdOld }),
+        body: JSON.stringify({ topics: selectedArticles }),
       }).then(safeJson);
       if (nlResp.error) throw new Error(nlResp.error);
       currentContent['newsletter'] = nlResp.content;
@@ -5471,9 +5434,6 @@ function renderGeneratedContent() {
         <div class="carousel-actions">
           <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
           <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${i})">🎨 Rigenera img</button>
-          <label class="ig-enrich-toggle ${window._igEnrichImages ? 'active' : ''}" onclick="toggleIgEnrichImages(this)" title="Genera sfondi AI per le slide del carousel">
-            <input type="checkbox" ${window._igEnrichImages ? 'checked' : ''}><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
-          </label>
         </div>
         <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
         <div class="col-actions">
@@ -5589,9 +5549,6 @@ function renderGeneratedContent() {
           <button class="btn btn-secondary btn-small" onclick="toggleFeedback(this)">Feedback ✍</button>
           <button class="btn btn-primary btn-small" onclick="copyNlHtml()">Copia HTML</button>
           <button class="btn btn-small" style="background:var(--accent);color:#fff;border:none;" onclick="openNlPreview()">👁 Anteprima completa</button>
-          <label class="nl-enrich-toggle ${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI e inseriscile nella newsletter">
-            <input type="checkbox" ${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
-          </label>
           <button class="btn btn-approve btn-small ${nlApproved ? 'approved' : ''}" onclick="approveContent('newsletter', this)">${nlApproved ? '✓ Approvato' : 'Approva'}</button>
         </div>
         <div class="feedback-row" id="fb-newsletter">
@@ -5652,31 +5609,6 @@ async function renderSingleCarouselImages(key, text, paletteIdx, artIdx) {
     // Use custom template if one was selected
     const igTplId = (window._selectedGenTemplates || {}).instagram;
     if (igTplId) payload.template_id = igTplId;
-
-    // If AI background images are enabled and we have a template, enrich first
-    if (window._igEnrichImages && igTplId) {
-      const loadEl = document.getElementById('render-loading-' + key);
-      if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>🖼️ Generando sfondi AI...</span></div>';
-      try {
-        const enrichCtrl = new AbortController();
-        const enrichTimeout = setTimeout(() => enrichCtrl.abort(), 30000); // 30s timeout
-        const enrichResp = await fetch('/api/carousel/enrich-images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, template_id: igTplId }),
-          signal: enrichCtrl.signal,
-        }).then(safeJson);
-        clearTimeout(enrichTimeout);
-        if (enrichResp.images && Object.keys(enrichResp.images).length > 0) {
-          payload.slide_images = enrichResp.images;
-          console.log('[IG enrich] AI decided:', enrichResp.count, 'images for carousel');
-        }
-      } catch (enrichErr) {
-        console.warn('[IG enrich] Image enrichment skipped:', enrichErr.name === 'AbortError' ? 'timeout' : enrichErr.message);
-      }
-      if (loadEl) loadEl.innerHTML = '<div class="rendering-overlay"><div class="spinner"></div><span>Rendering immagini...</span></div>';
-    }
-
     const resp = await fetch('/api/render-carousel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5850,18 +5782,16 @@ function regenerateSingle(format, idx) {
     const topics = (selectedArticles.length ? selectedArticles : _creaArticles).map(ss => ({
       article: ss.article || ss, opinion: ss.opinion || ''
     }));
-    const nlTplRegen = (window._selectedGenTemplates || {}).newsletter || '';
     apiCall = fetch('/api/generate-newsletter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topics, feedback, template_id: nlTplRegen }),
+      body: JSON.stringify({ topics, feedback }),
     });
   } else {
-    const igTplRegen = format === 'instagram' ? ((window._selectedGenTemplates || {}).instagram || '') : '';
     apiCall = fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ article: s.article, opinion, format, feedback, source_mode: (s.article || {}).source_mode || 'rss', custom_text: (s.article || {}).custom_text || '', template_id: igTplRegen }),
+      body: JSON.stringify({ article: s.article, opinion, format, feedback, source_mode: (s.article || {}).source_mode || 'rss', custom_text: (s.article || {}).custom_text || '' }),
     });
   }
 
@@ -5914,11 +5844,10 @@ function regenerateNewsletter() {
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '...'; }
   showColLoader(col, 'Rigenerando newsletter...');
 
-  const nlTplRegenDirect = (window._selectedGenTemplates || {}).newsletter || '';
   fetch('/api/generate-newsletter', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topics: selectedArticles, feedback, template_id: nlTplRegenDirect }),
+    body: JSON.stringify({ topics: selectedArticles, feedback }),
   })
   .then(safeJson)
   .then(data => {
@@ -7179,24 +7108,21 @@ async function _processQueue(queue, sessionId, sources, chatText, startIdx) {
       let resp;
       if (job.type === 'newsletter') {
         const topics = job.sources.map(s => ({ article: s, opinion: job.opinion }));
-        const nlTplId = (window._selectedGenTemplates || {}).newsletter || '';
         resp = await fetch('/api/generate-newsletter', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topics, template_id: nlTplId }),
+          body: JSON.stringify({ topics }),
         }).then(safeJson);
         if (!results.newsletter) results.newsletter = [];
         results.newsletter.push({ content: resp.content || resp.error || 'Errore', source: 'Newsletter' });
         currentContent['newsletter_' + (results.newsletter.length - 1)] = resp.content || '';
       } else {
-        const igTplId = (window._selectedGenTemplates || {}).instagram || '';
         const body = {
           article: job.source,
           format: job.type,
           opinion: job.opinion,
           source_mode: job.source.source_mode || 'rss',
           custom_text: job.source.custom_text || '',
-          template_id: job.type === 'instagram' ? igTplId : '',
         };
         if (job.variant > 0) body.feedback = `Crea una variante diversa (angolazione #${job.variant + 1}). Offri una prospettiva differente.`;
         resp = await fetch('/api/generate', {
@@ -7499,9 +7425,6 @@ function renderCreaResults(results) {
           <div class="carousel-actions">
             <button class="btn btn-green btn-small" onclick="downloadCarousel('${key}')">📥 Scarica</button>
             <button class="btn btn-secondary btn-small" onclick="reRenderCarousel('${key}', ${idx})">🎨 Rigenera img</button>
-            <label class="ig-enrich-toggle ${window._igEnrichImages ? 'active' : ''}" onclick="toggleIgEnrichImages(this)" title="Genera sfondi AI per le slide del carousel">
-              <input type="checkbox" ${window._igEnrichImages ? 'checked' : ''}><span class="ig-enrich-dot"></span> 🖼️ Sfondi AI
-            </label>
           </div>
           <textarea id="content-${key}" oninput="updateCount('${key}')" style="margin-top:8px;min-height:160px;">${esc(text)}</textarea>
           <div class="col-actions">
@@ -7544,9 +7467,6 @@ function renderCreaResults(results) {
             <button class="btn btn-secondary btn-small" onclick="copyNlHtmlCrea(${idx})">📋 Copia HTML</button>
             <button class="btn btn-primary btn-small" onclick="copyC('${key}')">📄 Copia testo</button>
             <button class="btn btn-secondary btn-small" onclick="toggleNlSource(${idx})">🔧 Mostra sorgente</button>
-            <label class="nl-enrich-toggle ${window._nlEnrichImages ? 'active' : ''}" onclick="toggleNlEnrichImages(this)" title="Genera immagini AI nella newsletter">
-              <input type="checkbox" ${window._nlEnrichImages ? 'checked' : ''}><span class="nl-enrich-dot"></span> 🖼️ Immagini AI
-            </label>
             <button class="btn btn-approve btn-small ${isApproved ? 'approved' : ''}" onclick="approveContent('${key}', this)">${isApproved ? '✓ Approvato' : 'Approva'}</button>
           </div>
           <div id="nl-source-wrap-${idx}" style="display:none;">
@@ -8361,67 +8281,6 @@ function renderPreferences() {
   panel.innerHTML = html;
 }
 
-// ---- Instagram Carousel AI Image Enrichment ----
-window._igEnrichImages = false;
-
-function toggleIgEnrichImages(label) {
-  window._igEnrichImages = !window._igEnrichImages;
-  document.querySelectorAll('.ig-enrich-toggle').forEach(el => {
-    el.classList.toggle('active', window._igEnrichImages);
-    const cb = el.querySelector('input[type="checkbox"]');
-    if (cb) cb.checked = window._igEnrichImages;
-  });
-  if (window._igEnrichImages) {
-    toast('🖼️ Immagini AI IG attive: le prossime immagini carousel includeranno sfondi generati');
-  }
-}
-
-// ---- Newsletter AI Image Enrichment ----
-window._nlEnrichImages = false;
-
-function toggleNlEnrichImages(label) {
-  window._nlEnrichImages = !window._nlEnrichImages;
-  document.querySelectorAll('.nl-enrich-toggle').forEach(el => {
-    el.classList.toggle('active', window._nlEnrichImages);
-    const cb = el.querySelector('input[type="checkbox"]');
-    if (cb) cb.checked = window._nlEnrichImages;
-  });
-  if (window._nlEnrichImages) {
-    toast('🖼️ Immagini AI attive: le prossime anteprime includeranno immagini generate');
-  }
-}
-
-async function _enrichNlText(text, templateId) {
-  /**
-   * Call /api/newsletter/enrich-images to add AI-generated images to newsletter text.
-   * Returns the enriched text (or original text on error/skip).
-   */
-  if (!window._nlEnrichImages || !text || !text.trim()) return text;
-  try {
-    const payload = { text };
-    if (templateId) payload.template_id = templateId;
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 30000); // 30s timeout
-    const resp = await fetch('/api/newsletter/enrich-images', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-    clearTimeout(timeout);
-    const data = await resp.json();
-    if (data.error) { console.warn('[NL enrich] error:', data.error); return text; }
-    if (data.images_generated > 0) {
-      console.log(`[NL enrich] Added ${data.images_generated} AI images`);
-      toast(`🖼️ ${data.images_generated} immagini AI generate e inserite`);
-    }
-    return data.text || text;
-  } catch (err) {
-    console.warn('[NL enrich] skipped:', err.name === 'AbortError' ? 'timeout (30s)' : err.message);
-    return text; // non-fatal: return original
-  }
-}
-
 // ---- Newsletter HTML Preview ----
 let cachedNlHtml = '';
 
@@ -8445,16 +8304,8 @@ async function openNlPreview() {
     return;
   }
   try {
+    const nlPayload = { text: ta.value };
     const nlTplId = (window._selectedGenTemplates || {}).newsletter;
-    // Optionally enrich text with AI-generated images before rendering
-    let nlText = ta.value;
-    if (window._nlEnrichImages) {
-      frame.srcdoc = `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#888;">
-        <div style="text-align:center;"><div style="width:30px;height:30px;border:3px solid #6c5ce7;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div>🖼️ Generando immagini AI...</div>
-        <style>@keyframes spin{to{transform:rotate(360deg)}}</style></body></html>`;
-      nlText = await _enrichNlText(nlText, nlTplId);
-    }
-    const nlPayload = { text: nlText };
     if (nlTplId) nlPayload.template_id = nlTplId;
     const resp = await fetch('/api/newsletter/html', {
       method: 'POST',
@@ -8488,16 +8339,10 @@ async function autoRenderNlPreview() {
     return;
   }
   // Show loading
-  const enriching = window._nlEnrichImages;
-  const nlTplId = (window._selectedGenTemplates || {}).newsletter;
-  container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:30px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">${enriching ? '🖼️ Generando immagini AI e rendering...' : 'Rendering newsletter con template...'}</span></div>`;
+  container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:30px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">Rendering newsletter con template...</span></div>';
   try {
-    // Optionally enrich text with AI-generated images before rendering
-    let nlText = ta.value;
-    if (window._nlEnrichImages) {
-      nlText = await _enrichNlText(nlText, nlTplId);
-    }
-    const nlPayload = { text: nlText };
+    const nlPayload = { text: ta.value };
+    const nlTplId = (window._selectedGenTemplates || {}).newsletter;
     if (nlTplId) nlPayload.template_id = nlTplId;
     const resp = await fetch('/api/newsletter/html', {
       method: 'POST',
@@ -8536,16 +8381,10 @@ async function autoRenderNlPreviewsCrea(nlItems) {
       return;
     }
     try {
+      const nlPayload = { text: nlText };
       const nlTplId = (window._selectedGenTemplates || {}).newsletter;
-      // Optionally enrich with AI-generated images
-      let finalNlText = nlText;
-      if (window._nlEnrichImages) {
-        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:40px;"><div class="spinner"></div><span style="font-size:13px;color:var(--text2);">🖼️ Generando immagini AI...</span></div>';
-        finalNlText = await _enrichNlText(nlText, nlTplId);
-      }
-      const nlPayload = { text: finalNlText };
       if (nlTplId) nlPayload.template_id = nlTplId;
-      console.log('[NL preview] fetching HTML, text length:', finalNlText.length, 'template:', nlTplId || 'none', 'enriched:', window._nlEnrichImages);
+      console.log('[NL preview] fetching HTML, text length:', nlText.length, 'template:', nlTplId || 'none');
       const resp = await fetch('/api/newsletter/html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -9006,9 +8845,6 @@ async function openTemplateChat(templateId) {
     // Update preview
     updateTemplatePreview();
 
-    // Show style rules if available
-    renderStyleRulesPanel(tpl.style_rules || null);
-
     showPersScreen('pers-chat');
   } catch(e) { hideLoading(); toast('Errore nel caricamento'); }
   finally { _persNavigating = false; }
@@ -9091,103 +8927,6 @@ async function _uploadTemplateFiles() {
   return urls;
 }
 
-// ---- Style Rules Panel ----
-let _styleRulesOpen = false;
-
-function toggleStyleRulesPanel() {
-  _styleRulesOpen = !_styleRulesOpen;
-  const body = document.getElementById('pers-style-rules-body');
-  const actions = document.getElementById('pers-style-rules-actions');
-  const chevron = document.getElementById('pers-style-rules-chevron');
-  if (body) body.style.display = _styleRulesOpen ? '' : 'none';
-  if (actions) actions.style.display = _styleRulesOpen ? '' : 'none';
-  if (chevron) chevron.style.transform = _styleRulesOpen ? 'rotate(180deg)' : '';
-}
-
-function renderStyleRulesPanel(rules) {
-  const panel = document.getElementById('pers-style-rules-panel');
-  const body = document.getElementById('pers-style-rules-body');
-  if (!panel || !body) return;
-  if (!rules || Object.keys(rules).length === 0) {
-    panel.style.display = 'none';
-    return;
-  }
-  panel.style.display = '';
-  let html = '';
-
-  // Visual style
-  const vs = rules.visual_style;
-  if (vs) {
-    html += '<div class="sr-section"><div class="sr-section-title">🎨 Stile Visivo</div>';
-    if (vs.mood) html += `<div class="sr-row"><span class="sr-label">Mood</span><span class="sr-value">${esc(vs.mood.substring(0, 50))}</span></div>`;
-    if (vs.aesthetic) html += `<div class="sr-row"><span class="sr-label">Estetica</span><span class="sr-value">${esc(vs.aesthetic.substring(0, 50))}</span></div>`;
-    if (vs.color_palette && vs.color_palette.length) {
-      html += '<div class="sr-colors">';
-      vs.color_palette.forEach(c => { html += `<div class="sr-swatch" style="background:${c}" title="${c}"></div>`; });
-      html += '</div>';
-    }
-    html += '</div>';
-  }
-
-  // Typography
-  const typo = rules.typography;
-  if (typo) {
-    html += '<div class="sr-section"><div class="sr-section-title">✏️ Tipografia</div>';
-    for (const [zone, cfg] of Object.entries(typo)) {
-      const label = zone.replace(/_/g, ' ');
-      const mc = cfg.max_chars || cfg.max_chars_per_line || '';
-      const fs = cfg.max_font_size_px || cfg.font_size || '';
-      let desc = '';
-      if (mc) desc += `max ${mc} car`;
-      if (fs) desc += `${desc ? ', ' : ''}${fs}px`;
-      if (cfg.max_lines) desc += `, ${cfg.max_lines} righe`;
-      if (cfg.max_items) desc += `max ${cfg.max_items} items`;
-      if (desc) html += `<div class="sr-row"><span class="sr-label">${esc(label)}</span><span class="sr-value">${esc(desc)}</span></div>`;
-    }
-    html += '</div>';
-  }
-
-  // Image style
-  const img = rules.image_style;
-  if (img) {
-    html += '<div class="sr-section"><div class="sr-section-title">🖼️ Stile Immagini</div>';
-    if (img.description) html += `<div class="sr-row"><span class="sr-label">Stile</span><span class="sr-value">${esc(img.description.substring(0, 60))}</span></div>`;
-    if (img.preferred_aspect_ratio) html += `<div class="sr-row"><span class="sr-label">Aspect</span><span class="sr-value">${esc(img.preferred_aspect_ratio)}</span></div>`;
-    html += '</div>';
-  }
-
-  // Content rules
-  const cr = rules.content_rules;
-  if (cr) {
-    html += '<div class="sr-section"><div class="sr-section-title">📏 Regole Contenuto</div>';
-    if (cr.recommended_slides) html += `<div class="sr-row"><span class="sr-label">Slide consigliate</span><span class="sr-value">${esc(cr.recommended_slides)}</span></div>`;
-    if (cr.max_sections) html += `<div class="sr-row"><span class="sr-label">Max sezioni</span><span class="sr-value">${cr.max_sections}</span></div>`;
-    html += '</div>';
-  }
-
-  body.innerHTML = html;
-}
-
-async function regenerateStyleRules() {
-  if (!_persCurrentId) return;
-  const btn = document.querySelector('#pers-style-rules-actions .btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Rigenerando...'; }
-  try {
-    const resp = await fetch(`/api/templates/${_persCurrentId}/extract-rules`, { method: 'POST' });
-    const data = await resp.json();
-    if (data.style_rules) {
-      renderStyleRulesPanel(data.style_rules);
-      toast('Regole stile rigenerate!');
-    } else {
-      toast('Errore: ' + (data.error || 'estrazione fallita'));
-    }
-  } catch(e) {
-    toast('Errore: ' + e.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🔄 Rigenera regole'; }
-  }
-}
-
 async function sendTemplateMessage() {
   if (_persSending) return; // prevent double-send
   const input = document.getElementById('pers-chat-input');
@@ -9268,19 +9007,6 @@ async function sendTemplateMessage() {
       errBubble.textContent = data.error || 'Errore nella risposta';
       msgContainer.appendChild(errBubble);
     } else {
-      // Show orchestrator log messages (AI image generation steps)
-      if (data.orchestrator_log && data.orchestrator_log.length) {
-        const logDiv = document.createElement('div');
-        logDiv.className = 'pers-orchestrator-log';
-        data.orchestrator_log.forEach(msg => {
-          const line = document.createElement('div');
-          line.className = 'pers-orchestrator-msg';
-          line.textContent = msg;
-          logDiv.appendChild(line);
-        });
-        msgContainer.appendChild(logDiv);
-      }
-
       const botBubble = document.createElement('div');
       botBubble.className = 'pers-chat-bubble bot';
       botBubble.textContent = data.reply || 'Template aggiornato!';
@@ -9289,10 +9015,6 @@ async function sendTemplateMessage() {
       if (data.html_content) {
         _persCurrentHtml = data.html_content;
         updateTemplatePreview();
-      }
-      // Update style rules panel if new rules were extracted
-      if (data.style_rules) {
-        renderStyleRulesPanel(data.style_rules);
       }
     }
   } catch(e) {
@@ -9310,7 +9032,6 @@ async function sendTemplateMessage() {
   input.focus();
 }
 
-// ── Preview Content ──
 // Example content for IG preview placeholders (matches backend's render_template_preview)
 const _previewSampleContent = {
   cover: { COVER_TITLE: '5 Strategie di Marketing', COVER_SUBTITLE: 'che Cambieranno il Tuo Business nel 2026' },
@@ -9335,14 +9056,6 @@ function _fillPreviewPlaceholders(html, slideType) {
   html = html.split('{{BRAND_HANDLE}}').join('@tuobrand');
   // Legacy fallback
   html = html.split('{{SLIDE_CONTENT}}').join(Object.values(sample).join('<br>'));
-  // Safety: inject overflow protection in case AI omitted it
-  // This prevents text overflow/repetition in scaled-down preview iframes
-  const overflowCSS = '<style>body{overflow:hidden!important;max-height:1080px!important;}</style>';
-  if (html.includes('</head>')) {
-    html = html.replace('</head>', overflowCSS + '</head>');
-  } else if (html.includes('<body')) {
-    html = html.replace('<body', overflowCSS + '<body');
-  }
   return html;
 }
 
@@ -9541,7 +9254,7 @@ async function deleteCurrentTemplate() {
     if (res.ok) {
       toast('Template eliminato');
       _persCurrentId = null;
-      showPersScreen('pers-home');
+      showPersHome();
       loadPersonalizzazione();
     } else {
       const data = await res.json().catch(() => ({}));
