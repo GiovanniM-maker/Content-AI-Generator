@@ -8772,7 +8772,12 @@ function showPersScreen(screenId) {
 }
 
 function showPersHome() {
+  // Abort any in-flight preview request
+  if (_igPreviewAbort) { _igPreviewAbort.abort(); _igPreviewAbort = null; }
+  if (_previewDebounceTimer) { clearTimeout(_previewDebounceTimer); _previewDebounceTimer = null; }
   _persCurrentId = null;
+  _persCurrentHtml = '';
+  showPersScreen('pers-home');
   loadPersonalizzazione();
 }
 
@@ -8825,6 +8830,9 @@ async function createNewTemplateFromWizard() {
 async function openTemplateChat(templateId) {
   if (_persNavigating) return; // prevent double-click
   _persNavigating = true;
+  // Abort any in-flight preview from a previous template
+  if (_igPreviewAbort) { _igPreviewAbort.abort(); _igPreviewAbort = null; }
+  if (_previewDebounceTimer) { clearTimeout(_previewDebounceTimer); _previewDebounceTimer = null; }
   showLoading('Apertura template...');
   try {
     const res = await fetch(`/api/templates/${templateId}`);
@@ -9141,7 +9149,7 @@ async function updateTemplatePreview() {
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
     });
-    if (version !== _previewUpdateVersion) return; // stale
+    if (version !== _previewUpdateVersion || !_persCurrentId) return; // stale or navigated away
     const data = await res.json();
 
     if (!res.ok || (!data.slides && data.type !== 'html_slides')) {
@@ -9316,6 +9324,10 @@ async function deleteCurrentTemplate() {
   const title = document.getElementById('pers-chat-title').textContent;
   if (!confirm(`Eliminare il template "${title}"?`)) return;
 
+  // Abort any in-flight preview request immediately
+  if (_igPreviewAbort) { _igPreviewAbort.abort(); _igPreviewAbort = null; }
+  if (_previewDebounceTimer) { clearTimeout(_previewDebounceTimer); _previewDebounceTimer = null; }
+
   // Blur the chat view
   const chatLayout = document.querySelector('.pers-chat-layout');
   if (chatLayout) {
@@ -9324,22 +9336,24 @@ async function deleteCurrentTemplate() {
     chatLayout.style.opacity = '0.5';
   }
 
+  const templateId = _persCurrentId;
   try {
-    const res = await fetch(`/api/templates/${_persCurrentId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/templates/${templateId}`, { method: 'DELETE' });
     if (res.ok) {
       toast('Template eliminato');
-      _persCurrentId = null;
-      showPersHome();
-      loadPersonalizzazione();
+      // Clean up all state and navigate to home
+      showPersHome(); // resets _persCurrentId, aborts previews, switches screen
     } else {
       const data = await res.json().catch(() => ({}));
       toast(data.error || 'Errore nell\'eliminazione');
-      if (chatLayout) { chatLayout.style.filter = 'none'; chatLayout.style.opacity = '1'; }
     }
   } catch(e) {
     console.error('[deleteCurrentTemplate] exception:', e);
     toast('Errore di rete');
-    if (chatLayout) { chatLayout.style.filter = 'none'; chatLayout.style.opacity = '1'; }
+  } finally {
+    // Always restore chat layout blur — whether success (screen switches away)
+    // or failure (user stays on chat screen)
+    if (chatLayout) { chatLayout.style.filter = ''; chatLayout.style.opacity = ''; }
   }
 }
 
