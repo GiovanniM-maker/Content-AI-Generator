@@ -909,7 +909,7 @@ def increment_weekly_counter(user_id: str, week_key: str, platform: str, action:
         }).execute()
     except Exception as e:
         _logger.warning("RPC increment_weekly_status failed, using fallback: %s", e)
-        # Fallback: read-modify-write
+        # Fallback: read-modify-write with optimistic locking
         result = (
             _sb().table("weekly_status")
             .select("*")
@@ -920,13 +920,33 @@ def increment_weekly_counter(user_id: str, week_key: str, platform: str, action:
         )
         if result.data:
             row = result.data[0]
-            new_val = row.get(action, 0) + 1
-            (
+            old_val = row.get(action, 0)
+            new_val = old_val + 1
+            # Optimistic lock: only update if value hasn't changed since read
+            update_result = (
                 _sb().table("weekly_status")
                 .update({action: new_val})
                 .eq("id", row["id"])
+                .eq(action, old_val)
                 .execute()
             )
+            # If no rows updated, another request changed the value — retry once
+            if not update_result.data:
+                _logger.info("Optimistic lock failed on weekly_status, retrying once")
+                result2 = (
+                    _sb().table("weekly_status")
+                    .select("*")
+                    .eq("id", row["id"])
+                    .execute()
+                )
+                if result2.data:
+                    row2 = result2.data[0]
+                    (
+                        _sb().table("weekly_status")
+                        .update({action: row2.get(action, 0) + 1})
+                        .eq("id", row2["id"])
+                        .execute()
+                    )
         else:
             row = {
                 "user_id": user_id,
@@ -978,13 +998,23 @@ def increment_generation_count(user_id: str) -> dict:
     except Exception as e:
         _logger.warning("RPC increment_generation_count failed: %s", e)
 
-    # Fallback: direct SQL update (still atomic, uses SET col = col + 1 semantics)
+    # Fallback: read-modify-write (non-atomic but correct values)
     profile = get_profile(user_id)
     try:
         now_iso = now.isoformat()
+        old_lifetime = profile.get("generation_count", 0) if profile else 0
+        stored_month = (profile.get("generation_count_month") or "") if profile else ""
+        old_monthly = (profile.get("generation_count_monthly") or 0) if profile else 0
+
+        # Only reset monthly if we crossed a month boundary; otherwise increment
+        if stored_month == current_month:
+            new_monthly = old_monthly + 1
+        else:
+            new_monthly = 1  # Legitimate month boundary reset
+
         _sb().table("profiles").update({
-            "generation_count": profile.get("generation_count", 0) + 1 if profile else 1,
-            "generation_count_monthly": 1,  # Reset if RPC failed
+            "generation_count": old_lifetime + 1,
+            "generation_count_monthly": new_monthly,
             "generation_count_month": current_month,
             "updated_at": now_iso,
         }).eq("id", user_id).execute()

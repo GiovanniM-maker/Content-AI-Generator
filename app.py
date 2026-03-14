@@ -2374,8 +2374,8 @@ Scrivi il contenuto ora. Restituisci SOLO il testo del post/caption, senza comme
         # Increment generation counter (for plan limits)
         try:
             db.increment_generation_count(user_id)
-        except Exception:
-            pass
+        except Exception as e:
+            _log_pipeline("error", f"Failed to increment generation count for user {user_id}: {e}")
         try:
             db.create_notification(user_id, "generation", f"Contenuto {format_type} generato", article.get("title", "")[:120])
         except Exception:
@@ -2710,8 +2710,8 @@ Scrivi la newsletter ora. Restituisci SOLO il testo completo, senza commenti agg
         # Increment generation counter (for plan limits)
         try:
             db.increment_generation_count(user_id)
-        except Exception:
-            pass
+        except Exception as e:
+            _log_pipeline("error", f"Failed to increment generation count for user {user_id}: {e}")
         try:
             db.create_notification(user_id, "generation", "Newsletter generata", f"{len(topics)} topic inclusi")
         except Exception:
