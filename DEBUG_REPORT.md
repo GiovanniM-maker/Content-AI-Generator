@@ -312,35 +312,119 @@
 
 ---
 
-## 8. RIEPILOGO STATISTICO
+## 8. BUG AGGIUNTIVI (Analisi Approfondita Round 2)
+
+### 8.1 IndexError — Accesso a `result.data[0]` senza bounds checking (11 punti)
+- **Problema:** In molti punti del codice, `result.data[0]` viene acceduto senza verificare che l'array non sia vuoto. Se il database ritorna un risultato vuoto, l'applicazione crasha con `IndexError`.
+- **Severita:** CRITICA (crash dell'app)
+- **Occorrenze:**
+  - `db.py:310` — `get_session()` → `return _session_row_to_dict(result.data[0])`
+  - `db.py:325` — `insert_session()` → `return _session_row_to_dict(result.data[0])`
+  - `db.py:342` — `update_session()` → `return _session_row_to_dict(result.data[0])`
+  - `db.py:384` — `insert_schedule()` → `return result.data[0]`
+  - `db.py:531` — `add_feedback()` → `return result.data[0]`
+  - `db.py:904` — `increment_weekly_counter()` → `row = result.data[0]`
+  - `db.py:954` — `increment_generation_count()` → `row = result.data[0]`
+  - `payments.py:300` — `_find_user_by_customer()` → `return result.data[0]["id"]`
+- **Fix suggerito:** Aggiungere `if result.data:` prima di ogni accesso `[0]`.
+
+### 8.2 XSS via URL non sanitizzati nel newsletter formatter
+- **File:** `app.py:2435`
+- **Codice:** `lambda m: f'<a href="{m.group(2)}" style="{_style("a")}">{m.group(1)}</a>'`
+- **Problema:** URL estratti dal testo utente vengono inseriti direttamente nell'attributo `href` senza validazione. Un URL come `javascript:alert(1)` o `data:text/html,...` verrebbe incluso nel link senza filtro.
+- **Severita:** ALTA (XSS)
+- **Fix suggerito:** Validare che l'URL inizi con `http://` o `https://` prima di includerlo.
+
+### 8.3 HTML escaping incompleto — apostrofo non escaped
+- **File:** `carousel_renderer.py:363`
+- **Codice:** `return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')`
+- **Problema:** Manca `.replace("'", "&#39;")`. Se l'output viene inserito in un attributo HTML delimitato da apostrofi, e' possibile uscire dall'attributo.
+- **Severita:** MEDIA-ALTA (XSS via attributi)
+- **Fix suggerito:** Aggiungere `.replace("'", "&#39;")` alla catena di escape.
+
+### 8.4 Race condition in `_fetch_state` — thread non sincronizzati
+- **File:** `app.py:1709-1740`
+- **Problema:** Il dizionario `_fetch_state` viene modificato dal thread di background (riga 1731: `state["progress"].append(...)`) e letto dallo stream SSE (riga 1753-1757: `while sent < len(progress)`) senza lock. Python non garantisce thread-safety sulle operazioni di lista.
+- **Severita:** MEDIA (data corruption, messaggi persi)
+- **Fix suggerito:** Usare `_fetch_lock` per TUTTE le operazioni su `_fetch_state`, non solo per il check iniziale.
+
+### 8.5 Token JWT esposto nei query parameter per SSE
+- **File:** `auth.py:46-69` (riga 60)
+- **Codice:** `token = request.args.get("token")`
+- **Problema:** Il token JWT viene passato come query parameter per le connessioni SSE. I query parameter vengono loggati nei server log, nei referrer header, e nella browser history. L'SSE non supporta header custom, ma il token dovrebbe essere a breve scadenza.
+- **Severita:** MEDIA (token leakage nei log)
+- **Fix suggerito:** Usare token SSE dedicato a breve scadenza (es. 5 minuti) invece del JWT completo.
+
+### 8.6 Unsafe JSON parsing nelle risposte LLM
+- **File:** `app.py:359` — `return data["choices"][0]["message"]["content"]`
+- **File:** `app.py:395` — `msg = data.get("choices", [{}])[0].get("message", {})`
+- **File:** `app.py:398` — `return images[0].get("image_url", {}).get("url")`
+- **File:** `video_generator.py:226` — `prepared = data["choices"][0]["message"]["content"].strip()`
+- **Problema:** Accesso a `[0]` su liste potenzialmente vuote nelle risposte API di OpenRouter. Se il modello non ritorna choices, crash immediato.
+- **Severita:** MEDIA-ALTA (crash su risposte API malformate)
+- **Fix suggerito:** `choices = data.get("choices", []); if not choices: return None`
+
+### 8.7 String split senza bounds checking
+- **File:** `app.py:1865-1866`
+- **Codice:** `result.split("\n", 1)[1]` e `result.rsplit("```", 1)[0]`
+- **Problema:** Se la risposta LLM non contiene `\n` o ` ``` `, l'accesso a `[1]` o `[0]` puo' fallire con IndexError.
+- **Severita:** MEDIA (crash su risposte LLM inattese)
+
+### 8.8 Database write operations senza verifica successo
+- **File:** `db.py:110-114` — `update_preset_thumbnail_url()` non ritorna status
+- **File:** `app.py:1503` — `db.update_profile()` chiamato senza verificare il risultato
+- **Problema:** Le operazioni di scrittura non verificano se l'update ha avuto successo. Il chiamante assume che sia andato tutto bene.
+- **Severita:** BASSA-MEDIA (silent failures)
+
+### 8.9 Mancanza di `.dockerignore`
+- **Problema:** Non esiste un file `.dockerignore`. Il build context Docker include file inutili (`.git/`, `.env`, `*.pyc`, `__pycache__/`, `venv/`), aumentando i tempi di build e potenzialmente includendo segreti nell'immagine.
+- **Severita:** MEDIA
+- **Fix suggerito:** Creare `.dockerignore` con le esclusioni appropriate.
+
+### 8.10 Dipendenza `cryptography` outdated
+- **File:** `requirements.txt`
+- **Versione corrente:** 44.0.0
+- **Versione disponibile:** 46.0.5
+- **Problema:** La libreria di crittografia e' indietro di 2 versioni minor. Anche se non ci sono CVE note su 44.0.0, e' una best practice mantenere aggiornata questa libreria.
+- **Severita:** BASSA-MEDIA
+- **Fix suggerito:** `pip install cryptography==46.0.5` e aggiornare requirements.txt.
+
+---
+
+## 9. RIEPILOGO STATISTICO
 
 | Categoria | Conteggio |
 |-----------|-----------|
-| Bug CRITICI (sicurezza) | **7** |
-| Bug GRAVI (logica/dati) | **6** |
-| Bug MEDI (robustezza) | **7** |
-| Bug MINORI (code quality) | **5** |
+| Bug CRITICI (sicurezza) | **9** |
+| Bug GRAVI (logica/dati) | **8** |
+| Bug MEDI (robustezza) | **12** |
+| Bug MINORI (code quality) | **6** |
 | Problemi di performance | **4** |
-| Problemi di configurazione | **4** |
+| Problemi di configurazione | **5** |
 | Dead code / code smells | **4** |
-| **TOTALE PROBLEMI** | **37** |
+| **TOTALE PROBLEMI** | **48** |
 
 ### Distribuzione per severita'
 
 ```
-CRITICA  ████████████████████  7  (19%)
-ALTA     ████████████████      6  (16%)
-MEDIA    ████████████████████  7  (19%)
-BASSA    ████████████████████████████████████  17 (46%)
+CRITICA  ██████████████████████████  9  (19%)
+ALTA     ████████████████████████    8  (17%)
+MEDIA    ████████████████████████████████████  12 (25%)
+BASSA    ██████████████████████████████████████████████  19 (39%)
 ```
 
-### Top 5 priorita' di fix suggerite
+### Top 10 priorita' di fix suggerite
 
-1. **Spostare ADMIN_EMAIL in env var** — 5 minuti, elimina rischio impersonation
-2. **Rimuovere fallback non-atomico nel contatore generazioni** — 15 minuti, previene abuso limiti piano
-3. **Validare webhook Stripe in tutti gli ambienti** — 10 minuti, previene upgrade piano fraudolento
-4. **Aggiungere validazione UUID per template_id nei path** — 10 minuti, previene path traversal
-5. **Aggiungere validazione MIME type su file upload** — 20 minuti, previene upload file malevoli
+1. **Aggiungere bounds checking su `result.data[0]`** — 30 min, previene crash in 11+ punti
+2. **Spostare ADMIN_EMAIL in env var** — 5 min, elimina rischio impersonation
+3. **Rimuovere fallback non-atomico nel contatore generazioni** — 15 min, previene abuso limiti piano
+4. **Validare webhook Stripe in tutti gli ambienti** — 10 min, previene upgrade piano fraudolento
+5. **Sanitizzare URL nel newsletter formatter** — 10 min, previene XSS
+6. **Aggiungere validazione UUID per template_id nei path** — 10 min, previene path traversal
+7. **Aggiungere validazione MIME type su file upload** — 20 min, previene upload file malevoli
+8. **Completare HTML escaping con apostrofo** — 2 min, previene XSS via attributi
+9. **Fix race condition in `_fetch_state`** — 15 min, previene data corruption
+10. **Aggiungere bounds checking su risposte API OpenRouter** — 20 min, previene crash
 
 ---
 
