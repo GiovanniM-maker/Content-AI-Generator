@@ -427,7 +427,53 @@
 - **Severita:** BASSA-MEDIA (performance)
 - **Fix suggerito:** Usare `createElement` + `appendChild` o `insertAdjacentHTML`.
 
-### 9.6 Nessun timeout sulle chiamate fetch
+### 9.6 BUG CRITICO — Browser freeze nella chat Personalizzazione (CONFERMATO DALL'UTENTE)
+- **File:** `templates/index.html:9371-9405` (`updateTemplatePreview()`)
+- **Sintomo:** Quando l'utente scrive nella chat di Personalizzazione, il browser si blocca completamente e il PC diventa inutilizzabile.
+- **Cause identificate (multiple, tutte contribuiscono):**
+
+**Causa 1 — Fallback JSON parse crea 4 copie dell'intero HTML in iframe (PRINCIPALE)**
+- **Riga 9374-9378:**
+  ```javascript
+  try {
+    const parsed = JSON.parse(_persCurrentHtml);
+    if (parsed && typeof parsed === 'object') templates = parsed;
+  } catch(e) {
+    templates = { cover: _persCurrentHtml, content: _persCurrentHtml, list: _persCurrentHtml, cta: _persCurrentHtml };
+  }
+  ```
+- Quando `_persCurrentHtml` e' un JSON stringificato ma il parse fallisce (es. HTML raw, o JSON malformato dall'LLM), l'INTERO contenuto (potenzialmente decine di KB di HTML con 4 documenti `<!DOCTYPE>` annidati) viene duplicato in 4 iframe simultaneamente.
+- Ogni iframe carica lo stesso HTML enorme + Google Fonts via `@import` (4 richieste parallele a fonts.googleapis.com).
+- Il browser deve renderizzare 4 documenti HTML completi 1080x1080px ciascuno, scalati con CSS transform.
+
+**Causa 2 — Google Fonts @import in ogni iframe**
+- Il system prompt (`app.py:4060`) istruisce l'LLM a usare `@import url('https://fonts.googleapis.com/css2?family=...')` in ogni slide.
+- Con 4 iframe, vengono lanciate 4+ richieste HTTP parallele per caricare i font, piu' il download dei file WOFF2.
+- Se la rete e' lenta o i font sono pesanti, il browser si blocca in attesa.
+
+**Causa 3 — Nessun limite sulla dimensione dell'HTML nelle iframe**
+- `_persCurrentHtml` puo' essere arbitrariamente grande (l'LLM genera 4 slide HTML complete).
+- Non c'e' nessun check sulla dimensione prima di assegnare a `iframe.srcdoc`.
+- Un JSON con 4 slide di ~5KB ciascuna = ~20KB di HTML parsato 4 volte = ~80KB di rendering simultaneo.
+
+**Causa 4 — `updateTemplatePreview()` chiamato in modo sincrono dopo ogni risposta chat**
+- Riga 9291: `updateTemplatePreview()` viene chiamato immediatamente dopo ricevere `data.html_content`.
+- Non c'e' debounce — se l'utente invia messaggi rapidamente, piu' render si accumulano.
+
+**Causa 5 — iframe sandbox `allow-same-origin` senza `allow-scripts` potrebbe causare rendering loop**
+- Riga 9395: `sandbox="allow-same-origin"` permette all'iframe di accedere al DOM del parent.
+- Se l'HTML generato dall'LLM contiene JavaScript (anche accidentale), potrebbe creare interazioni impreviste.
+
+- **Severita:** CRITICA (blocca completamente il browser/PC dell'utente)
+- **Fix suggeriti:**
+  1. **Aggiungere limite dimensione HTML:** `if (_persCurrentHtml.length > 100000) { container.innerHTML = 'HTML troppo grande'; return; }`
+  2. **NON duplicare l'intero HTML in 4 iframe:** Nel catch del JSON.parse, mostrare un messaggio di errore invece di duplicare.
+  3. **Usare `loading="lazy"` su tutte le iframe** per non caricarle tutte insieme.
+  4. **Debounce su `updateTemplatePreview()`** — non chiamarla piu' di una volta ogni 500ms.
+  5. **Preload/cache Google Fonts** o usare font locali (`Inter` e' gia' presente in `/static/fonts/`).
+  6. **Aggiungere timeout/AbortController** sulla risposta del chat API.
+
+### 9.7 Nessun timeout sulle chiamate fetch
 - **File:** `templates/index.html:4299-4378` (initAuth) e altri
 - **Problema:** Le chiamate `fetch()` non hanno timeout configurato. Se il server non risponde, la richiesta resta appesa indefinitamente.
 - **Severita:** MEDIA
