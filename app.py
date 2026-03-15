@@ -3877,114 +3877,158 @@ REGOLE:
         parsed = _try_parse_response(raw_response)
 
         if template_type == "instagram":
-            # ── Check for image intent BEFORE processing LLM spec ──
-            image_intent = _detect_image_intent(user_message)
+            # ══════════════════════════════════════════════════════════
+            # STRUCTURED COMMAND LAYER — parse message BEFORE LLM
+            # ══════════════════════════════════════════════════════════
+            from services.personalizza_commands import (
+                parse_message as _parse_personalizza,
+                execute_asset_commands as _exec_asset_cmds,
+                CommandMode,
+            )
+
+            parse_result = _parse_personalizza(
+                message=user_message,
+                uploaded_image_urls=image_urls,
+            )
             _log_pipeline("info",
-                f"[image_flow] intent detection: message={user_message[:80]!r}, "
-                f"result={image_intent}")
+                f"[personalizza] mode={parse_result.mode.value}, "
+                f"commands={len(parse_result.commands)}, "
+                f"asset_score={parse_result.asset_score}, "
+                f"design_score={parse_result.design_score}")
+            for i, cmd in enumerate(parse_result.commands):
+                _log_pipeline("info",
+                    f"[personalizza] cmd[{i}]: {cmd}")
 
-            # ── New architecture: extract design_spec (NOT html) ──
-            has_llm_spec = parsed and "design_spec" in parsed and isinstance(parsed["design_spec"], dict)
+            # ── ASSET MODE: skip LLM design rewrite, execute commands directly ──
+            if parse_result.mode == CommandMode.ASSET and parse_result.commands:
+                _log_pipeline("info", "[personalizza] ASSET MODE — preserving design_spec")
 
-            if has_llm_spec:
-                reply_text = parsed.get("reply", "Design aggiornato!")
-                try:
-                    # For image-only requests: keep current spec as base,
-                    # ignore LLM's full rewrite to prevent design corruption
-                    if image_intent and image_intent["image_only"] and current_design_spec:
-                        new_design_spec = validate_design_spec(current_design_spec)
-                        _log_pipeline("info",
-                            f"[image_flow] image-only request → preserving existing design_spec")
-                    else:
-                        new_design_spec = validate_design_spec(parsed["design_spec"])
-                        _log_pipeline("info",
-                            f"[image_flow] using LLM design_spec (has_llm_spec=True)")
-                    spec_changed = True
-                except ValueError as ve:
-                    reply_text += f"\n\n⚠️ Errore nella validazione del design: {ve}"
-                    _log_pipeline("warn", f"Template chat: design_spec validation failed: {ve}")
-            elif parsed and "reply" in parsed:
-                reply_text = parsed["reply"]
-                _log_pipeline("warn",
-                    f"[image_flow] LLM returned JSON without 'design_spec' "
-                    f"(keys={list(parsed.keys())})")
-                # If we have image intent but no LLM spec, use current spec as base
-                if image_intent and current_design_spec:
-                    new_design_spec = validate_design_spec(current_design_spec)
-                    _log_pipeline("info",
-                        f"[image_flow] no LLM spec but have image intent → "
-                        f"using current_design_spec as base")
+                base_spec = current_design_spec
+                if not base_spec:
+                    base_spec = dict(DEFAULT_DESIGN_SPEC)
+                    _log_pipeline("info", "[personalizza] no current spec, using DEFAULT_DESIGN_SPEC")
+
+                new_design_spec = validate_design_spec(base_spec)
+
+                # For generate_asset commands, build proper prompts via the planner
+                for cmd in parse_result.commands:
+                    if cmd["type"] == "generate_asset" and cmd.get("prompt"):
+                        try:
+                            refined = _build_image_prompt(
+                                cmd["prompt"], new_design_spec,
+                                "cover" if cmd["slot"] != "background_asset" else "background",
+                            )
+                            cmd["prompt"] = refined
+                            _log_pipeline("info",
+                                f"[personalizza] refined prompt for {cmd['slot']}: {refined[:100]}")
+                        except Exception as e:
+                            _log_pipeline("warn",
+                                f"[personalizza] prompt refinement failed: {e}")
+
+                exec_result = _exec_asset_cmds(
+                    parse_result.commands, new_design_spec,
+                    user_id=user_id, template_id=template_id,
+                )
+                new_design_spec = exec_result["design_spec"]
+
+                # Build reply
+                changes = exec_result["changes"]
+                errors = exec_result["errors"]
+                if changes and not errors:
+                    reply_text = "Fatto! " + " ".join(changes) + "."
+                elif changes and errors:
+                    reply_text = " ".join(changes) + "."
+                    reply_text += "\n\n⚠️ " + " | ".join(errors)
+                elif errors:
+                    reply_text = "⚠️ " + " | ".join(errors)
+                    reply_text += "\n\nHo mantenuto il design precedente."
+                else:
+                    reply_text = parsed.get("reply", "") if parsed else "Nessuna modifica applicata."
+
+                spec_changed = bool(changes)
+                _log_pipeline("info",
+                    f"[personalizza] ASSET MODE done: changes={len(changes)}, errors={len(errors)}")
+
+            # ── DESIGN MODE or MIXED: use LLM spec + optional asset commands ──
             else:
-                cleaned = _strip_fences(raw_response)
-                reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
-                _log_pipeline("warn", "[image_flow] failed to parse JSON response entirely")
+                has_llm_spec = parsed and "design_spec" in parsed and isinstance(parsed["design_spec"], dict)
 
-            # ── Phase 1C: image generation (INDEPENDENT of LLM spec gate) ──
-            if image_intent and new_design_spec:
-                _log_pipeline("info",
-                    f"[image_flow] entering image generation: "
-                    f"target={image_intent['target']}, image_only={image_intent['image_only']}")
-                try:
-                    from services.image_generator import generate_image
-                    _log_pipeline("info", "[image_flow] building image prompt via planner...")
-                    img_prompt = _build_image_prompt(
-                        user_message, new_design_spec, image_intent["target"],
-                    )
-                    _log_pipeline("info",
-                        f"[image_flow] planner prompt built ({len(img_prompt)} chars): "
-                        f"{img_prompt[:150]}...")
-                    _log_pipeline("info",
-                        f"[image_flow] calling generate_image() for {template_id}, "
-                        f"target={image_intent['target']}")
-                    img_result = generate_image(
-                        prompt=img_prompt,
-                        user_id=user_id,
-                        template_id=template_id,
-                        target=image_intent["target"],
-                    )
-                    _log_pipeline("info",
-                        f"[image_flow] generate_image() returned: url={img_result['url'][:80]}...")
-                    # Inject URL into design_spec
-                    if image_intent["target"] == "cover":
-                        new_design_spec["images"]["slide_images"]["cover"] = img_result["url"]
-                        _log_pipeline("info",
-                            f"[image_flow] injected URL into images.slide_images.cover")
-                    else:
-                        new_design_spec["images"]["background_image_url"] = img_result["url"]
-                        _log_pipeline("info",
-                            f"[image_flow] injected URL into images.background_image_url")
-                    reply_text += f"\n\n🖼️ Immagine generata e applicata come {'copertina' if image_intent['target'] == 'cover' else 'sfondo'}."
-                    _log_pipeline("info",
-                        f"[image_flow] image generation COMPLETE for {template_id} → {img_result['url']}")
-                    spec_changed = True
-                except Exception as img_err:
-                    import traceback as _tb
-                    _log_pipeline("error",
-                        f"[image_flow] generate_image() FAILED for {template_id}: "
-                        f"{type(img_err).__name__}: {img_err}\n{_tb.format_exc()}")
-                    if image_intent["image_only"]:
-                        reply_text = (parsed.get("reply", "") if parsed else "") + \
-                            "\n\n⚠️ Non sono riuscito a generare l'immagine. Ho mantenuto il design precedente."
-                        # Don't set spec_changed — nothing saved
-                        _log_pipeline("info",
-                            "[image_flow] image-only request failed → preserving previous state")
-                    else:
-                        reply_text += "\n\n⚠️ Non sono riuscito a generare l'immagine. Il design è stato aggiornato senza immagine."
-                        spec_changed = True
-                        _log_pipeline("info",
-                            "[image_flow] mixed request failed → saving design changes without image")
-            elif image_intent and not new_design_spec:
-                _log_pipeline("warn",
-                    f"[image_flow] image intent detected but no design_spec available "
-                    f"(current_design_spec={'exists' if current_design_spec else 'None'}, "
-                    f"parsed={'exists' if parsed else 'None'})")
-            elif not image_intent:
-                # No image intent — normal design update
                 if has_llm_spec:
+                    reply_text = parsed.get("reply", "Design aggiornato!")
+                    try:
+                        new_design_spec = validate_design_spec(parsed["design_spec"])
+                        spec_changed = True
+                        _log_pipeline("info", "[personalizza] DESIGN MODE — using LLM design_spec")
+                    except ValueError as ve:
+                        reply_text += f"\n\n⚠️ Errore nella validazione del design: {ve}"
+                        _log_pipeline("warn", f"Template chat: design_spec validation failed: {ve}")
+                elif parsed and "reply" in parsed:
+                    reply_text = parsed["reply"]
+                    _log_pipeline("warn",
+                        f"[personalizza] LLM returned JSON without 'design_spec' "
+                        f"(keys={list(parsed.keys())})")
+                else:
+                    cleaned = _strip_fences(raw_response)
+                    reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
+                    _log_pipeline("warn", "[personalizza] failed to parse JSON response entirely")
+
+                # ── Execute any asset commands from MIXED mode ──
+                if parse_result.mode == CommandMode.MIXED and parse_result.commands and new_design_spec:
+                    _log_pipeline("info",
+                        f"[personalizza] MIXED MODE — executing {len(parse_result.commands)} asset commands on top of LLM spec")
+
+                    for cmd in parse_result.commands:
+                        if cmd["type"] == "generate_asset" and cmd.get("prompt"):
+                            try:
+                                refined = _build_image_prompt(
+                                    cmd["prompt"], new_design_spec,
+                                    "cover" if cmd["slot"] != "background_asset" else "background",
+                                )
+                                cmd["prompt"] = refined
+                            except Exception:
+                                pass
+
+                    exec_result = _exec_asset_cmds(
+                        parse_result.commands, new_design_spec,
+                        user_id=user_id, template_id=template_id,
+                    )
+                    new_design_spec = exec_result["design_spec"]
+                    if exec_result["changes"]:
+                        reply_text += "\n\n" + " ".join(exec_result["changes"])
+                    if exec_result["errors"]:
+                        reply_text += "\n\n⚠️ " + " | ".join(exec_result["errors"])
                     spec_changed = True
-                _log_pipeline("info",
-                    f"[image_flow] no image intent → normal design update "
-                    f"(spec_changed={spec_changed})")
+
+                # ── Legacy fallback: image intent detection for pure image requests
+                #    that the command parser didn't catch ──
+                elif not parse_result.commands:
+                    image_intent = _detect_image_intent(user_message)
+                    if image_intent and new_design_spec:
+                        _log_pipeline("info",
+                            f"[personalizza] legacy image_intent fallback: target={image_intent['target']}")
+                        try:
+                            from services.image_generator import generate_image
+                            img_prompt = _build_image_prompt(
+                                user_message, new_design_spec, image_intent["target"],
+                            )
+                            img_result = generate_image(
+                                prompt=img_prompt,
+                                user_id=user_id,
+                                template_id=template_id,
+                                target=image_intent["target"],
+                            )
+                            if image_intent["target"] == "cover":
+                                new_design_spec["images"]["slide_images"]["cover"] = img_result["url"]
+                            else:
+                                new_design_spec["images"]["background_image_url"] = img_result["url"]
+                            reply_text += f"\n\n🖼️ Immagine generata e applicata come {'copertina' if image_intent['target'] == 'cover' else 'sfondo'}."
+                            spec_changed = True
+                        except Exception as img_err:
+                            _log_pipeline("error",
+                                f"[personalizza] image generation FAILED: {img_err}")
+                            reply_text += "\n\n⚠️ Non sono riuscito a generare l'immagine."
+                            if not image_intent["image_only"]:
+                                spec_changed = True
 
             # Generate HTML only if spec actually changed
             if spec_changed:

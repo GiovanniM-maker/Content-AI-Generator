@@ -504,7 +504,18 @@ def _render_cover(spec: dict, content: dict, width: int, height: int,
     logo_html = ""
     logo_url = spec.get("images", {}).get("logo_url", "")
     if logo_url:
-        logo_html = f'<img src="{_esc(logo_url)}" style="height:50px;width:auto;margin-bottom:16px;" />'
+        # Logo rendering rules:
+        # - preserve aspect ratio (width:auto OR height:auto, never both fixed)
+        # - max-height and max-width caps to prevent banner/hero behavior
+        # - object-fit:contain to prevent stretch/crop
+        # - safe margins via margin-bottom
+        logo_html = (
+            f'<img src="{_esc(logo_url)}" style="'
+            f"max-height:60px;max-width:160px;"
+            f"width:auto;height:auto;"
+            f"object-fit:contain;"
+            f'margin-bottom:16px;" />'
+        )
 
     # Cover-specific image (higher prominence than global background)
     cover_image_css = ""
