@@ -1,8 +1,12 @@
 """Template-driven Pillow slide renderer for Instagram carousels.
 
-The renderer is **generic** — it contains zero layout logic.  All positioning,
-sizing, fonts, and colors come from the template JSON.  Each slide is defined
-as an ordered list of *elements*, and the renderer simply iterates and draws.
+Architecture: **Layout + Theme + Overrides**
+
+The renderer is fully generic — it reads layout structure from a *template*,
+visual styling from a *theme*, and allows per-request *overrides*.
+
+Merge priority (highest wins):
+    user overrides  >  theme  >  element defaults
 
 Supported element types
 -----------------------
@@ -15,34 +19,25 @@ Supported element types
 - ``cta``          — call-to-action text (optionally inside a button rect)
 - ``slide_counter``— slide number indicator
 
-Content binding
----------------
-Each text element pulls its value from the structured content dict via a
-``content_key`` field (defaults to the element type name).  This means
-templates can map any element to any content field.
+Theme-aware styling
+-------------------
+Layout elements specify position (``x``, ``y``, ``max_width``).
+Theme fills in style (``font``, ``size``, ``weight``, ``color``).
+Rect elements use a ``role`` field to look up themed colors::
+
+    {"type": "rect", "role": "accent", ...}  →  theme.colors.accent
+    {"type": "rect", "role": "overlay", ...} →  theme.colors.overlay
 
 Asset mapping
 -------------
-Image elements reference assets by an ``asset_id`` string.  The caller
-passes an ``asset_map`` dict that maps IDs to PIL Images::
-
-    asset_map = {"background_asset": <PIL.Image>, "logo": <PIL.Image>}
+Image elements reference assets by ``asset_id``.  The caller passes an
+``asset_map`` dict mapping IDs to PIL Images.
 
 User overrides
 --------------
-Callers may pass an ``overrides`` dict to change fonts, sizes, and colors
-without editing the template::
+Keys follow ``{element_type}_{property}``::
 
-    overrides = {
-        "title_font": "Montserrat",
-        "title_size": 80,
-        "title_color": "#FFD700",
-        "subtitle_font": "Inter",
-        "body_color": "#cccccc",
-        "accent_color": "#ff0000",
-    }
-
-The override keys follow the pattern ``{element_type}_{property}``.
+    {"title_font": "Montserrat", "title_color": "#FFD700"}
 """
 
 from __future__ import annotations
@@ -82,7 +77,6 @@ def _resolve_font(family: str, size: int, weight: int = 400) -> ImageFont.FreeTy
     else:
         candidates = [f"{family}.ttf", f"{family}.ttc"]
 
-    # Always add Inter as fallback
     candidates += ["InterVariable.ttf", "Inter.ttc"]
 
     for font_dir in _FONT_DIRS:
@@ -143,31 +137,110 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFon
 
 
 # ---------------------------------------------------------------------------
-# Override application
+# Theme + Override merge
 # ---------------------------------------------------------------------------
 
-def _apply_overrides(element: dict, overrides: dict) -> dict:
-    """Return a shallow copy of *element* with user overrides merged in.
+_STYLE_PROPS = ("font", "size", "weight", "color")
+_RECT_ROLE_MAP = {
+    "accent": "accent",
+    "overlay": "overlay",
+    "overlay_heavy": "overlay_heavy",
+    "marker": "marker",
+    "button": "button",
+}
 
-    Override keys follow ``{element_type}_{property}`` naming, e.g.
-    ``title_font``, ``subtitle_color``, ``cta_size``.
+
+def apply_theme(element: dict, theme: dict | None) -> dict:
+    """Merge theme styling into a layout element (non-mutating).
+
+    For text-like elements (title, subtitle, body, cta, bullet_list,
+    slide_counter), the theme provides font, size, weight, color based
+    on the element type.
+
+    For ``rect`` elements, the ``role`` field maps to a theme color.
+    For ``cta`` elements, ``button_color/padding/radius`` come from theme.
+    """
+    if not theme:
+        return element
+    merged = dict(element)
+    etype = element.get("type", "")
+
+    # Text-style elements: font, size, weight, color from theme
+    if etype in ("title", "subtitle", "body", "cta", "bullet_list", "slide_counter"):
+        fonts = theme.get("fonts", {})
+        sizes = theme.get("sizes", {})
+        weights = theme.get("weights", {})
+        colors = theme.get("colors", {})
+
+        if "font" not in element and etype in fonts:
+            merged["font"] = fonts[etype]
+        if "size" not in element and etype in sizes:
+            merged["size"] = sizes[etype]
+        if "weight" not in element and etype in weights:
+            merged["weight"] = weights[etype]
+        if "color" not in element and etype in colors:
+            merged["color"] = colors[etype]
+
+        # bullet_list extras
+        if etype == "bullet_list":
+            if "marker_color" not in element and "marker" in colors:
+                merged["marker_color"] = colors["marker"]
+
+        # cta button styling
+        if etype == "cta":
+            if "button_color" not in element and "button" in colors:
+                merged["button_color"] = colors["button"]
+            btn = theme.get("button", {})
+            if "button_padding_x" not in element and "padding_x" in btn:
+                merged["button_padding_x"] = btn["padding_x"]
+            if "button_padding_y" not in element and "padding_y" in btn:
+                merged["button_padding_y"] = btn["padding_y"]
+            if "button_radius" not in element and "radius" in btn:
+                merged["button_radius"] = btn["radius"]
+
+    # Rect elements: color from role
+    elif etype == "rect":
+        role = element.get("role", "")
+        colors = theme.get("colors", {})
+        if role and "color" not in element and role in colors:
+            merged["color"] = colors[role]
+
+    return merged
+
+
+def apply_overrides(element: dict, overrides: dict) -> dict:
+    """Apply user overrides on top of a (theme-merged) element.
+
+    Override keys: ``{element_type}_{property}``, e.g. ``title_font``.
+    ``accent_color`` applies to rect elements with role=accent.
     """
     if not overrides:
         return element
     etype = element.get("type", "")
     merged = dict(element)
+
     for prop in ("font", "size", "color", "weight"):
         key = f"{etype}_{prop}"
         if key in overrides:
             merged[prop] = overrides[key]
-    # Generic accent override applies to rect elements with role "accent"
-    if etype == "rect" and "accent_color" in overrides:
+
+    # bullet_list marker_color override
+    if etype == "bullet_list" and "bullet_list_marker_color" in overrides:
+        merged["marker_color"] = overrides["bullet_list_marker_color"]
+
+    # accent_color override for accent rects
+    if etype == "rect" and element.get("role") == "accent" and "accent_color" in overrides:
         merged["color"] = overrides["accent_color"]
+
+    # button_color override for CTA
+    if etype == "cta" and "cta_button_color" in overrides:
+        merged["button_color"] = overrides["cta_button_color"]
+
     return merged
 
 
 # ---------------------------------------------------------------------------
-# Element renderers — each handles one element type
+# Element renderers
 # ---------------------------------------------------------------------------
 
 def _draw_image(
@@ -179,7 +252,6 @@ def _draw_image(
     asset_id = el.get("asset_id", "")
     pil_asset = asset_map.get(asset_id) if asset_id else None
     if pil_asset is None:
-        # Fill with solid color if specified, otherwise skip
         fill = el.get("fill")
         if fill:
             overlay = Image.new("RGBA", img.size, _parse_color(fill))
@@ -216,7 +288,7 @@ def _draw_text_element(
     el: dict, content: dict, asset_map: dict,
     slide_number: int,
 ) -> None:
-    """Draw a single text block (title, subtitle, body, cta)."""
+    """Draw a single text block (title, subtitle, body)."""
     content_key = el.get("content_key", el.get("type", "title"))
     text = content.get(content_key, "")
     if not text:
@@ -275,13 +347,11 @@ def _draw_bullet_list(
     line_gap = int(el.get("line_gap", 8))
 
     for bullet in bullets:
-        # Marker
         my = y + 8
         draw.ellipse(
             [x, my, x + marker_size, my + marker_size],
             fill=marker_color,
         )
-        # Text
         lines = _wrap_text(draw, bullet, font, max_w - indent)
         for line in lines:
             draw.text((x + indent, y), line, fill=text_color, font=font)
@@ -313,7 +383,6 @@ def _draw_cta(
 
     lines = _wrap_text(draw, text, font, max_w)
 
-    # Optional button background
     btn_color = el.get("button_color")
     if btn_color:
         total_h = 0
@@ -332,7 +401,6 @@ def _draw_cta(
             radius=btn_radius,
             fill=_parse_color(btn_color),
         )
-        # Shift text inside button
         y = btn_y + btn_pad_y
         x = btn_x
 
@@ -380,7 +448,7 @@ _ELEMENT_RENDERERS = {
 
 
 # ---------------------------------------------------------------------------
-# Single-slide renderer (generic)
+# Single-slide renderer
 # ---------------------------------------------------------------------------
 
 def _render_slide(
@@ -388,10 +456,11 @@ def _render_slide(
     elements: list[dict],
     content: dict,
     asset_map: dict,
+    theme: dict | None,
     overrides: dict,
     slide_number: int,
 ) -> Image.Image:
-    """Render one slide by iterating its element list."""
+    """Render one slide: merge theme → overrides → draw elements."""
     w = int(canvas.get("width", 1080))
     h = int(canvas.get("height", 1080))
     bg = _parse_color(canvas.get("background", "#111111"))
@@ -400,14 +469,14 @@ def _render_slide(
     draw = ImageDraw.Draw(img)
 
     for el in elements:
-        el = _apply_overrides(el, overrides)
+        el = apply_theme(el, theme)
+        el = apply_overrides(el, overrides)
         etype = el.get("type", "")
         renderer = _ELEMENT_RENDERERS.get(etype)
         if renderer is None:
             log.warning("[renderer] unknown element type '%s', skipping", etype)
             continue
         renderer(img, draw, el, content, asset_map, slide_number)
-        # Re-acquire draw after potential image paste operations
         draw = ImageDraw.Draw(img)
 
     return img
@@ -421,28 +490,21 @@ def render_slides(
     template: dict,
     content: dict,
     asset_map: dict | None = None,
+    theme: dict | None = None,
     overrides: dict | None = None,
-    # Legacy compat — if caller passes asset_img instead of asset_map,
-    # we wrap it into asset_map with the key "background_asset".
+    # Legacy compat
     asset_img: Optional[Image.Image] = None,
 ) -> list[bytes]:
-    """Render all slides defined in the template and return PNG byte buffers.
+    """Render all slides and return PNG byte buffers.
 
     Args:
-        template: Parsed template dict (from templates/layouts/*.json).
-        content:  Structured content from the LLM::
-
-                    {
-                      "title": "...",
-                      "subtitle": "...",
-                      "bullets": ["...", "..."],
-                      "cta": "...",
-                      "body": "..."
-                    }
-
+        template: Layout template (from templates/layouts/).
+        content:  Structured content from the LLM.
         asset_map: Dict mapping asset_id strings to PIL Images.
-        overrides: Optional user overrides for fonts/colors/sizes.
-        asset_img: Legacy parameter — single background image.
+        theme: Theme dict (from templates/themes/). Optional — if the
+               template has inline styles they still work.
+        overrides: User overrides (highest priority).
+        asset_img: Legacy — single background image.
 
     Returns:
         List of PNG byte buffers, one per slide.
@@ -450,22 +512,28 @@ def render_slides(
     asset_map = dict(asset_map or {})
     overrides = overrides or {}
 
-    # Legacy compat: wrap single asset_img
     if asset_img is not None and "background_asset" not in asset_map:
         asset_map["background_asset"] = asset_img
 
-    canvas = template.get("canvas", {
-        "width": template.get("layout", {}).get("width", 1080),
-        "height": template.get("layout", {}).get("height", 1080),
-        "background": template.get("colors", {}).get("background", "#111111"),
-    })
+    # Resolve canvas: theme background overrides template if template
+    # doesn't specify one.
+    canvas = dict(template.get("canvas", {"width": 1080, "height": 1080}))
+    if "background" not in canvas and theme:
+        canvas["background"] = theme.get("canvas", {}).get("background", "#111111")
+    elif theme and "background" in theme.get("canvas", {}):
+        # Theme provides canvas background; only use if template doesn't
+        # already have one OR it's a layout-only template.
+        if "background" not in template.get("canvas", {}):
+            canvas["background"] = theme["canvas"]["background"]
 
     slides = template.get("slides", [])
 
     png_buffers: list[bytes] = []
     for idx, slide_def in enumerate(slides):
         elements = slide_def.get("elements", [])
-        pil_img = _render_slide(canvas, elements, content, asset_map, overrides, idx + 1)
+        pil_img = _render_slide(
+            canvas, elements, content, asset_map, theme, overrides, idx + 1,
+        )
 
         buf = io.BytesIO()
         pil_img.convert("RGB").save(buf, format="PNG", optimize=True)

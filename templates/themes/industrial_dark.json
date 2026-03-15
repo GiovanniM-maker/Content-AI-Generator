@@ -1,0 +1,55 @@
+{
+  "id": "industrial_dark",
+  "name": "Industrial Dark",
+  "description": "Dark background with gold accent, suited for luxury and professional brands",
+
+  "canvas": {
+    "background": "#111111"
+  },
+
+  "fonts": {
+    "title": "Inter",
+    "subtitle": "Inter",
+    "body": "Inter",
+    "cta": "Inter",
+    "slide_counter": "Inter"
+  },
+
+  "sizes": {
+    "title": 72,
+    "subtitle": 36,
+    "body": 32,
+    "cta": 40,
+    "bullet_list": 32,
+    "slide_counter": 24
+  },
+
+  "weights": {
+    "title": 800,
+    "subtitle": 400,
+    "body": 400,
+    "cta": 700,
+    "bullet_list": 400
+  },
+
+  "colors": {
+    "background": "#111111",
+    "title": "#ffffff",
+    "subtitle": "#aaaaaa",
+    "body": "#aaaaaa",
+    "cta": "#ffffff",
+    "bullet_list": "#ffffff",
+    "slide_counter": "#aaaaaa",
+    "accent": "#c9a36a",
+    "overlay": "#00000090",
+    "overlay_heavy": "#000000A0",
+    "marker": "#c9a36a",
+    "button": "#c9a36a"
+  },
+
+  "button": {
+    "padding_x": 60,
+    "padding_y": 30,
+    "radius": 12
+  }
+}

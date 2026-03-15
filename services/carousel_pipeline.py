@@ -1,12 +1,19 @@
-"""New carousel generation pipeline — template + content + assets.
+"""Carousel generation pipeline — layout + theme + content + assets.
 
 Orchestrates the full flow:
   1. LLM generates structured content (title, subtitle, bullets, cta)
   2. LLM generates 2-3 image prompts from the user prompt
   3. Image model generates assets
   4. Assets are stored in Supabase
-  5. Renderer composes slides using template + content + selected asset
+  5. Renderer composes slides using layout + theme + content + asset
   6. Slides exported as PNG and uploaded to Supabase
+
+Template registry
+-----------------
+Layouts live in ``templates/layouts/{layout_name}/{variant}.json``.
+Themes live in ``templates/themes/{theme_id}.json``.
+Legacy flat files (``templates/layouts/{name}.json``) are also supported
+for backward compatibility.
 
 Usage::
 
@@ -15,7 +22,9 @@ Usage::
     result = generate_instagram_carousel(
         prompt="5 strategie per aumentare le vendite online",
         user_id="abc123",
-        template_id="minimal_industrial",
+        template_id="minimal_layout",
+        variant="center",
+        theme_id="industrial_dark",
     )
 """
 
@@ -42,47 +51,172 @@ log = logging.getLogger(__name__)
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 MODEL_CONTENT = os.getenv("CAROUSEL_LLM_MODEL", "google/gemini-2.5-flash")
 
-TEMPLATES_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "templates", "layouts"
-)
+_BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+LAYOUTS_DIR = os.path.join(_BASE_DIR, "templates", "layouts")
+THEMES_DIR = os.path.join(_BASE_DIR, "templates", "themes")
 
 
 # ---------------------------------------------------------------------------
-# Template loader
+# Theme loader
 # ---------------------------------------------------------------------------
 
-def load_template(template_id: str) -> dict:
-    """Load a template JSON from templates/layouts/{template_id}.json."""
-    path = os.path.join(TEMPLATES_DIR, f"{template_id}.json")
+def load_theme(theme_id: str) -> dict:
+    """Load a theme JSON from templates/themes/{theme_id}.json."""
+    path = os.path.join(THEMES_DIR, f"{theme_id}.json")
     if not os.path.isfile(path):
-        available = [
-            f.replace(".json", "")
-            for f in os.listdir(TEMPLATES_DIR)
-            if f.endswith(".json")
-        ]
+        available = list_theme_ids()
         raise ValueError(
-            f"Template '{template_id}' not found. "
-            f"Available: {available}"
+            f"Theme '{theme_id}' not found. Available: {available}"
         )
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def list_templates() -> list[dict]:
-    """Return a summary of all available templates."""
-    templates = []
-    for fname in sorted(os.listdir(TEMPLATES_DIR)):
-        if not fname.endswith(".json"):
-            continue
-        path = os.path.join(TEMPLATES_DIR, fname)
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        templates.append({
-            "id": data.get("id", fname.replace(".json", "")),
-            "name": data.get("name", ""),
-            "description": data.get("description", ""),
+def list_theme_ids() -> list[str]:
+    """Return IDs of all available themes."""
+    if not os.path.isdir(THEMES_DIR):
+        return []
+    return sorted(
+        f.replace(".json", "")
+        for f in os.listdir(THEMES_DIR)
+        if f.endswith(".json")
+    )
+
+
+def list_themes() -> list[dict]:
+    """Return summary of all available themes."""
+    results = []
+    for tid in list_theme_ids():
+        theme = load_theme(tid)
+        results.append({
+            "id": theme.get("id", tid),
+            "name": theme.get("name", ""),
+            "description": theme.get("description", ""),
         })
-    return templates
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Template / variant loader
+# ---------------------------------------------------------------------------
+
+def _find_layout_path(template_id: str, variant: str | None) -> str:
+    """Resolve layout file path, supporting both directory and flat layouts.
+
+    Resolution order:
+      1. templates/layouts/{template_id}/{variant}.json
+      2. templates/layouts/{template_id}/center.json  (default variant)
+      3. templates/layouts/{template_id}.json          (legacy flat file)
+    """
+    # Directory-based (new format)
+    dir_path = os.path.join(LAYOUTS_DIR, template_id)
+    if os.path.isdir(dir_path):
+        if variant:
+            path = os.path.join(dir_path, f"{variant}.json")
+            if os.path.isfile(path):
+                return path
+            raise ValueError(
+                f"Variant '{variant}' not found for layout '{template_id}'. "
+                f"Available: {list_variants(template_id)}"
+            )
+        # Default: first variant alphabetically, or "center" if it exists
+        center = os.path.join(dir_path, "center.json")
+        if os.path.isfile(center):
+            return center
+        variants = list_variants(template_id)
+        if variants:
+            return os.path.join(dir_path, f"{variants[0]}.json")
+        raise ValueError(f"Layout dir '{template_id}' contains no variant files.")
+
+    # Legacy flat file
+    flat = os.path.join(LAYOUTS_DIR, f"{template_id}.json")
+    if os.path.isfile(flat):
+        return flat
+
+    available = list_layout_ids()
+    raise ValueError(
+        f"Layout '{template_id}' not found. Available: {available}"
+    )
+
+
+def load_template(template_id: str, variant: str | None = None) -> dict:
+    """Load a layout template JSON, resolving variant if needed."""
+    path = _find_layout_path(template_id, variant)
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def list_variants(template_id: str) -> list[str]:
+    """Return available variants for a layout (empty for flat layouts)."""
+    dir_path = os.path.join(LAYOUTS_DIR, template_id)
+    if not os.path.isdir(dir_path):
+        return []
+    return sorted(
+        f.replace(".json", "")
+        for f in os.listdir(dir_path)
+        if f.endswith(".json")
+    )
+
+
+def list_layout_ids() -> list[str]:
+    """Return IDs of all available layouts (directories + flat files)."""
+    if not os.path.isdir(LAYOUTS_DIR):
+        return []
+    result = []
+    for entry in sorted(os.listdir(LAYOUTS_DIR)):
+        full = os.path.join(LAYOUTS_DIR, entry)
+        if os.path.isdir(full):
+            # Only include if it has at least one .json variant
+            if any(f.endswith(".json") for f in os.listdir(full)):
+                result.append(entry)
+        elif entry.endswith(".json"):
+            result.append(entry.replace(".json", ""))
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Template registry (public API)
+# ---------------------------------------------------------------------------
+
+def list_templates() -> list[dict]:
+    """Return the full template registry: layouts + variants + themes.
+
+    Response::
+
+        [
+            {
+                "template": "minimal_layout",
+                "name": "Minimal Center",
+                "variants": ["center", "split"],
+                "default_theme": "industrial_dark",
+                "themes": ["industrial_dark", "luxury_gold", ...]
+            },
+            ...
+        ]
+    """
+    all_themes = list_theme_ids()
+    result = []
+
+    for layout_id in list_layout_ids():
+        variants = list_variants(layout_id)
+
+        # Load the default variant (or flat file) for metadata
+        try:
+            tpl = load_template(layout_id)
+        except ValueError:
+            continue
+
+        entry = {
+            "template": layout_id,
+            "name": tpl.get("name", layout_id),
+            "description": tpl.get("description", ""),
+            "variants": variants,
+            "default_theme": tpl.get("default_theme", ""),
+            "themes": all_themes,
+        }
+        result.append(entry)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -123,16 +257,14 @@ def _llm_call(messages: list, model: str = MODEL_CONTENT,
 def _llm_json(messages: list, model: str = MODEL_CONTENT) -> dict:
     """Call LLM and parse the response as JSON."""
     raw = _llm_call(messages, model=model, temperature=0.3)
-    # Strip markdown fences
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
-        lines = lines[1:]  # remove opening fence
+        lines = lines[1:]
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         cleaned = "\n".join(lines)
 
-    # Find JSON object
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start != -1 and end > start:
@@ -198,7 +330,6 @@ def _generate_image_prompts(prompt: str, num_images: int = 3) -> list[str]:
     data = _llm_json(messages)
     prompts = data.get("image_prompts", [])
     if not prompts:
-        # Fallback: single generic prompt
         prompts = [f"Abstract elegant background texture for {prompt}, editorial style, no text"]
     return prompts[:num_images]
 
@@ -210,9 +341,12 @@ def _generate_image_prompts(prompt: str, num_images: int = 3) -> list[str]:
 def generate_instagram_carousel(
     prompt: str,
     user_id: str,
-    template_id: str = "minimal_industrial",
+    template_id: str = "minimal_layout",
+    variant: str | None = None,
+    theme_id: str | None = None,
     num_images: int = 3,
     selected_asset_index: int = 0,
+    asset_mapping: dict | None = None,
     overrides: dict | None = None,
 ) -> dict:
     """Generate a complete Instagram carousel.
@@ -220,28 +354,26 @@ def generate_instagram_carousel(
     Args:
         prompt: User's topic/description for the carousel.
         user_id: Supabase user ID.
-        template_id: Which template to use (from templates/layouts/).
-        num_images: How many asset images to generate (2-3).
-        selected_asset_index: Which generated asset to use as background.
-        overrides: Optional user overrides for fonts/colors/sizes.
-                   Keys follow ``{element_type}_{property}`` naming::
-
-                       {
-                           "title_font": "Montserrat",
-                           "title_color": "#FFD700",
-                           "subtitle_size": 40,
-                           "accent_color": "#ff0000",
-                       }
+        template_id: Layout template (from templates/layouts/).
+        variant: Layout variant (e.g. "center", "split"). None = default.
+        theme_id: Theme to apply (from templates/themes/). None = use
+                  the layout's ``default_theme``, or fall back to
+                  ``industrial_dark``.
+        num_images: How many asset images to generate (1-3).
+        selected_asset_index: Which generated asset to use as background
+                              (ignored if asset_mapping is provided).
+        asset_mapping: Explicit mapping of template asset_ids to asset
+                       indices, e.g. ``{"background_asset": 1}``.
+        overrides: User overrides for fonts/colors/sizes.
 
     Returns::
 
         {
-            "slides": ["url1", "url2", "url3", "url4"],
-            "assets": [
-                {"id": "...", "image_url": "...", "prompt": "..."},
-                ...
-            ],
-            "template": "minimal_industrial",
+            "slides": ["url1", "url2", ...],
+            "assets": [{"id": "...", "image_url": "...", ...}, ...],
+            "template": "minimal_layout",
+            "variant": "center",
+            "theme": "industrial_dark",
             "content": {"title": "...", ...}
         }
     """
@@ -250,50 +382,76 @@ def generate_instagram_carousel(
     num_images = max(1, min(num_images, 3))
     overrides = overrides or {}
 
-    log.info("[carousel] ═══ START ═══ user=%s template=%s", user_id[:8], template_id)
+    log.info("[carousel] ═══ START ═══ user=%s template=%s variant=%s theme=%s",
+             user_id[:8], template_id, variant, theme_id)
     log.info("[carousel] prompt: %s", prompt[:200])
 
-    # 1) Load template
-    template = load_template(template_id)
-    log.info("[carousel] template loaded: %s", template["name"])
+    # 1) Load layout template
+    template = load_template(template_id, variant=variant)
+    actual_variant = variant or "center"
+    log.info("[carousel] layout loaded: %s", template.get("name", template_id))
 
-    # 2) Generate structured content
+    # 2) Load theme (resolve default if not specified)
+    if not theme_id:
+        theme_id = template.get("default_theme", "") or "industrial_dark"
+    try:
+        theme = load_theme(theme_id)
+    except ValueError:
+        log.warning("[carousel] theme '%s' not found, falling back to no theme", theme_id)
+        theme = None
+    log.info("[carousel] theme: %s", theme.get("name", "none") if theme else "none")
+
+    # 3) Generate structured content
     log.info("[carousel] step 1: generating structured content…")
     content = _generate_content(prompt)
     log.info("[carousel] content: title=%s", content.get("title", "")[:60])
 
-    # 3) Generate image prompts
+    # 4) Generate image prompts
     log.info("[carousel] step 2: generating %d image prompts…", num_images)
     image_prompts = _generate_image_prompts(prompt, num_images=num_images)
     log.info("[carousel] image prompts: %s", [p[:60] for p in image_prompts])
 
-    # 4) Generate and store assets
+    # 5) Generate and store assets
     log.info("[carousel] step 3: generating %d assets…", len(image_prompts))
     assets = generate_assets_batch(image_prompts, user_id)
     successful_assets = [a for a in assets if "error" not in a]
     log.info("[carousel] assets generated: %d/%d successful",
              len(successful_assets), len(assets))
 
-    # 5) Build asset_map — maps template asset_ids to PIL Images
+    # 6) Build asset_map from mapping or default
     asset_map: dict = {}
     if successful_assets:
-        idx = min(selected_asset_index, len(successful_assets) - 1)
-        try:
-            asset_map["background_asset"] = load_asset_image(
-                successful_assets[idx]["image_url"]
-            )
-            log.info("[carousel] mapped background_asset → asset %d", idx)
-        except Exception as exc:
-            log.warning("[carousel] failed to load asset image: %s", exc)
+        if asset_mapping:
+            # Explicit mapping: {"background_asset": 1, "logo": 2}
+            for asset_id, asset_idx in asset_mapping.items():
+                idx = min(int(asset_idx), len(successful_assets) - 1)
+                try:
+                    asset_map[asset_id] = load_asset_image(
+                        successful_assets[idx]["image_url"]
+                    )
+                    log.info("[carousel] mapped %s → asset %d", asset_id, idx)
+                except Exception as exc:
+                    log.warning("[carousel] failed to load asset %d for %s: %s",
+                                idx, asset_id, exc)
+        else:
+            # Default: first successful asset → background_asset
+            idx = min(selected_asset_index, len(successful_assets) - 1)
+            try:
+                asset_map["background_asset"] = load_asset_image(
+                    successful_assets[idx]["image_url"]
+                )
+                log.info("[carousel] mapped background_asset → asset %d", idx)
+            except Exception as exc:
+                log.warning("[carousel] failed to load asset image: %s", exc)
 
-    # 6) Render slides
+    # 7) Render slides
     log.info("[carousel] step 5: rendering slides…")
     png_buffers = render_slides(
-        template, content, asset_map=asset_map, overrides=overrides,
+        template, content, asset_map=asset_map, theme=theme, overrides=overrides,
     )
     log.info("[carousel] rendered %d slides", len(png_buffers))
 
-    # 7) Upload slides to Supabase
+    # 8) Upload slides to Supabase
     log.info("[carousel] step 6: uploading slides…")
     slide_urls = _db.upload_carousel_images_batch(user_id, session_id, png_buffers)
     log.info("[carousel] uploaded %d slides", len(slide_urls))
@@ -306,5 +464,7 @@ def generate_instagram_carousel(
         "slides": slide_urls,
         "assets": successful_assets,
         "template": template_id,
+        "variant": actual_variant,
+        "theme": theme_id,
         "content": content,
     }

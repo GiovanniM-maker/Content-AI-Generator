@@ -1,0 +1,57 @@
+{
+  "id": "minimal_layout/center",
+  "name": "Minimal Center",
+  "description": "Clean centered layout with accent line, text stacked vertically",
+  "default_theme": "industrial_dark",
+
+  "canvas": {
+    "width": 1080,
+    "height": 1080
+  },
+
+  "slides": [
+    {
+      "name": "cover",
+      "elements": [
+        {"type": "image", "asset_id": "background_asset", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "rect", "role": "overlay", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "rect", "role": "accent", "x": 80, "y": 420, "width": 64, "height": 5},
+        {"type": "title", "content_key": "title", "x": 80, "y": 440, "max_width": 920, "line_gap": 10},
+        {"type": "subtitle", "content_key": "subtitle", "x": 80, "y": 600, "max_width": 920, "line_gap": 8},
+        {"type": "slide_counter", "x": 1000, "y": 1000}
+      ]
+    },
+    {
+      "name": "text",
+      "elements": [
+        {"type": "image", "asset_id": "background_asset", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "rect", "role": "overlay_heavy", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "rect", "role": "accent", "x": 80, "y": 120, "width": 64, "height": 5},
+        {"type": "subtitle", "content_key": "subtitle", "x": 80, "y": 150, "max_width": 920, "line_gap": 10},
+        {"type": "body", "content_key": "body", "x": 80, "y": 280, "max_width": 920, "line_gap": 10},
+        {"type": "slide_counter", "x": 1000, "y": 1000}
+      ]
+    },
+    {
+      "name": "list",
+      "elements": [
+        {"type": "image", "asset_id": "background_asset", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "rect", "role": "overlay_heavy", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "rect", "role": "accent", "x": 80, "y": 120, "width": 64, "height": 5},
+        {"type": "subtitle", "content_key": "subtitle", "x": 80, "y": 150, "max_width": 920, "line_gap": 10},
+        {"type": "bullet_list", "content_key": "bullets", "x": 80, "y": 280, "max_width": 920, "indent": 30, "marker_size": 12, "item_gap": 16, "line_gap": 8},
+        {"type": "slide_counter", "x": 1000, "y": 1000}
+      ]
+    },
+    {
+      "name": "cta",
+      "elements": [
+        {"type": "image", "asset_id": "background_asset", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "rect", "role": "overlay", "x": 0, "y": 0, "width": 1080, "height": 1080},
+        {"type": "subtitle", "content_key": "subtitle", "x": 120, "y": 380, "max_width": 840, "align": "center", "line_gap": 8},
+        {"type": "cta", "content_key": "cta", "x": 120, "y": 480, "max_width": 840, "align": "center", "line_gap": 10},
+        {"type": "slide_counter", "x": 1000, "y": 1000}
+      ]
+    }
+  ]
+}
