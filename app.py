@@ -3829,8 +3829,10 @@ REGOLE:
                                 f"Template chat: image generated for {template_id} → {img_result['url']}")
                             spec_changed = True
                         except Exception as img_err:
+                            import traceback as _tb
                             _log_pipeline("error",
-                                f"Template chat: image generation failed for {template_id}: {img_err}")
+                                f"Template chat: image generation failed for {template_id}: "
+                                f"{type(img_err).__name__}: {img_err}\n{_tb.format_exc()}")
                             if image_intent["image_only"]:
                                 # Image-only request failed → preserve everything
                                 reply_text = parsed.get("reply", "") + \
