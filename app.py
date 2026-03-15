@@ -3451,39 +3451,130 @@ def _detect_image_intent(message: str) -> dict | None:
 
 
 def _build_image_prompt(user_message: str, design_spec: dict, target: str) -> str:
-    """Build a concise image generation prompt from user request + design context.
+    """Build an optimized image generation prompt via a small LLM planner step.
 
-    Keeps it short and reliable for Flux Schnell.
+    Uses MODEL_CHEAP to analyze the user's request and produce a precise,
+    subject-accurate image prompt. This prevents the image model from drifting
+    to random/unrelated subjects (e.g. generating a cat when user asked for marble).
     """
-    # Extract the user's descriptive words (the message itself is the best signal)
-    base = user_message.strip()
-
-    # Add style hints from the design spec
+    # ── Gather design context ──
     theme = design_spec.get("theme_name", "")
     bg_color = design_spec.get("colors", {}).get("background", "")
+    is_dark = any(c in bg_color.lower() for c in ("#0", "#1", "#2", "rgb(0", "rgb(1", "rgb(2", "dark"))
+    palette = "dark" if is_dark else "light"
 
-    # Determine if dark or light theme
+    # ── Pre-compute dynamic parts (no backslashes in f-string expressions) ──
+    theme_label = theme or "not specified"
+    target_desc = (
+        "full-bleed background behind ALL slides — must be subtle"
+        if target == "background"
+        else "hero image for the cover slide — can be more prominent"
+    )
+    if target == "background":
+        composition_rules = (
+            "   - Clean negative space for text overlay\n"
+            "   - Not too busy or cluttered\n"
+            "   - Subtle, editorial background suitable for text readability\n"
+            "   - Soft focus or muted tones to stay behind content"
+        )
+    else:
+        composition_rules = (
+            "   - Strong focal point, editorial quality\n"
+            "   - Can be more detailed and prominent\n"
+            "   - Magazine-cover style composition"
+        )
+
+    # ── LLM planner system prompt ──
+    planner_system = f"""You are an image prompt engineer for an Instagram carousel design tool.
+
+TASK: Analyze the user's request and produce ONE optimized image generation prompt.
+
+CONTEXT:
+- Template theme: {theme_label}
+- Color palette: {palette}
+- Target placement: {target} ({target_desc})
+
+RULES — follow ALL of these strictly:
+1. SUBJECT ACCURACY is your #1 priority. Extract the exact subject the user wants:
+   - "cucina in marmo" → marble kitchen interior
+   - "texture di marmo" → marble texture, veined stone surface
+   - "ufficio moderno" → modern office interior
+   - "clinica dentale" → dental clinic interior
+   - "vini" → premium wine bottles and vineyard
+   - "fiori" → floral arrangement
+   If the user mentions a specific subject, it MUST be the dominant element in the prompt.
+
+2. STYLE: Match the template style (minimal, industrial, luxury, playful, etc.).
+
+3. COMPOSITION for target="{target}":
+{composition_rules}
+
+4. NEGATIVE CONSTRAINTS — always include these at the end:
+   - no text, no letters, no words, no watermarks
+   - no random animals unless specifically requested
+   - no unrelated objects
+   - no clutter, no collage
+
+5. FORMAT: Output ONLY the final prompt text. No JSON, no explanation, no labels.
+   Keep it under 250 characters. Be specific and visual.
+
+EXAMPLES:
+User: "template minimal con foto di cucine"
+→ Modern minimalist kitchen interior with marble countertops, clean lines, soft natural light, editorial photography, shallow depth of field, muted tones, no text, no animals, no clutter
+
+User: "sfondo texture marmo scuro"
+→ Dark veined marble texture, close-up stone surface, dramatic lighting, seamless subtle pattern, premium material photography, no text, no objects, no animals
+
+User: "aggiungi immagine di vini per enoteca"
+→ Premium wine bottles on rustic wooden shelf, warm ambient lighting, Italian enoteca atmosphere, shallow depth of field, editorial food photography, no text, no animals, no clutter"""
+
+    planner_user = f"User request: {user_message.strip()}"
+
+    try:
+        prompt = _llm_call(
+            [
+                {"role": "system", "content": planner_system},
+                {"role": "user", "content": planner_user},
+            ],
+            model=MODEL_CHEAP,
+            temperature=0.2,
+        )
+        prompt = prompt.strip().strip('"').strip("'")
+        # Safety: if planner returned something too short or suspicious, fall back
+        if len(prompt) < 15:
+            _log_pipeline("warning", f"Image planner returned short prompt ({len(prompt)} chars), using fallback")
+            raise ValueError("Planner returned too-short prompt")
+        _log_pipeline("info", f"Image planner prompt: {prompt[:200]}")
+    except Exception as e:
+        # Fallback: deterministic prompt building if LLM planner fails
+        _log_pipeline("warning", f"Image planner failed ({e}), using deterministic fallback")
+        prompt = _build_image_prompt_fallback(user_message, design_spec, target)
+
+    # Cap length
+    if len(prompt) > 400:
+        prompt = prompt[:400]
+
+    return prompt
+
+
+def _build_image_prompt_fallback(user_message: str, design_spec: dict, target: str) -> str:
+    """Deterministic fallback prompt builder (used only if LLM planner fails)."""
+    base = user_message.strip()
+    bg_color = design_spec.get("colors", {}).get("background", "")
     is_dark = any(c in bg_color.lower() for c in ("#0", "#1", "#2", "rgb(0", "rgb(1", "rgb(2", "dark"))
 
-    style_hints = []
-    if is_dark:
-        style_hints.append("dark moody atmosphere")
-    else:
-        style_hints.append("clean bright atmosphere")
-
+    parts = [base]
+    parts.append("dark moody atmosphere" if is_dark else "clean bright atmosphere")
     if target == "cover":
-        style_hints.append("hero image composition, editorial quality")
+        parts.append("hero image, editorial quality, strong focal point")
     else:
-        style_hints.append("seamless background texture, subtle pattern")
+        parts.append("subtle background, clean composition, negative space for text")
+    parts.append("professional photography, high resolution")
+    parts.append("no text, no letters, no animals, no clutter, no watermarks")
 
-    style_hints.append("high resolution, professional photography style")
-
-    prompt = f"{base}, {', '.join(style_hints)}"
-
-    # Cap length for reliability
-    if len(prompt) > 300:
-        prompt = prompt[:300]
-
+    prompt = ", ".join(parts)
+    if len(prompt) > 400:
+        prompt = prompt[:400]
     return prompt
 
 
