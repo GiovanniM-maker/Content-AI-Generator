@@ -2236,6 +2236,8 @@ body::after {
 .pers-inspector-mode.mode-asset { background: #dcfce7; color: #166534; }
 .pers-inspector-mode.mode-design { background: #dbeafe; color: #1e40af; }
 .pers-inspector-mode.mode-mixed { background: #fef3c7; color: #92400e; }
+.pers-inspector-mode.mode-layout_edit { background: #f3e8ff; color: #6b21a8; }
+.pers-inspector-mode.mode-content { background: #fce7f3; color: #9d174d; }
 .pers-inspector-section { margin-top: 8px; }
 .pers-inspector-section-title { font-weight: 700; font-size: 10px; text-transform: uppercase; color: var(--text3); letter-spacing: 0.5px; margin-bottom: 4px; }
 .pers-inspector-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
@@ -9122,7 +9124,7 @@ function updatePersInspector(state) {
   if (!body || !badge) return;
 
   // Show mode badge
-  const modeLabels = { asset: 'ASSET', design: 'DESIGN', mixed: 'MIXED' };
+  const modeLabels = { asset: 'ASSET', design: 'DESIGN', mixed: 'MIXED', layout_edit: 'LAYOUT', content: 'CONTENT' };
   badge.textContent = modeLabels[state.mode] || state.mode;
   badge.className = 'pers-inspector-mode mode-' + (state.mode || 'design');
   badge.style.display = 'inline-block';
@@ -9161,6 +9163,30 @@ function updatePersInspector(state) {
       html += '<span class="pers-inspector-anchor">' + esc(anchor) + '</span>';
       html += '<span class="pers-inspector-slides">→ ' + esc(slides) + '</span>';
       html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Element overlays (LAYOUT_EDIT mode)
+  const overlays = state.element_overlays || [];
+  if (overlays.length > 0) {
+    html += '<div class="pers-inspector-section">';
+    html += '<div class="pers-inspector-section-title">Element Overlays</div>';
+    for (const ov of overlays) {
+      const opLabel = (ov.op || '').toUpperCase();
+      const id = ov.id || '-';
+      const anchor = ov.anchor || '';
+      const slides = ov.target_slides ? ov.target_slides.join(', ') : 'tutte';
+      html += '<div class="pers-inspector-row">';
+      html += '<span class="pers-inspector-slot" style="font-weight:700;">' + esc(opLabel) + '</span>';
+      html += '<span class="pers-inspector-value">' + esc(id) + (anchor ? ' → ' + esc(anchor) : '') + '</span>';
+      html += '<span class="pers-inspector-slides" style="font-size:10px;color:#888;">(' + esc(slides) + ')</span>';
+      html += '</div>';
+      if (ov.text_value) {
+        html += '<div class="pers-inspector-row" style="padding-left:12px;">';
+        html += '<span style="color:#888;">text:</span> <span>' + esc(ov.text_value) + '</span>';
+        html += '</div>';
+      }
     }
     html += '</div>';
   }
@@ -9209,7 +9235,7 @@ function updatePersInspector(state) {
 
   // Auto-expand on first command state
   const panel = document.getElementById('pers-inspector');
-  if (panel && (hasMapping || hasPlacements || errors.length > 0)) {
+  if (panel && (hasMapping || hasPlacements || overlays.length > 0 || errors.length > 0)) {
     panel.classList.remove('collapsed');
     panel.classList.add('expanded');
   }

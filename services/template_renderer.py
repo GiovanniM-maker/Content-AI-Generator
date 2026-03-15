@@ -865,8 +865,20 @@ def render_instagram_slide(
     """
     renderer = SLIDE_RENDERERS.get(slide_type, _render_content)
     width, height = ASPECT_DIMENSIONS.get(aspect_ratio, (1080, 1080))
-    return renderer(spec, content, width, height, slide_num, total_slides,
+    html = renderer(spec, content, width, height, slide_num, total_slides,
                     brand_name, brand_handle)
+
+    # Apply element overlays (LAYOUT_EDIT_MODE patches)
+    if spec.get("element_overlays"):
+        try:
+            from services.layout_patch import render_all_overlays
+            overlay_html = render_all_overlays(spec, slide_type)
+            if overlay_html:
+                html = html.replace("</body>", f"{overlay_html}\n</body>")
+        except Exception:
+            pass  # graceful degradation — overlays are optional
+
+    return html
 
 
 def render_instagram_template(

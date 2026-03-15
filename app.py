@@ -3899,8 +3899,68 @@ REGOLE:
                 _log_pipeline("info",
                     f"[personalizza] cmd[{i}]: {cmd}")
 
+            # ── LAYOUT_EDIT MODE: LLM generates only JSON patch operations ──
+            if parse_result.mode == CommandMode.LAYOUT_EDIT:
+                _log_pipeline("info", "[personalizza] LAYOUT_EDIT MODE — patch-based editing")
+
+                base_spec = current_design_spec
+                if not base_spec:
+                    base_spec = dict(DEFAULT_DESIGN_SPEC)
+
+                new_design_spec = validate_design_spec(base_spec)
+
+                from services.layout_patch import (
+                    validate_patch_operations,
+                    apply_patch_operations,
+                    LAYOUT_EDIT_SYSTEM_PROMPT,
+                    build_layout_edit_prompt,
+                )
+
+                current_overlays = new_design_spec.get("element_overlays", [])
+                layout_user_prompt = build_layout_edit_prompt(
+                    user_message, new_design_spec, current_overlays,
+                )
+
+                # Ask LLM for structured patch operations only
+                layout_messages = [
+                    {"role": "system", "content": LAYOUT_EDIT_SYSTEM_PROMPT},
+                    {"role": "user", "content": layout_user_prompt},
+                ]
+
+                try:
+                    layout_raw = _llm_call(layout_messages, temperature=0.2)
+                    layout_parsed = _try_parse_response(layout_raw)
+
+                    if layout_parsed and "operations" in layout_parsed:
+                        ops = layout_parsed["operations"]
+                        reply_text = layout_parsed.get("reply", "Layout aggiornato!")
+
+                        validation = validate_patch_operations(ops)
+                        for w in validation.warnings:
+                            _log_pipeline("warn", f"[layout_edit] validation: {w}")
+
+                        if validation.valid:
+                            new_design_spec = apply_patch_operations(new_design_spec, ops)
+                            spec_changed = True
+                            _log_pipeline("info",
+                                f"[layout_edit] applied {len(ops)} operations")
+                        else:
+                            for e in validation.errors:
+                                _log_pipeline("error", f"[layout_edit] validation error: {e}")
+                            reply_text += "\n\n⚠️ Alcune operazioni non sono valide: " + "; ".join(validation.errors[:3])
+                    elif layout_parsed and "reply" in layout_parsed:
+                        reply_text = layout_parsed["reply"]
+                        _log_pipeline("warn", "[layout_edit] LLM returned no operations")
+                    else:
+                        reply_text = "Non sono riuscito a interpretare la richiesta di layout. Riprova."
+                        _log_pipeline("warn", "[layout_edit] failed to parse LLM response")
+
+                except Exception as layout_err:
+                    _log_pipeline("error", f"[layout_edit] LLM call failed: {layout_err}")
+                    reply_text = f"⚠️ Errore nella modifica layout: {layout_err}"
+
             # ── ASSET MODE: skip LLM design rewrite, execute commands directly ──
-            if parse_result.mode == CommandMode.ASSET and parse_result.commands:
+            elif parse_result.mode == CommandMode.ASSET and parse_result.commands:
                 _log_pipeline("info", "[personalizza] ASSET MODE — preserving design_spec")
 
                 base_spec = current_design_spec
@@ -4142,6 +4202,10 @@ REGOLE:
                             "slides": c.get("slides"),
                             "box": c.get("box"),
                         }
+                # Include element overlays for layout_edit mode
+                overlays = new_design_spec.get("element_overlays", [])
+                if overlays:
+                    command_state["element_overlays"] = overlays
             response_data["command_state"] = command_state
 
         return jsonify(response_data)

@@ -42,7 +42,9 @@ log = logging.getLogger(__name__)
 class CommandMode(Enum):
     ASSET = "asset"
     DESIGN = "design"
-    MIXED = "mixed"   # has both asset and design intent
+    MIXED = "mixed"           # has both asset and design intent
+    LAYOUT_EDIT = "layout_edit"  # precise structural modifications
+    CONTENT = "content"          # text content changes only
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +57,7 @@ COMMAND_TYPES = frozenset({
     "remove_asset",
     "placement_override",
     "slide_scope_override",
+    "layout_edit",
 })
 
 
@@ -141,9 +144,55 @@ _DESIGN_KEYWORDS = [
     r"\barrotonda\b", r"\brounded\b", r"\bradius\b",
 ]
 
+# Layout-edit keywords — precise structural modifications (trigger LAYOUT_EDIT_MODE)
+_LAYOUT_EDIT_KEYWORDS = [
+    # Adding elements
+    r"\baggiungi\s+.{1,40}\s+(in\s+(alto|basso)|su\s+tutt|a\s+(destra|sinistra))\b",
+    r"\badd\s+.{1,40}\s+(to|in|at|on)\s+(the\s+)?(top|bottom|left|right|all)\b",
+    r"\binserisci\b", r"\binsert\b",
+    # Moving/repositioning
+    r"\bsposta\s+(il|la|lo|l'|i|le|gli)\s*(titolo|testo|logo|immagine|bottone|pulsante|footer|contatore|header|brand)",
+    r"\bmove\s+(the\s+)?(title|text|logo|image|button|footer|counter|header|brand)\b",
+    r"\b(più\s+in\s+alto|più\s+in\s+basso|più\s+a\s+destra|più\s+a\s+sinistra)\b",
+    r"\bhigher\b|\blower\b|\bfarther\b|\bcloser\b",
+    # Positioning with prepositions
+    r"\bsotto\s+(il|la|lo|l'|al)\b", r"\bsopra\s+(il|la|lo|l'|al)\b",
+    r"\bunder\s+the\b", r"\babove\s+the\b", r"\bnext\s+to\b",
+    # Slide-specific element ops
+    r"\b(solo\s+)?(nella|sulla|nella)\s+(cover|prima|ultima|cta)\b",
+    r"\b(only\s+)?(on|in)\s+(the\s+)?(cover|first|last|cta)\b",
+    # Element visibility
+    r"\bnascondi\b", r"\bmostra\b", r"\bhide\b", r"\bshow\b",
+    # Opacity
+    r"\bopacit[àa]\b", r"\bopacity\b", r"\btrasparenz\w*\b", r"\btransparenc\w*\b",
+    # Scope changes
+    r"\bsu\s+tutt[eio]\s+le\s+slide\b.*\b(logo|titolo|footer|brand|contatore)\b",
+    r"\bon\s+all\s+slides?\b.*\b(logo|title|footer|brand|counter)\b",
+    # Element-specific reference + action
+    r"\b(titolo|title)\s+(più|piu)\s+(grande|piccol|alto|basso)",
+    r"\b(bottone|button|pulsante)\s+(più|piu)\s+(grande|piccol)",
+    # Watermark / handle
+    r"\b@\w+\b.*\b(in|su|a|tutt)\b",
+    r"\bwatermark\b", r"\bhandle\b",
+]
+
+# Content-edit keywords — text changes only (trigger CONTENT_MODE)
+_CONTENT_KEYWORDS = [
+    r"\bcambia\s+(il\s+)?(titolo|testo|sottotitolo|bullet|elenco|testo\s+del|contenut)",
+    r"\bchange\s+(the\s+)?(title|text|subtitle|bullet|list\s+item|content|heading|body|cta)\b",
+    r"\bscrivi\b", r"\bwrite\b",
+    r"\bsostituisci\s+(il\s+)?(testo|titolo|contenut)",
+    r"\breplace\s+(the\s+)?(text|title|content)\b",
+    r"\btitolo\s*[:=]\s*", r"\btitle\s*[:=]\s*",
+    r"\bmodifica\s+(il\s+)?(testo|titolo|sottotitolo|contenut)",
+    r"\bedit\s+(the\s+)?(text|title|subtitle|content)\b",
+]
+
 # Compiled for performance
 _ASSET_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _ASSET_KEYWORDS]
 _DESIGN_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _DESIGN_KEYWORDS]
+_LAYOUT_EDIT_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _LAYOUT_EDIT_KEYWORDS]
+_CONTENT_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _CONTENT_KEYWORDS]
 
 
 # Position detection (reuse from asset_command_interpreter)
@@ -224,24 +273,39 @@ class ParseResult:
 # ---------------------------------------------------------------------------
 
 def detect_mode(message: str) -> tuple[CommandMode, int, int]:
-    """Detect whether a message is ASSET MODE or DESIGN MODE.
+    """Detect message intent mode.
 
-    Returns (mode, asset_score, design_score).
+    Returns (mode, primary_score, secondary_score).
+    Priority: LAYOUT_EDIT > ASSET > CONTENT > DESIGN.
     """
     lower = message.lower()
 
     asset_score = sum(1 for p in _ASSET_PATTERNS if p.search(lower))
     design_score = sum(1 for p in _DESIGN_PATTERNS if p.search(lower))
+    layout_score = sum(1 for p in _LAYOUT_EDIT_PATTERNS if p.search(lower))
+    content_score = sum(1 for p in _CONTENT_PATTERNS if p.search(lower))
 
-    log.info("[personalizza] mode detection: asset_score=%d, design_score=%d",
-             asset_score, design_score)
+    log.info(
+        "[personalizza] mode detection: asset=%d, design=%d, layout=%d, content=%d",
+        asset_score, design_score, layout_score, content_score,
+    )
 
+    # LAYOUT_EDIT takes priority when layout signals are present and dominant
+    if layout_score >= 2:
+        return CommandMode.LAYOUT_EDIT, layout_score, design_score
+    if layout_score >= 1 and layout_score >= asset_score and design_score == 0:
+        return CommandMode.LAYOUT_EDIT, layout_score, 0
+
+    # CONTENT mode when only content signals present
+    if content_score > 0 and asset_score == 0 and design_score == 0 and layout_score == 0:
+        return CommandMode.CONTENT, content_score, 0
+
+    # ASSET mode
     if asset_score > 0 and design_score == 0:
         return CommandMode.ASSET, asset_score, design_score
     if design_score > 0 and asset_score == 0:
         return CommandMode.DESIGN, asset_score, design_score
     if asset_score > 0 and design_score > 0:
-        # If asset signals dominate, still use ASSET mode
         if asset_score >= design_score * 2:
             return CommandMode.ASSET, asset_score, design_score
         return CommandMode.MIXED, asset_score, design_score

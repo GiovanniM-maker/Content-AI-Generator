@@ -610,6 +610,29 @@ def validate_registry(
 # Composite validation for the full pipeline
 # ---------------------------------------------------------------------------
 
+def validate_element_overlays(overlays: list) -> ValidationResult:
+    """Validate element overlays stored in design_spec.
+
+    Delegates to layout_patch.validate_patch_operations for the heavy lifting,
+    but wraps the result in our ValidationResult format.
+    """
+    r = ValidationResult()
+
+    if not isinstance(overlays, list):
+        r.errors.append("element_overlays must be a list")
+        return r
+
+    try:
+        from services.layout_patch import validate_patch_operations
+        patch_result = validate_patch_operations(overlays)
+        r.errors.extend(patch_result.errors)
+        r.warnings.extend(patch_result.warnings)
+    except ImportError:
+        r.warnings.append("layout_patch module not available; skipping overlay validation")
+
+    return r
+
+
 def validate_render_inputs(
     template: dict,
     theme: dict | None = None,
