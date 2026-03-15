@@ -452,3 +452,25 @@ BEGIN
         ALTER TABLE public.preset_templates ADD COLUMN components JSONB DEFAULT '{}'::jsonb;
     END IF;
 END $$;
+
+-- =====================================================
+-- 16. USER ASSETS (reusable uploaded images)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.user_assets (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     TEXT NOT NULL,
+    type        TEXT NOT NULL DEFAULT 'other'
+                CHECK (type IN ('logo', 'product', 'photo', 'texture', 'other')),
+    url         TEXT NOT NULL,
+    filename    TEXT NOT NULL DEFAULT '',
+    tags        JSONB DEFAULT '[]'::jsonb,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_assets_user ON user_assets(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_assets_user_type ON user_assets(user_id, type);
+
+ALTER TABLE user_assets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "user_assets_all" ON user_assets
+    FOR ALL USING (auth.uid()::text = user_id)
+    WITH CHECK (auth.uid()::text = user_id);

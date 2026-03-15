@@ -514,6 +514,9 @@ def generate_instagram_carousel(
     asset_mapping: dict | None = None,
     overrides: dict | None = None,
     auto_plan: bool = False,
+    user_asset_mapping: dict | None = None,
+    placement_overrides: dict | None = None,
+    asset_commands: list[str] | None = None,
 ) -> dict:
     """Generate a complete Instagram carousel.
 
@@ -535,6 +538,20 @@ def generate_instagram_carousel(
                    choose template/variant/theme/asset roles from the
                    prompt.  Explicit values for template_id/variant/theme_id
                    are ignored when auto_plan is enabled.
+        user_asset_mapping: Maps template slot names to user asset IDs,
+                            e.g. ``{"logo_asset": "asset_001"}``.
+                            User assets are loaded from the user_assets
+                            table and placed into the asset_map.
+        placement_overrides: Per-slot placement config with anchor, box,
+                             and slide targeting, e.g.::
+
+                                 {"logo_asset": {"anchor": "top_left",
+                                  "slides": ["cover"]}}
+
+        asset_commands: Natural-language asset placement instructions
+                        (e.g. ``["metti il logo in alto a sinistra"]``).
+                        Interpreted into user_asset_mapping and
+                        placement_overrides automatically.
 
     Returns::
 
@@ -552,6 +569,8 @@ def generate_instagram_carousel(
     session_id = uuid.uuid4().hex[:12]
     num_images = max(1, min(num_images, 3))
     overrides = overrides or {}
+    user_asset_mapping = user_asset_mapping or {}
+    placement_overrides = placement_overrides or {}
 
     # Step 0: AI Design Planner (optional)
     design_plan = None
@@ -567,6 +586,26 @@ def generate_instagram_carousel(
         log.info("[carousel] planner chose: template=%s variant=%s theme=%s",
                  template_id, variant, theme_id)
 
+    # Step 0b: Interpret asset commands (if provided)
+    if asset_commands:
+        from services.asset_command_interpreter import interpret_asset_commands
+        from services.user_assets import list_user_assets
+
+        # Build available_assets dict from user's assets
+        user_assets_list = list_user_assets(user_id, limit=100)
+        available_assets = {a["id"]: a for a in user_assets_list}
+
+        if available_assets:
+            interpreted = interpret_asset_commands(asset_commands, available_assets)
+            # Merge interpreted mappings (commands take lower priority than explicit)
+            for slot, aid in interpreted.get("asset_mapping", {}).items():
+                if slot not in user_asset_mapping:
+                    user_asset_mapping[slot] = aid
+            for slot, ov in interpreted.get("placement_overrides", {}).items():
+                if slot not in placement_overrides:
+                    placement_overrides[slot] = ov
+            log.info("[carousel] interpreted %d asset commands", len(asset_commands))
+
     log.info("[carousel] ═══ START ═══ user=%s template=%s variant=%s theme=%s",
              user_id[:8], template_id, variant, theme_id)
     log.info("[carousel] prompt: %s", prompt[:200])
@@ -575,6 +614,12 @@ def generate_instagram_carousel(
     template = load_template(template_id, variant=variant)
     actual_variant = variant or "center"
     log.info("[carousel] layout loaded: %s", template.get("name", template_id))
+
+    # 1b) Apply placement overrides to template (if any)
+    if placement_overrides:
+        from services.asset_placement import apply_placement_overrides
+        template = apply_placement_overrides(template, placement_overrides)
+        log.info("[carousel] applied %d placement overrides", len(placement_overrides))
 
     # 2) Load theme (resolve default if not specified)
     if not theme_id:
@@ -630,6 +675,22 @@ def generate_instagram_carousel(
                 log.info("[carousel] mapped background_asset → asset %d", idx)
             except Exception as exc:
                 log.warning("[carousel] failed to load asset image: %s", exc)
+
+    # 6b) Load user-uploaded assets into asset_map
+    if user_asset_mapping:
+        from services.user_assets import get_user_asset
+        for slot_name, user_asset_id in user_asset_mapping.items():
+            asset_meta = get_user_asset(user_id, user_asset_id)
+            if asset_meta and asset_meta.get("url"):
+                try:
+                    asset_map[slot_name] = load_asset_image(asset_meta["url"])
+                    log.info("[carousel] user asset %s → slot %s",
+                             user_asset_id[:12], slot_name)
+                except Exception as exc:
+                    log.warning("[carousel] failed to load user asset %s: %s",
+                                user_asset_id, exc)
+            else:
+                log.warning("[carousel] user asset '%s' not found", user_asset_id)
 
     # 7) Render slides
     log.info("[carousel] step 5: rendering slides…")
