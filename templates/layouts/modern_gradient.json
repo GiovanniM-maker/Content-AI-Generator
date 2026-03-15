@@ -1,0 +1,44 @@
+{
+  "id": "modern_gradient",
+  "name": "Modern Gradient",
+  "description": "Vibrant gradient background with clean white text, ideal for tech and startups",
+  "fonts": {
+    "title": "Inter",
+    "body": "Inter"
+  },
+  "colors": {
+    "background": "#1a1a2e",
+    "gradient_start": "#16213e",
+    "gradient_end": "#0f3460",
+    "text": "#ffffff",
+    "secondary_text": "#b0b0d0",
+    "accent": "#e94560"
+  },
+  "typography": {
+    "title_size": 68,
+    "title_weight": 800,
+    "subtitle_size": 34,
+    "subtitle_weight": 400,
+    "body_size": 30,
+    "body_weight": 400,
+    "cta_size": 38,
+    "cta_weight": 700,
+    "line_height": 1.35
+  },
+  "layout": {
+    "width": 1080,
+    "height": 1080,
+    "padding": 80,
+    "accent_line": false,
+    "accent_line_width": 0,
+    "accent_line_height": 0,
+    "show_slide_counter": true,
+    "show_brand_footer": true
+  },
+  "slides": [
+    {"type": "cover"},
+    {"type": "text"},
+    {"type": "list"},
+    {"type": "cta"}
+  ]
+}

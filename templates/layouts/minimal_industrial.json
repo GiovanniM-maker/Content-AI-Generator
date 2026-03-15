@@ -1,0 +1,42 @@
+{
+  "id": "minimal_industrial",
+  "name": "Minimal Industrial",
+  "description": "Dark elegant theme with gold accent, suited for luxury and professional brands",
+  "fonts": {
+    "title": "Inter",
+    "body": "Inter"
+  },
+  "colors": {
+    "background": "#111111",
+    "text": "#ffffff",
+    "secondary_text": "#aaaaaa",
+    "accent": "#c9a36a"
+  },
+  "typography": {
+    "title_size": 72,
+    "title_weight": 800,
+    "subtitle_size": 36,
+    "subtitle_weight": 400,
+    "body_size": 32,
+    "body_weight": 400,
+    "cta_size": 40,
+    "cta_weight": 700,
+    "line_height": 1.3
+  },
+  "layout": {
+    "width": 1080,
+    "height": 1080,
+    "padding": 80,
+    "accent_line": true,
+    "accent_line_width": 64,
+    "accent_line_height": 5,
+    "show_slide_counter": true,
+    "show_brand_footer": true
+  },
+  "slides": [
+    {"type": "cover"},
+    {"type": "text"},
+    {"type": "list"},
+    {"type": "cta"}
+  ]
+}
