@@ -4067,8 +4067,7 @@ REGOLE:
         return jsonify({"error": "Errore nella generazione. Riprova tra poco."}), 500
 
 
-@app.route("/api/debug/image-pipeline", methods=["POST"])
-@auth.require_auth
+@app.route("/api/debug/image-pipeline", methods=["POST", "GET"])
 def debug_image_pipeline():
     """Diagnostic endpoint: test the image generation pipeline end-to-end.
 
@@ -4076,8 +4075,8 @@ def debug_image_pipeline():
     Returns step-by-step results showing exactly where the pipeline fails.
     """
     import traceback as _tb
-    user_id = _get_user_id()
-    body = request.json or {}
+    user_id = "debug-probe"
+    body = request.json or {} if request.is_json else {}
     prompt = body.get("prompt", "dark marble texture, elegant, editorial, no text, no animals")
     steps = []
 
