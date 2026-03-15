@@ -1,8 +1,9 @@
-"""AI Design Planner — automatically selects template, variant, theme, and
-asset roles for a given user prompt.
+"""AI Design Planner — two-stage system for stable design decisions.
 
-Uses the LLM to analyze the prompt and choose the best design configuration
-from the available options in the template registry.
+Stage 1 (LLM): Classify the user prompt into structured categories
+    (post_type, tone, visual_style).
+Stage 2 (Rules): Map the classification to a concrete design using
+    a deterministic rule engine validated against the registry.
 
 Usage::
 
@@ -12,23 +13,32 @@ Usage::
     # {
     #     "template": "minimal_layout",
     #     "variant": "split",
-    #     "theme": "industrial_dark",
-    #     "asset_roles": {
-    #         "background_asset": "texture",
-    #         "secondary_asset": "product"
-    #     }
+    #     "theme": "clean_light",
+    #     "asset_roles": {"background_asset": "abstract"},
+    #     "classification": {"post_type": "educational", "tone": "professional", "visual_style": "clean"}
     # }
 """
 
 from __future__ import annotations
 
-import json
 import logging
 
 log = logging.getLogger(__name__)
 
-# Valid asset role categories the planner may assign
-ASSET_ROLE_TYPES = ["texture", "product", "abstract", "architecture", "gradient"]
+# ---------------------------------------------------------------------------
+# Valid classification values
+# ---------------------------------------------------------------------------
+
+VALID_POST_TYPES = ["educational", "promotional", "motivational", "luxury", "product_showcase"]
+VALID_TONES = ["professional", "playful", "minimal"]
+VALID_VISUAL_STYLES = ["clean", "bold", "luxury", "modern"]
+VALID_ASSET_ROLE_TYPES = ["texture", "product", "abstract", "architecture", "gradient"]
+
+FALLBACK_CLASSIFICATION = {
+    "post_type": "educational",
+    "tone": "professional",
+    "visual_style": "clean",
+}
 
 FALLBACK_PLAN = {
     "template": "minimal_layout",
@@ -39,23 +49,261 @@ FALLBACK_PLAN = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Rule engine: classification → design mapping
+# ---------------------------------------------------------------------------
+
+# Primary mapping keyed by post_type.  Each entry defines a base design
+# that can be refined by tone and visual_style modifiers below.
+_POST_TYPE_RULES: dict[str, dict] = {
+    "educational": {
+        "template": "minimal_layout",
+        "variant": "split",
+        "theme": "clean_light",
+        "asset_roles": {"background_asset": "abstract"},
+    },
+    "promotional": {
+        "template": "bold_layout",
+        "variant": "center",
+        "theme": "tech_vibrant",
+        "asset_roles": {"background_asset": "product"},
+    },
+    "motivational": {
+        "template": "bold_layout",
+        "variant": "center",
+        "theme": "tech_vibrant",
+        "asset_roles": {"background_asset": "gradient"},
+    },
+    "luxury": {
+        "template": "minimal_layout",
+        "variant": "center",
+        "theme": "luxury_gold",
+        "asset_roles": {"background_asset": "texture"},
+    },
+    "product_showcase": {
+        "template": "minimal_layout",
+        "variant": "split",
+        "theme": "startup_blue",
+        "asset_roles": {"background_asset": "product"},
+    },
+}
+
+# Tone modifiers — override specific fields when tone matches
+_TONE_OVERRIDES: dict[str, dict] = {
+    "professional": {},  # no change — professional is the default feel
+    "playful": {
+        "theme": "tech_vibrant",
+        "asset_roles": {"background_asset": "abstract"},
+    },
+    "minimal": {
+        "template": "minimal_layout",
+        "theme": "industrial_dark",
+        "asset_roles": {"background_asset": "texture"},
+    },
+}
+
+# Visual-style modifiers — applied after tone overrides
+_VISUAL_STYLE_OVERRIDES: dict[str, dict] = {
+    "clean": {},  # clean is the default — no extra override
+    "bold": {
+        "template": "bold_layout",
+        "variant": "center",
+    },
+    "luxury": {
+        "theme": "luxury_gold",
+        "asset_roles": {"background_asset": "texture"},
+    },
+    "modern": {
+        "theme": "startup_blue",
+        "asset_roles": {"background_asset": "gradient"},
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: Prompt classification (LLM)
+# ---------------------------------------------------------------------------
+
+def classify_prompt(prompt: str) -> dict:
+    """Classify a user prompt into post_type, tone, and visual_style.
+
+    Uses a constrained LLM call with explicit valid values.
+    Falls back to ``FALLBACK_CLASSIFICATION`` on any error.
+    """
+    from services.carousel_pipeline import _llm_json
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a social media content analyst. "
+                "Classify the following user prompt into exactly three categories. "
+                "Reply ONLY with a JSON object, no extra text.\n\n"
+                "Categories and their valid values:\n\n"
+                "post_type (what kind of post is this):\n"
+                "- educational: teaches something, tips, how-to, strategies\n"
+                "- promotional: sells a product/service, discounts, offers\n"
+                "- motivational: inspires, quotes, personal growth\n"
+                "- luxury: premium brands, high-end lifestyle, elegance\n"
+                "- product_showcase: shows a specific product, features, specs\n\n"
+                "tone (the communication style):\n"
+                "- professional: formal, business, corporate\n"
+                "- playful: fun, colorful, casual, energetic\n"
+                "- minimal: simple, understated, clean\n\n"
+                "visual_style (the desired visual feel):\n"
+                "- clean: white space, structured, readable\n"
+                "- bold: large type, strong contrasts, impactful\n"
+                "- luxury: dark backgrounds, gold/rose accents, elegant\n"
+                "- modern: gradients, blue tones, tech-forward\n\n"
+                "Reply format:\n"
+                "{\n"
+                '  "post_type": "<value>",\n'
+                '  "tone": "<value>",\n'
+                '  "visual_style": "<value>"\n'
+                "}"
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Classify this prompt: {prompt}",
+        },
+    ]
+
+    try:
+        result = _llm_json(messages)
+    except Exception as exc:
+        log.warning("[planner] classification LLM call failed: %s", exc)
+        return dict(FALLBACK_CLASSIFICATION)
+
+    return _validate_classification(result)
+
+
+def _validate_classification(raw: dict) -> dict:
+    """Ensure all classification values are within the valid sets."""
+    post_type = raw.get("post_type", "")
+    tone = raw.get("tone", "")
+    visual_style = raw.get("visual_style", "")
+
+    if post_type not in VALID_POST_TYPES:
+        log.warning("[planner] invalid post_type '%s', defaulting to 'educational'", post_type)
+        post_type = "educational"
+    if tone not in VALID_TONES:
+        log.warning("[planner] invalid tone '%s', defaulting to 'professional'", tone)
+        tone = "professional"
+    if visual_style not in VALID_VISUAL_STYLES:
+        log.warning("[planner] invalid visual_style '%s', defaulting to 'clean'", visual_style)
+        visual_style = "clean"
+
+    return {
+        "post_type": post_type,
+        "tone": tone,
+        "visual_style": visual_style,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stage 2: Rule engine (deterministic)
+# ---------------------------------------------------------------------------
+
+def select_design(
+    classification: dict,
+    registry: dict,
+    available_themes: list[str],
+) -> dict:
+    """Map a classification to a concrete design using deterministic rules.
+
+    Applies rules in order: post_type base → tone override → visual_style
+    override.  Then validates the result against the registry.
+    """
+    post_type = classification.get("post_type", "educational")
+    tone = classification.get("tone", "professional")
+    visual_style = classification.get("visual_style", "clean")
+
+    # Start with post_type base rule
+    design = dict(_POST_TYPE_RULES.get(post_type, _POST_TYPE_RULES["educational"]))
+    # Deep copy asset_roles
+    design["asset_roles"] = dict(design["asset_roles"])
+
+    # Apply tone overrides
+    tone_ov = _TONE_OVERRIDES.get(tone, {})
+    _apply_overrides(design, tone_ov)
+
+    # Apply visual_style overrides
+    style_ov = _VISUAL_STYLE_OVERRIDES.get(visual_style, {})
+    _apply_overrides(design, style_ov)
+
+    # Validate against registry
+    return _validate_against_registry(design, registry, available_themes)
+
+
+def _apply_overrides(design: dict, overrides: dict) -> None:
+    """Apply override dict onto design in-place."""
+    for key, val in overrides.items():
+        if key == "asset_roles" and isinstance(val, dict):
+            design["asset_roles"].update(val)
+        else:
+            design[key] = val
+
+
+def _validate_against_registry(
+    design: dict,
+    registry: dict,
+    available_themes: list[str],
+) -> dict:
+    """Ensure the design references valid registry entries."""
+    template = design.get("template", "")
+    if template not in registry:
+        log.warning("[planner] rule produced invalid template '%s', using fallback", template)
+        return dict(FALLBACK_PLAN)
+
+    meta = registry[template]
+    valid_variants = meta.get("variants", [])
+    valid_themes = meta.get("themes", available_themes)
+
+    # Validate variant
+    variant = design.get("variant", "")
+    if valid_variants:
+        if variant not in valid_variants:
+            design["variant"] = valid_variants[0]
+            log.warning("[planner] variant '%s' invalid for %s, using '%s'",
+                        variant, template, design["variant"])
+    else:
+        design["variant"] = None  # Legacy template
+
+    # Validate theme
+    theme = design.get("theme", "")
+    if theme not in valid_themes and theme not in available_themes:
+        design["theme"] = meta.get("default_theme", "") or "industrial_dark"
+        log.warning("[planner] theme '%s' invalid, using '%s'", theme, design["theme"])
+
+    # Validate asset roles
+    roles = design.get("asset_roles", {})
+    validated_roles = {}
+    for role_id, role_type in roles.items():
+        if isinstance(role_type, str) and role_type in VALID_ASSET_ROLE_TYPES:
+            validated_roles[role_id] = role_type
+        else:
+            validated_roles[role_id] = "texture"
+    design["asset_roles"] = validated_roles or {"background_asset": "texture"}
+
+    return design
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 def plan_design(prompt: str) -> dict:
-    """Use the LLM to select the best template/variant/theme/asset roles.
+    """Two-stage design planning: LLM classification + deterministic rules.
 
-    Loads the template registry to build a list of valid options, asks the
-    LLM to pick the best combination for the given prompt, validates the
-    response, and returns a design plan dict.
+    Stage 1: Classify the prompt (post_type, tone, visual_style) via LLM.
+    Stage 2: Map the classification to a design via the rule engine.
 
     Falls back to ``FALLBACK_PLAN`` on any failure.
     """
-    # Import here to avoid circular imports and keep module lightweight
-    from services.carousel_pipeline import (
-        _load_registry,
-        list_theme_ids,
-        _llm_json,
-    )
+    from services.carousel_pipeline import _load_registry, list_theme_ids
 
+    # Load registry and themes
     try:
         registry = _load_registry()
         available_themes = list_theme_ids()
@@ -67,146 +315,19 @@ def plan_design(prompt: str) -> dict:
         log.warning("[planner] registry is empty, using fallback")
         return dict(FALLBACK_PLAN)
 
-    # Build a description of available options for the LLM
-    options_text = _build_options_text(registry, available_themes)
+    # Stage 1: Classify
+    classification = classify_prompt(prompt)
+    log.info("[planner] classification: %s", classification)
 
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a design director for Instagram carousels. "
-                "Given a user prompt, choose the best template, variant, "
-                "theme, and asset roles from the available options.\n\n"
-                f"AVAILABLE OPTIONS:\n{options_text}\n\n"
-                f"VALID ASSET ROLE TYPES: {', '.join(ASSET_ROLE_TYPES)}\n\n"
-                "Asset roles describe the visual style of background images:\n"
-                "- texture: marble, wood, fabric, concrete surfaces\n"
-                "- product: product photography, objects, items\n"
-                "- abstract: geometric shapes, patterns, abstract art\n"
-                "- architecture: buildings, interiors, spaces\n"
-                "- gradient: smooth color gradients, soft blends\n\n"
-                "Reply ONLY with a JSON object:\n"
-                "{\n"
-                '  "template": "<template_id>",\n'
-                '  "variant": "<variant_name>",\n'
-                '  "theme": "<theme_id>",\n'
-                '  "asset_roles": {\n'
-                '    "background_asset": "<role_type>"\n'
-                "  }\n"
-                "}\n\n"
-                "Rules:\n"
-                "- template MUST be one of the listed template IDs\n"
-                "- variant MUST be valid for the chosen template\n"
-                "- theme MUST be one of the listed theme IDs\n"
-                "- asset_roles must use only the valid role types listed above\n"
-                "- Pick what best fits the mood and content of the prompt"
-            ),
-        },
-        {
-            "role": "user",
-            "content": f"Choose the best design for this carousel: {prompt}",
-        },
-    ]
+    # Stage 2: Rule engine
+    design = select_design(classification, registry, available_themes)
+    design["classification"] = classification
 
-    try:
-        plan = _llm_json(messages)
-    except Exception as exc:
-        log.warning("[planner] LLM call failed: %s", exc)
-        return dict(FALLBACK_PLAN)
-
-    # Validate and sanitize the plan
-    validated = _validate_plan(plan, registry, available_themes)
     log.info(
         "[planner] plan: template=%s variant=%s theme=%s roles=%s",
-        validated["template"],
-        validated["variant"],
-        validated["theme"],
-        validated["asset_roles"],
+        design["template"],
+        design["variant"],
+        design["theme"],
+        design["asset_roles"],
     )
-    return validated
-
-
-def _build_options_text(registry: dict, available_themes: list[str]) -> str:
-    """Build a human-readable list of available design options."""
-    lines = []
-    for tid, meta in registry.items():
-        variants = meta.get("variants", [])
-        themes = meta.get("themes", available_themes)
-        name = meta.get("name", tid)
-        desc = meta.get("description", "")
-        variant_str = ", ".join(variants) if variants else "(none — legacy template)"
-        lines.append(
-            f"- Template: {tid} ({name})\n"
-            f"  Description: {desc}\n"
-            f"  Variants: {variant_str}\n"
-            f"  Compatible themes: {', '.join(themes)}"
-        )
-
-    lines.append(f"\nAll available themes: {', '.join(available_themes)}")
-    return "\n".join(lines)
-
-
-def _validate_plan(
-    plan: dict,
-    registry: dict,
-    available_themes: list[str],
-) -> dict:
-    """Validate LLM output against registry. Fix or fall back on invalid values."""
-    result = dict(FALLBACK_PLAN)
-
-    # Validate template
-    template = plan.get("template", "")
-    if template in registry:
-        result["template"] = template
-    else:
-        log.warning("[planner] invalid template '%s', using fallback", template)
-        return dict(FALLBACK_PLAN)
-
-    meta = registry[result["template"]]
-    valid_variants = meta.get("variants", [])
-    valid_themes = meta.get("themes", available_themes)
-
-    # Validate variant
-    variant = plan.get("variant", "")
-    if valid_variants:
-        if variant in valid_variants:
-            result["variant"] = variant
-        else:
-            result["variant"] = valid_variants[0]
-            log.warning(
-                "[planner] invalid variant '%s' for %s, using '%s'",
-                variant, result["template"], result["variant"],
-            )
-    else:
-        result["variant"] = None  # Legacy template, no variants
-
-    # Validate theme
-    theme = plan.get("theme", "")
-    if theme in valid_themes:
-        result["theme"] = theme
-    elif theme in available_themes:
-        # Theme exists but not listed as compatible — allow it with warning
-        result["theme"] = theme
-        log.warning("[planner] theme '%s' not listed for %s but exists", theme, result["template"])
-    else:
-        result["theme"] = meta.get("default_theme", "") or "industrial_dark"
-        log.warning("[planner] invalid theme '%s', using '%s'", theme, result["theme"])
-
-    # Validate asset_roles
-    raw_roles = plan.get("asset_roles", {})
-    if isinstance(raw_roles, dict):
-        validated_roles = {}
-        for role_id, role_type in raw_roles.items():
-            if isinstance(role_type, str) and role_type in ASSET_ROLE_TYPES:
-                validated_roles[role_id] = role_type
-            else:
-                validated_roles[role_id] = "texture"
-                log.warning("[planner] invalid role type '%s' for '%s', using 'texture'", role_type, role_id)
-        if validated_roles:
-            result["asset_roles"] = validated_roles
-        else:
-            result["asset_roles"] = {"background_asset": "texture"}
-    else:
-        result["asset_roles"] = {"background_asset": "texture"}
-
-    return result
+    return design
