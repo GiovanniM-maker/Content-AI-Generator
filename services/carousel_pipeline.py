@@ -54,14 +54,84 @@ MODEL_CONTENT = os.getenv("CAROUSEL_LLM_MODEL", "google/gemini-2.5-flash")
 _BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 LAYOUTS_DIR = os.path.join(_BASE_DIR, "templates", "layouts")
 THEMES_DIR = os.path.join(_BASE_DIR, "templates", "themes")
+TOKENS_DIR = os.path.join(_BASE_DIR, "templates", "tokens")
+REGISTRY_PATH = os.path.join(_BASE_DIR, "templates", "registry.json")
 
 
 # ---------------------------------------------------------------------------
-# Theme loader
+# Design tokens
 # ---------------------------------------------------------------------------
 
-def load_theme(theme_id: str) -> dict:
-    """Load a theme JSON from templates/themes/{theme_id}.json."""
+_tokens_cache: dict[str, dict] | None = None
+
+
+def _load_tokens() -> dict[str, dict]:
+    """Load all token files from templates/tokens/ into a flat namespace.
+
+    Token files are keyed by filename (without extension).
+    Example: ``typography.json`` → accessible as ``typography.h1``.
+    """
+    global _tokens_cache
+    if _tokens_cache is not None:
+        return _tokens_cache
+
+    _tokens_cache = {}
+    if not os.path.isdir(TOKENS_DIR):
+        return _tokens_cache
+
+    for fname in os.listdir(TOKENS_DIR):
+        if not fname.endswith(".json"):
+            continue
+        ns = fname.replace(".json", "")
+        with open(os.path.join(TOKENS_DIR, fname), "r", encoding="utf-8") as f:
+            _tokens_cache[ns] = json.load(f)
+
+    return _tokens_cache
+
+
+def _resolve_token(value, tokens: dict[str, dict]):
+    """Resolve a single value that may be a token reference.
+
+    Token references use dot notation: ``"typography.h1"`` →
+    looks up tokens["typography"]["h1"].
+
+    Non-string or non-matching values are returned unchanged.
+    """
+    if not isinstance(value, str):
+        return value
+    if "." not in value:
+        return value
+    parts = value.split(".", 1)
+    if len(parts) != 2:
+        return value
+    ns, key = parts
+    if ns in tokens and key in tokens[ns]:
+        return tokens[ns][key]
+    return value
+
+
+def _resolve_tokens_in_dict(d: dict, tokens: dict[str, dict]) -> dict:
+    """Recursively resolve token references in a dict."""
+    resolved = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            resolved[k] = _resolve_tokens_in_dict(v, tokens)
+        elif isinstance(v, str):
+            resolved[k] = _resolve_token(v, tokens)
+        else:
+            resolved[k] = v
+    return resolved
+
+
+# ---------------------------------------------------------------------------
+# Theme loader (with inheritance + token resolution)
+# ---------------------------------------------------------------------------
+
+_MAX_INHERITANCE_DEPTH = 5
+
+
+def _load_theme_raw(theme_id: str) -> dict:
+    """Load raw theme JSON without resolving inheritance or tokens."""
     path = os.path.join(THEMES_DIR, f"{theme_id}.json")
     if not os.path.isfile(path):
         available = list_theme_ids()
@@ -70,6 +140,56 @@ def load_theme(theme_id: str) -> dict:
         )
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge override into base (override wins)."""
+    result = dict(base)
+    for key, val in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(val, dict):
+            result[key] = _deep_merge(result[key], val)
+        else:
+            result[key] = val
+    return result
+
+
+def load_theme(theme_id: str) -> dict:
+    """Load a theme, resolving inheritance chain and design tokens.
+
+    Inheritance: a theme with ``"extends": "base_theme"`` inherits
+    all properties from the base, with its own values winning.
+    Chains up to 5 levels deep are supported.
+
+    Token resolution: string values like ``"typography.h1"`` are
+    replaced with the corresponding token value.
+    """
+    tokens = _load_tokens()
+    chain: list[dict] = []
+    visited: set[str] = set()
+    current_id: str | None = theme_id
+
+    # Walk the inheritance chain
+    while current_id and len(chain) < _MAX_INHERITANCE_DEPTH:
+        if current_id in visited:
+            log.warning("[theme] circular inheritance detected at '%s'", current_id)
+            break
+        visited.add(current_id)
+        raw = _load_theme_raw(current_id)
+        chain.append(raw)
+        current_id = raw.get("extends")
+
+    # Merge from base → child (most specific wins)
+    chain.reverse()
+    merged: dict = {}
+    for layer in chain:
+        # Remove "extends" from the merged result
+        layer_clean = {k: v for k, v in layer.items() if k != "extends"}
+        merged = _deep_merge(merged, layer_clean)
+
+    # Resolve token references
+    merged = _resolve_tokens_in_dict(merged, tokens)
+
+    return merged
 
 
 def list_theme_ids() -> list[str]:
@@ -92,6 +212,7 @@ def list_themes() -> list[dict]:
             "id": theme.get("id", tid),
             "name": theme.get("name", ""),
             "description": theme.get("description", ""),
+            "extends": None,  # already resolved
         })
     return results
 
@@ -178,15 +299,26 @@ def list_layout_ids() -> list[str]:
 # Template registry (public API)
 # ---------------------------------------------------------------------------
 
+def _load_registry() -> dict:
+    """Load the central registry file, falling back to directory scan."""
+    if os.path.isfile(REGISTRY_PATH):
+        with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
 def list_templates() -> list[dict]:
     """Return the full template registry: layouts + variants + themes.
+
+    Uses ``templates/registry.json`` as the source of truth when
+    available.  Falls back to scanning the layouts directory.
 
     Response::
 
         [
             {
                 "template": "minimal_layout",
-                "name": "Minimal Center",
+                "name": "Minimal Layout",
                 "variants": ["center", "split"],
                 "default_theme": "industrial_dark",
                 "themes": ["industrial_dark", "luxury_gold", ...]
@@ -194,28 +326,38 @@ def list_templates() -> list[dict]:
             ...
         ]
     """
+    registry = _load_registry()
     all_themes = list_theme_ids()
-    result = []
 
+    if registry:
+        result = []
+        for layout_id, meta in registry.items():
+            result.append({
+                "template": layout_id,
+                "name": meta.get("name", layout_id),
+                "description": meta.get("description", ""),
+                "variants": meta.get("variants", []),
+                "default_theme": meta.get("default_theme", ""),
+                "themes": meta.get("themes", all_themes),
+            })
+        return result
+
+    # Fallback: scan directories
+    result = []
     for layout_id in list_layout_ids():
         variants = list_variants(layout_id)
-
-        # Load the default variant (or flat file) for metadata
         try:
             tpl = load_template(layout_id)
         except ValueError:
             continue
-
-        entry = {
+        result.append({
             "template": layout_id,
             "name": tpl.get("name", layout_id),
             "description": tpl.get("description", ""),
             "variants": variants,
             "default_theme": tpl.get("default_theme", ""),
             "themes": all_themes,
-        }
-        result.append(entry)
-
+        })
     return result
 
 
