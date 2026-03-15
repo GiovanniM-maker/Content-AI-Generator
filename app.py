@@ -3879,9 +3879,14 @@ REGOLE:
         if template_type == "instagram":
             # ── Check for image intent BEFORE processing LLM spec ──
             image_intent = _detect_image_intent(user_message)
+            _log_pipeline("info",
+                f"[image_flow] intent detection: message={user_message[:80]!r}, "
+                f"result={image_intent}")
 
             # ── New architecture: extract design_spec (NOT html) ──
-            if parsed and "design_spec" in parsed and isinstance(parsed["design_spec"], dict):
+            has_llm_spec = parsed and "design_spec" in parsed and isinstance(parsed["design_spec"], dict)
+
+            if has_llm_spec:
                 reply_text = parsed.get("reply", "Design aggiornato!")
                 try:
                     # For image-only requests: keep current spec as base,
@@ -3889,77 +3894,113 @@ REGOLE:
                     if image_intent and image_intent["image_only"] and current_design_spec:
                         new_design_spec = validate_design_spec(current_design_spec)
                         _log_pipeline("info",
-                            f"Template chat: image-only request for {template_id}, "
-                            f"preserving existing design_spec")
+                            f"[image_flow] image-only request → preserving existing design_spec")
                     else:
                         new_design_spec = validate_design_spec(parsed["design_spec"])
-
-                    # ── Phase 1C: image generation if user explicitly asked ──
-                    if image_intent:
-                        try:
-                            from services.image_generator import generate_image
-                            img_prompt = _build_image_prompt(
-                                user_message, new_design_spec, image_intent["target"],
-                            )
-                            _log_pipeline("info",
-                                f"Template chat: generating image for {template_id}, "
-                                f"target={image_intent['target']}, prompt={img_prompt[:100]}...")
-                            img_result = generate_image(
-                                prompt=img_prompt,
-                                user_id=user_id,
-                                template_id=template_id,
-                                target=image_intent["target"],
-                            )
-                            # Inject URL into design_spec
-                            if image_intent["target"] == "cover":
-                                new_design_spec["images"]["slide_images"]["cover"] = img_result["url"]
-                            else:
-                                new_design_spec["images"]["background_image_url"] = img_result["url"]
-                            reply_text += f"\n\n🖼️ Immagine generata e applicata come {'copertina' if image_intent['target'] == 'cover' else 'sfondo'}."
-                            _log_pipeline("info",
-                                f"Template chat: image generated for {template_id} → {img_result['url']}")
-                            spec_changed = True
-                        except Exception as img_err:
-                            import traceback as _tb
-                            _log_pipeline("error",
-                                f"Template chat: image generation failed for {template_id}: "
-                                f"{type(img_err).__name__}: {img_err}\n{_tb.format_exc()}")
-                            if image_intent["image_only"]:
-                                # Image-only request failed → preserve everything
-                                reply_text = parsed.get("reply", "") + \
-                                    "\n\n⚠️ Non sono riuscito a generare l'immagine. Ho mantenuto il design precedente."
-                                # Don't set spec_changed or html_changed — nothing saved
-                            else:
-                                # Mixed request: design changes go through, only image skipped
-                                reply_text += "\n\n⚠️ Non sono riuscito a generare l'immagine. Il design è stato aggiornato senza immagine."
-                                spec_changed = True
-                    else:
-                        # No image intent — normal design update
-                        spec_changed = True
-
-                    # Generate HTML only if spec actually changed
-                    if spec_changed:
-                        preview_htmls = render_preview_slides(
-                            new_design_spec, aspect_ratio=aspect_ratio,
-                        )
-                        # Store rendered HTML as JSON (backward compat with render-carousel)
-                        new_html = json.dumps({
-                            "cover": preview_htmls["cover"],
-                            "content": preview_htmls["content"],
-                            "list": preview_htmls["list"],
-                            "cta": preview_htmls["cta"],
-                        })
-                        html_changed = True
+                        _log_pipeline("info",
+                            f"[image_flow] using LLM design_spec (has_llm_spec=True)")
+                    spec_changed = True
                 except ValueError as ve:
                     reply_text += f"\n\n⚠️ Errore nella validazione del design: {ve}"
                     _log_pipeline("warn", f"Template chat: design_spec validation failed: {ve}")
             elif parsed and "reply" in parsed:
                 reply_text = parsed["reply"]
-                _log_pipeline("warn", "Template chat: model returned JSON without 'design_spec'")
+                _log_pipeline("warn",
+                    f"[image_flow] LLM returned JSON without 'design_spec' "
+                    f"(keys={list(parsed.keys())})")
+                # If we have image intent but no LLM spec, use current spec as base
+                if image_intent and current_design_spec:
+                    new_design_spec = validate_design_spec(current_design_spec)
+                    _log_pipeline("info",
+                        f"[image_flow] no LLM spec but have image intent → "
+                        f"using current_design_spec as base")
             else:
                 cleaned = _strip_fences(raw_response)
                 reply_text = cleaned + "\n\n⚠️ Non sono riuscito ad aggiornare il template. Riprova con istruzioni più specifiche."
-                _log_pipeline("warn", "Template chat: failed to parse JSON response")
+                _log_pipeline("warn", "[image_flow] failed to parse JSON response entirely")
+
+            # ── Phase 1C: image generation (INDEPENDENT of LLM spec gate) ──
+            if image_intent and new_design_spec:
+                _log_pipeline("info",
+                    f"[image_flow] entering image generation: "
+                    f"target={image_intent['target']}, image_only={image_intent['image_only']}")
+                try:
+                    from services.image_generator import generate_image
+                    _log_pipeline("info", "[image_flow] building image prompt via planner...")
+                    img_prompt = _build_image_prompt(
+                        user_message, new_design_spec, image_intent["target"],
+                    )
+                    _log_pipeline("info",
+                        f"[image_flow] planner prompt built ({len(img_prompt)} chars): "
+                        f"{img_prompt[:150]}...")
+                    _log_pipeline("info",
+                        f"[image_flow] calling generate_image() for {template_id}, "
+                        f"target={image_intent['target']}")
+                    img_result = generate_image(
+                        prompt=img_prompt,
+                        user_id=user_id,
+                        template_id=template_id,
+                        target=image_intent["target"],
+                    )
+                    _log_pipeline("info",
+                        f"[image_flow] generate_image() returned: url={img_result['url'][:80]}...")
+                    # Inject URL into design_spec
+                    if image_intent["target"] == "cover":
+                        new_design_spec["images"]["slide_images"]["cover"] = img_result["url"]
+                        _log_pipeline("info",
+                            f"[image_flow] injected URL into images.slide_images.cover")
+                    else:
+                        new_design_spec["images"]["background_image_url"] = img_result["url"]
+                        _log_pipeline("info",
+                            f"[image_flow] injected URL into images.background_image_url")
+                    reply_text += f"\n\n🖼️ Immagine generata e applicata come {'copertina' if image_intent['target'] == 'cover' else 'sfondo'}."
+                    _log_pipeline("info",
+                        f"[image_flow] image generation COMPLETE for {template_id} → {img_result['url']}")
+                    spec_changed = True
+                except Exception as img_err:
+                    import traceback as _tb
+                    _log_pipeline("error",
+                        f"[image_flow] generate_image() FAILED for {template_id}: "
+                        f"{type(img_err).__name__}: {img_err}\n{_tb.format_exc()}")
+                    if image_intent["image_only"]:
+                        reply_text = (parsed.get("reply", "") if parsed else "") + \
+                            "\n\n⚠️ Non sono riuscito a generare l'immagine. Ho mantenuto il design precedente."
+                        # Don't set spec_changed — nothing saved
+                        _log_pipeline("info",
+                            "[image_flow] image-only request failed → preserving previous state")
+                    else:
+                        reply_text += "\n\n⚠️ Non sono riuscito a generare l'immagine. Il design è stato aggiornato senza immagine."
+                        spec_changed = True
+                        _log_pipeline("info",
+                            "[image_flow] mixed request failed → saving design changes without image")
+            elif image_intent and not new_design_spec:
+                _log_pipeline("warn",
+                    f"[image_flow] image intent detected but no design_spec available "
+                    f"(current_design_spec={'exists' if current_design_spec else 'None'}, "
+                    f"parsed={'exists' if parsed else 'None'})")
+            elif not image_intent:
+                # No image intent — normal design update
+                if has_llm_spec:
+                    spec_changed = True
+                _log_pipeline("info",
+                    f"[image_flow] no image intent → normal design update "
+                    f"(spec_changed={spec_changed})")
+
+            # Generate HTML only if spec actually changed
+            if spec_changed:
+                _log_pipeline("info",
+                    f"[image_flow] rendering preview slides (spec_changed=True, "
+                    f"bg_img={new_design_spec.get('images', {}).get('background_image_url', '')[:60] if new_design_spec else 'N/A'})")
+                preview_htmls = render_preview_slides(
+                    new_design_spec, aspect_ratio=aspect_ratio,
+                )
+                new_html = json.dumps({
+                    "cover": preview_htmls["cover"],
+                    "content": preview_htmls["content"],
+                    "list": preview_htmls["list"],
+                    "cta": preview_htmls["cta"],
+                })
+                html_changed = True
         else:
             # ── Newsletter: unchanged architecture (layout HTML + components) ──
             if parsed and "html" in parsed:
