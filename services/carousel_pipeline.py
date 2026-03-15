@@ -615,8 +615,19 @@ def generate_instagram_carousel(
     actual_variant = variant or "center"
     log.info("[carousel] layout loaded: %s", template.get("name", template_id))
 
-    # 1b) Apply placement overrides to template (if any)
+    # 1b) Validate and apply placement overrides to template (if any)
     if placement_overrides:
+        from services.renderer_validators import validate_placement_overrides
+        pv_result = validate_placement_overrides(placement_overrides, template)
+        for w in pv_result.warnings:
+            log.warning("[carousel] placement: %s", w)
+        if pv_result.errors:
+            for e in pv_result.errors:
+                log.error("[carousel] placement error: %s", e)
+            raise ValueError(
+                f"Invalid placement overrides: {'; '.join(pv_result.errors[:5])}"
+            )
+
         from services.asset_placement import apply_placement_overrides
         template = apply_placement_overrides(template, placement_overrides)
         log.info("[carousel] applied %d placement overrides", len(placement_overrides))

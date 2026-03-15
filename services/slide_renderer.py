@@ -528,6 +528,22 @@ def render_slides(
     Returns:
         List of PNG byte buffers, one per slide.
     """
+    # Validate inputs before rendering
+    from services.renderer_validators import validate_render_inputs
+    validation = validate_render_inputs(
+        template, theme=theme, content=content,
+        asset_map=asset_map, overrides=overrides,
+    )
+    for w in validation.warnings:
+        log.warning("[renderer] validation: %s", w)
+    for e in validation.errors:
+        log.error("[renderer] validation error: %s", e)
+    if not validation.valid:
+        raise ValueError(
+            f"Template validation failed with {len(validation.errors)} error(s): "
+            + "; ".join(validation.errors[:5])
+        )
+
     asset_map = dict(asset_map or {})
     overrides = overrides or {}
 
