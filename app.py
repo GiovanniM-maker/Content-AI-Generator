@@ -4067,6 +4067,203 @@ REGOLE:
         return jsonify({"error": "Errore nella generazione. Riprova tra poco."}), 500
 
 
+@app.route("/api/debug/image-pipeline", methods=["POST", "GET"])
+def debug_image_pipeline():
+    """Diagnostic endpoint: test the image generation pipeline end-to-end.
+
+    POST with {"prompt": "dark marble texture"} to test.
+    Returns step-by-step results showing exactly where the pipeline fails.
+    """
+    import traceback as _tb
+    user_id = "debug-probe"
+    body = request.json or {} if request.is_json else {}
+    prompt = body.get("prompt", "dark marble texture, elegant, editorial, no text, no animals")
+    steps = []
+
+    # Step 1: API key check
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    steps.append({
+        "step": 1, "name": "OPENROUTER_API_KEY",
+        "status": "ok" if api_key else "FAIL",
+        "detail": f"length={len(api_key)}" if api_key else "empty/missing",
+    })
+    if not api_key:
+        return jsonify({"steps": steps, "failed_at": 1})
+
+    # Step 2: OpenRouter image request
+    from services.image_generator import (
+        OPENROUTER_BASE, IMAGE_MODEL, GENERATE_TIMEOUT,
+    )
+    import requests as _req
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5001",
+        "X-Title": "Content Dashboard",
+    }
+    payload = {
+        "model": IMAGE_MODEL,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": f"Generate this image. Output ONLY the image, no text.\n\n{prompt}"}
+        ]}],
+        "modalities": ["image", "text"],
+    }
+    try:
+        resp = _req.post(
+            f"{OPENROUTER_BASE}/chat/completions",
+            headers=headers, json=payload, timeout=GENERATE_TIMEOUT,
+        )
+        steps.append({
+            "step": 2, "name": "OpenRouter request",
+            "status": "ok" if resp.status_code == 200 else "FAIL",
+            "detail": f"HTTP {resp.status_code}",
+        })
+        if resp.status_code != 200:
+            try:
+                err_body = resp.json()
+            except Exception:
+                err_body = resp.text[:500]
+            steps[-1]["error"] = err_body
+            return jsonify({"steps": steps, "failed_at": 2})
+    except Exception as e:
+        steps.append({
+            "step": 2, "name": "OpenRouter request",
+            "status": "FAIL", "detail": f"{type(e).__name__}: {e}",
+        })
+        return jsonify({"steps": steps, "failed_at": 2})
+
+    # Step 3: Parse response
+    data = resp.json()
+    if "error" in data:
+        steps.append({
+            "step": 3, "name": "Response parse",
+            "status": "FAIL", "detail": f"API error: {data['error']}",
+        })
+        return jsonify({"steps": steps, "failed_at": 3})
+
+    choices = data.get("choices", [])
+    message = choices[0].get("message", {}) if choices else {}
+    msg_keys = list(message.keys())
+    content = message.get("content", "")
+    content_type_name = type(content).__name__
+
+    # Build a truncated view of the response
+    def _trunc(obj, d=0):
+        if d > 4: return "..."
+        if isinstance(obj, str) and len(obj) > 120:
+            return f"{obj[:60]}...[{len(obj)} chars]"
+        if isinstance(obj, dict): return {k: _trunc(v, d+1) for k, v in obj.items()}
+        if isinstance(obj, list): return [_trunc(v, d+1) for v in obj[:5]]
+        return obj
+    response_structure = _trunc(data)
+
+    steps.append({
+        "step": 3, "name": "Response parse",
+        "status": "ok",
+        "detail": f"message_keys={msg_keys}, content_type={content_type_name}",
+        "response_structure": response_structure,
+    })
+
+    # Step 4: Extract image
+    try:
+        from services.image_generator import _generate_image_openrouter
+        # Re-run the full extraction (this makes the actual API call again,
+        # but we already know it succeeds). Instead, let's extract from `data` directly.
+        from services.image_generator import _decode_image_data, _extract_data_url_from_text
+        import base64 as _b64, re as _re
+
+        img_bytes = None
+        strategy_used = None
+
+        # Strategy 1: message.images
+        images = message.get("images", [])
+        if images:
+            img0 = images[0]
+            if isinstance(img0, dict):
+                url = (img0.get("image_url", {}).get("url", "")
+                       or img0.get("url", "")
+                       or img0.get("b64_json", ""))
+            else:
+                url = str(img0)
+            if url:
+                img_bytes = _decode_image_data(url)
+                strategy_used = "message.images"
+
+        # Strategy 2: content list
+        if not img_bytes and isinstance(content, list):
+            for i, part in enumerate(content):
+                if not isinstance(part, dict): continue
+                ptype = part.get("type", "")
+                if ptype == "image_url":
+                    url = part.get("image_url", {}).get("url", "")
+                    if url:
+                        img_bytes = _decode_image_data(url)
+                        strategy_used = f"content[{i}].image_url"
+                        break
+                if ptype == "image" and part.get("data"):
+                    img_bytes = _b64.b64decode(part["data"])
+                    strategy_used = f"content[{i}].image"
+                    break
+                inline = part.get("inline_data", {})
+                if inline and inline.get("data"):
+                    img_bytes = _b64.b64decode(inline["data"])
+                    strategy_used = f"content[{i}].inline_data"
+                    break
+
+        # Strategy 3: data URL in string
+        if not img_bytes and isinstance(content, str):
+            img_bytes = _extract_data_url_from_text(content)
+            if img_bytes:
+                strategy_used = "data_url_in_string"
+
+        if img_bytes:
+            steps.append({
+                "step": 4, "name": "Extract image",
+                "status": "ok",
+                "detail": f"strategy={strategy_used}, bytes={len(img_bytes)}",
+            })
+        else:
+            steps.append({
+                "step": 4, "name": "Extract image",
+                "status": "FAIL",
+                "detail": f"no image found. message_keys={msg_keys}, content_type={content_type_name}",
+                "response_structure": response_structure,
+            })
+            return jsonify({"steps": steps, "failed_at": 4})
+    except Exception as e:
+        steps.append({
+            "step": 4, "name": "Extract image",
+            "status": "FAIL", "detail": f"{type(e).__name__}: {e}",
+        })
+        return jsonify({"steps": steps, "failed_at": 4})
+
+    # Step 5: Supabase upload
+    try:
+        import db as _db
+        _db.ensure_template_assets_bucket()
+        url = _db.upload_template_asset(
+            user_id=user_id,
+            template_id="debug-probe",
+            filename="debug_test.png",
+            file_bytes=img_bytes,
+            content_type="image/png",
+        )
+        steps.append({
+            "step": 5, "name": "Supabase upload",
+            "status": "ok",
+            "detail": f"url={url}",
+        })
+    except Exception as e:
+        steps.append({
+            "step": 5, "name": "Supabase upload",
+            "status": "FAIL", "detail": f"{type(e).__name__}: {e}",
+            "traceback": _tb.format_exc(),
+        })
+        return jsonify({"steps": steps, "failed_at": 5})
+
+    return jsonify({"steps": steps, "failed_at": None, "success": True, "image_url": url})
+
+
 @app.route("/api/templates/<template_id>/preview", methods=["POST"])
 def template_preview(template_id):
     """Generate a preview of the user template.

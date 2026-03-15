@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 # OpenRouter config — same env var and base URL used by the rest of the app
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-IMAGE_MODEL = "google/gemini-2.5-flash-image-preview"
+IMAGE_MODEL = "google/gemini-2.5-flash-image"
 
 # Timeout for the full generation request (model inference can take 15-40s)
 GENERATE_TIMEOUT = 120
