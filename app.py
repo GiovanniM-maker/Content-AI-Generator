@@ -3829,8 +3829,10 @@ REGOLE:
                                 f"Template chat: image generated for {template_id} → {img_result['url']}")
                             spec_changed = True
                         except Exception as img_err:
+                            import traceback as _tb
                             _log_pipeline("error",
-                                f"Template chat: image generation failed for {template_id}: {img_err}")
+                                f"Template chat: image generation failed for {template_id}: "
+                                f"{type(img_err).__name__}: {img_err}\n{_tb.format_exc()}")
                             if image_intent["image_only"]:
                                 # Image-only request failed → preserve everything
                                 reply_text = parsed.get("reply", "") + \
@@ -4053,14 +4055,21 @@ Contenuto premium per i tuoi lettori più fedeli. Un insight pratico che fa la d
                       f"(type={template_type}, has_spec={design_spec is not None}, "
                       f"html_len={len(html_content)}): {e}\n{traceback.format_exc()}")
 
-        # ── Fallback: return HTML slides directly (no PNG) ──
-        # The frontend can render these in iframes as a degraded preview.
-        if preview_htmls:
+        # ── Fallback: return HTML slides for newsletter only (no PNG) ──
+        # Instagram previews should NOT fall back to html_slides — the frontend
+        # renders them in iframes which triggers "Blocked script execution in srcdoc".
+        if preview_htmls and template_type == "newsletter":
             _log_pipeline("info", f"Template preview {template_id}: falling back to HTML slides (Playwright unavailable)")
             return jsonify({"type": "html_slides", "slides": preview_htmls})
 
-        # Legacy templates: return raw html_content as single iframe
-        if html_content.strip():
+        # Instagram with failed Playwright: return clear error so frontend shows retry UI
+        if preview_htmls and template_type == "instagram":
+            _log_pipeline("warn", f"Template preview {template_id}: Playwright unavailable, no PNG fallback for Instagram")
+            return jsonify({"error": "preview_render_failed",
+                            "message": "Preview temporaneamente non disponibile — riprova tra poco"}), 503
+
+        # Legacy templates: return raw html_content as single iframe (newsletter only)
+        if html_content.strip() and template_type == "newsletter":
             return jsonify({"type": "html", "html": html_content})
 
         return jsonify({"error": "preview_render_failed", "message": "Playwright non disponibile e nessun fallback HTML"}), 500
