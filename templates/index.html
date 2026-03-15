@@ -9039,8 +9039,12 @@ async function sendTemplateMessage() {
       botBubble.textContent = data.reply || 'Template aggiornato!';
       msgContainer.appendChild(botBubble);
 
-      if (data.html_content) {
-        _persCurrentHtml = data.html_content;
+      // Trigger preview refresh when backend returns updated content
+      // html_content = rendered HTML slides, design_spec = updated design spec
+      if (data.html_content || data.design_spec) {
+        if (data.html_content) {
+          _persCurrentHtml = data.html_content;
+        }
         // Invalidate cached preview so backend re-renders with new content
         delete _cachedPreviewUrls[_persCurrentId];
         updateTemplatePreview();
@@ -9104,7 +9108,7 @@ async function updateTemplatePreview() {
   const container = document.getElementById('pers-preview-container');
   if (!container || !_persCurrentId) return;
 
-  if (!_persCurrentHtml.trim()) {
+  if (!_persCurrentHtml.trim() && _persCurrentType !== 'instagram') {
     container.innerHTML = '<div class="pers-preview-empty">La preview apparirà qui dopo il primo messaggio</div>';
     return;
   }
