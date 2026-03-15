@@ -68,6 +68,7 @@ def upload_template_asset(user_id: str, template_id: str, filename: str,
     Path: {user_id}/{template_id}/{filename}
     Returns the full public URL.
     """
+    ensure_template_assets_bucket()
     path = f"{user_id}/{template_id}/{filename}"
     _sb().storage.from_(TEMPLATE_ASSETS_BUCKET).upload(
         path,
@@ -76,6 +77,23 @@ def upload_template_asset(user_id: str, template_id: str, filename: str,
     )
     url = _sb().storage.from_(TEMPLATE_ASSETS_BUCKET).get_public_url(path)
     return url.rstrip("?")
+
+
+_template_assets_bucket_checked = False
+
+def ensure_template_assets_bucket():
+    """Create the template-assets Storage bucket if it doesn't exist (idempotent)."""
+    global _template_assets_bucket_checked
+    if _template_assets_bucket_checked:
+        return
+    try:
+        _sb().storage.create_bucket(
+            TEMPLATE_ASSETS_BUCKET,
+            options={"public": True},
+        )
+    except Exception:
+        pass  # Already exists
+    _template_assets_bucket_checked = True
 
 
 def ensure_template_previews_bucket():
