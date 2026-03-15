@@ -248,7 +248,12 @@ def _draw_image(
     el: dict, content: dict, asset_map: dict,
     slide_number: int,
 ) -> None:
-    """Draw an image element (background asset, logo, etc.)."""
+    """Draw an image element (background asset, logo, etc.).
+
+    Supports two positioning modes:
+    1. Explicit x/y/width/height (original behavior).
+    2. Anchor-based: ``anchor`` field resolved via asset_placement module.
+    """
     asset_id = el.get("asset_id", "")
     pil_asset = asset_map.get(asset_id) if asset_id else None
     if pil_asset is None:
@@ -258,8 +263,22 @@ def _draw_image(
             img.paste(Image.alpha_composite(img.convert("RGBA"), overlay), (0, 0))
         return
 
-    x, y = int(el.get("x", 0)), int(el.get("y", 0))
-    w, h = int(el.get("width", img.width)), int(el.get("height", img.height))
+    # Resolve position: anchor-based or explicit x/y
+    anchor = el.get("anchor")
+    if anchor:
+        from services.asset_placement import resolve_anchor
+        box = el.get("box") or {
+            "width": el.get("width", img.width),
+            "height": el.get("height", img.height),
+            "margin_x": el.get("margin_x", 40),
+            "margin_y": el.get("margin_y", 40),
+        }
+        coords = resolve_anchor(anchor, box=box, canvas_w=img.width, canvas_h=img.height)
+        x, y, w, h = coords["x"], coords["y"], coords["width"], coords["height"]
+    else:
+        x, y = int(el.get("x", 0)), int(el.get("y", 0))
+        w, h = int(el.get("width", img.width)), int(el.get("height", img.height))
+
     resized = pil_asset.resize((w, h), Image.LANCZOS).convert("RGBA")
     img.paste(Image.alpha_composite(
         img.crop((x, y, x + w, y + h)).convert("RGBA"), resized
@@ -509,6 +528,22 @@ def render_slides(
     Returns:
         List of PNG byte buffers, one per slide.
     """
+    # Validate inputs before rendering
+    from services.renderer_validators import validate_render_inputs
+    validation = validate_render_inputs(
+        template, theme=theme, content=content,
+        asset_map=asset_map, overrides=overrides,
+    )
+    for w in validation.warnings:
+        log.warning("[renderer] validation: %s", w)
+    for e in validation.errors:
+        log.error("[renderer] validation error: %s", e)
+    if not validation.valid:
+        raise ValueError(
+            f"Template validation failed with {len(validation.errors)} error(s): "
+            + "; ".join(validation.errors[:5])
+        )
+
     asset_map = dict(asset_map or {})
     overrides = overrides or {}
 

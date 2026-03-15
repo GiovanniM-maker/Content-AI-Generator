@@ -4092,7 +4092,22 @@ def api_generate_carousel():
                 "title_font": "Montserrat",
                 "title_color": "#FFD700"
             },
-            "auto_plan": true                     // optional, AI picks design
+            "auto_plan": true,                    // optional, AI picks design
+            "user_asset_mapping": {               // optional, user asset IDs → slots
+                "logo_asset": "asset_001",
+                "product_asset": "asset_002"
+            },
+            "placement_overrides": {              // optional, anchor-based placement
+                "logo_asset": {
+                    "anchor": "top_left",
+                    "box": {"width": 160, "height": 80},
+                    "slides": ["cover"]
+                }
+            },
+            "asset_commands": [                   // optional, natural-language placement
+                "metti il logo in alto a sinistra",
+                "metti il prodotto al centro"
+            ]
         }
 
     Response::
@@ -4123,6 +4138,9 @@ def api_generate_carousel():
     asset_mapping = body.get("asset_mapping") or None
     overrides = body.get("overrides") or {}
     auto_plan = bool(body.get("auto_plan", False))
+    user_asset_mapping = body.get("user_asset_mapping") or None
+    placement_overrides = body.get("placement_overrides") or None
+    asset_commands = body.get("asset_commands") or None
 
     try:
         result = generate_instagram_carousel(
@@ -4136,6 +4154,9 @@ def api_generate_carousel():
             asset_mapping=asset_mapping,
             overrides=overrides,
             auto_plan=auto_plan,
+            user_asset_mapping=user_asset_mapping,
+            placement_overrides=placement_overrides,
+            asset_commands=asset_commands,
         )
         return jsonify(result)
     except ValueError as exc:
@@ -4159,6 +4180,97 @@ def api_list_carousel_themes():
     """List available carousel themes."""
     from services.carousel_pipeline import list_themes
     return jsonify({"themes": list_themes()})
+
+
+# ── User Assets ──────────────────────────────────────────────────────────
+
+@app.route("/api/user-assets", methods=["POST"])
+@auth.require_auth
+def api_upload_user_asset():
+    """Upload a reusable user asset (logo, product image, photo, texture).
+
+    Expects multipart/form-data with:
+    - file: The image file (png, jpg, jpeg, gif, webp). Max 5MB.
+    - type: Asset type — "logo", "product", "photo", "texture", "other".
+    - tags: Optional comma-separated tags.
+
+    Response::
+
+        {
+            "id": "abc123...",
+            "type": "logo",
+            "url": "https://...",
+            "filename": "logo.png",
+            "tags": ["brand"],
+            "created_at": "2026-..."
+        }
+    """
+    from services.user_assets import upload_user_asset
+
+    user_id = _get_user_id()
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Filename missing"}), 400
+
+    file_bytes = f.read()
+    asset_type = request.form.get("type", "other")
+    tags_raw = request.form.get("tags", "")
+    tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
+
+    try:
+        result = upload_user_asset(
+            user_id=user_id,
+            file_bytes=file_bytes,
+            filename=f.filename,
+            asset_type=asset_type,
+            tags=tags,
+        )
+        return jsonify(result), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        log.exception("[api/user-assets] upload failed")
+        return jsonify({"error": f"Upload failed: {exc}"}), 500
+
+
+@app.route("/api/user-assets", methods=["GET"])
+@auth.require_auth
+def api_list_user_assets():
+    """List the current user's uploaded assets.
+
+    Query params:
+    - type: Filter by asset type (optional).
+    - limit: Max results (default 50).
+
+    Response::
+
+        {"assets": [{"id": "...", "type": "logo", "url": "...", ...}, ...]}
+    """
+    from services.user_assets import list_user_assets
+
+    user_id = _get_user_id()
+    asset_type = request.args.get("type")
+    limit = min(int(request.args.get("limit", 50)), 200)
+
+    assets = list_user_assets(user_id, asset_type=asset_type, limit=limit)
+    return jsonify({"assets": assets})
+
+
+@app.route("/api/user-assets/<asset_id>", methods=["DELETE"])
+@auth.require_auth
+def api_delete_user_asset(asset_id):
+    """Delete a user asset by ID."""
+    from services.user_assets import delete_user_asset
+
+    user_id = _get_user_id()
+    deleted = delete_user_asset(user_id, asset_id)
+    if deleted:
+        return jsonify({"ok": True})
+    return jsonify({"error": "Asset not found"}), 404
 
 
 @app.route("/api/debug/image-pipeline", methods=["POST", "GET"])
