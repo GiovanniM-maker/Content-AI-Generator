@@ -1,0 +1,35 @@
+<!--
+  Carousel Studio — Standalone carousel generation interface.
+  Inject this into the main app (e.g. as a screen within the Crea tab
+  or as a standalone tab).
+
+  Dependencies:
+  - static/css/carousel-studio.css
+  - static/js/carousel-studio.js
+
+  Usage:
+    1. Include CSS + JS in the page head/body.
+    2. Include this partial where the studio should appear.
+    3. Call CarouselStudio.init() after DOM is ready.
+-->
+
+<div id="cstudio-root" class="cstudio">
+  <!-- Step indicator bar -->
+  <div class="cstudio-topbar">
+    <div id="cstudio-steps">
+      <span class="cstudio-step active">1 Descrivi</span>
+      <span class="cstudio-step-divider"></span>
+      <span class="cstudio-step">2 Genera</span>
+      <span class="cstudio-step-divider"></span>
+      <span class="cstudio-step">3 Anteprima</span>
+    </div>
+  </div>
+
+  <!-- Dynamic body (content injected by JS) -->
+  <div id="cstudio-body" class="cstudio-body">
+    <!-- Placeholder — replaced by CarouselStudio.init() -->
+    <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:14px;">
+      Caricamento Carousel Studio...
+    </div>
+  </div>
+</div>
