@@ -4091,7 +4091,8 @@ def api_generate_carousel():
             "overrides": {                        // optional
                 "title_font": "Montserrat",
                 "title_color": "#FFD700"
-            }
+            },
+            "auto_plan": true                     // optional, AI picks design
         }
 
     Response::
@@ -4121,6 +4122,7 @@ def api_generate_carousel():
     selected_asset = int(body.get("selected_asset", 0))
     asset_mapping = body.get("asset_mapping") or None
     overrides = body.get("overrides") or {}
+    auto_plan = bool(body.get("auto_plan", False))
 
     try:
         result = generate_instagram_carousel(
@@ -4133,6 +4135,7 @@ def api_generate_carousel():
             selected_asset_index=selected_asset,
             asset_mapping=asset_mapping,
             overrides=overrides,
+            auto_plan=auto_plan,
         )
         return jsonify(result)
     except ValueError as exc:
@@ -4159,6 +4162,7 @@ def api_list_carousel_themes():
 
 
 @app.route("/api/debug/image-pipeline", methods=["POST", "GET"])
+@auth.require_auth
 def debug_image_pipeline():
     """Diagnostic endpoint: test the image generation pipeline end-to-end.
 

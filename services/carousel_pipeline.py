@@ -449,8 +449,30 @@ def _generate_content(prompt: str) -> dict:
 # Step 2: Generate image prompts
 # ---------------------------------------------------------------------------
 
-def _generate_image_prompts(prompt: str, num_images: int = 3) -> list[str]:
-    """Ask the LLM to produce image generation prompts."""
+def _generate_image_prompts(
+    prompt: str,
+    num_images: int = 3,
+    asset_roles: dict | None = None,
+) -> list[str]:
+    """Ask the LLM to produce image generation prompts.
+
+    When ``asset_roles`` is provided (from the design planner), the LLM
+    is instructed to generate images matching the specified visual styles
+    (e.g. "texture", "product", "abstract").
+    """
+    role_guidance = ""
+    if asset_roles:
+        role_lines = [f"- {rid}: {rtype} style" for rid, rtype in asset_roles.items()]
+        role_guidance = (
+            "\n\nThe images should match these visual roles:\n"
+            + "\n".join(role_lines)
+            + "\n\nGenerate one prompt per role listed above. "
+            "Each prompt must reflect the visual style indicated by the role type "
+            "(texture = surfaces/materials, product = objects/items, "
+            "abstract = geometric/patterns, architecture = buildings/spaces, "
+            "gradient = smooth color blends)."
+        )
+
     messages = [
         {
             "role": "system",
@@ -462,6 +484,7 @@ def _generate_image_prompts(prompt: str, num_images: int = 3) -> list[str]:
                 "Style: editorial, elegant, no text, no people, no animals. "
                 f"Reply ONLY with a JSON object containing an 'image_prompts' "
                 f"array of exactly {num_images} strings."
+                + role_guidance
             ),
         },
         {
@@ -490,6 +513,7 @@ def generate_instagram_carousel(
     selected_asset_index: int = 0,
     asset_mapping: dict | None = None,
     overrides: dict | None = None,
+    auto_plan: bool = False,
 ) -> dict:
     """Generate a complete Instagram carousel.
 
@@ -507,6 +531,10 @@ def generate_instagram_carousel(
         asset_mapping: Explicit mapping of template asset_ids to asset
                        indices, e.g. ``{"background_asset": 1}``.
         overrides: User overrides for fonts/colors/sizes.
+        auto_plan: When True, use the AI Design Planner to automatically
+                   choose template/variant/theme/asset roles from the
+                   prompt.  Explicit values for template_id/variant/theme_id
+                   are ignored when auto_plan is enabled.
 
     Returns::
 
@@ -516,13 +544,28 @@ def generate_instagram_carousel(
             "template": "minimal_layout",
             "variant": "center",
             "theme": "industrial_dark",
-            "content": {"title": "...", ...}
+            "content": {"title": "...", ...},
+            "design_plan": {...}  // only when auto_plan=True
         }
     """
     t0 = time.time()
     session_id = uuid.uuid4().hex[:12]
     num_images = max(1, min(num_images, 3))
     overrides = overrides or {}
+
+    # Step 0: AI Design Planner (optional)
+    design_plan = None
+    asset_roles = None
+    if auto_plan:
+        from services.design_planner import plan_design
+        log.info("[carousel] step 0: running AI design planner…")
+        design_plan = plan_design(prompt)
+        template_id = design_plan["template"]
+        variant = design_plan["variant"]
+        theme_id = design_plan["theme"]
+        asset_roles = design_plan.get("asset_roles")
+        log.info("[carousel] planner chose: template=%s variant=%s theme=%s",
+                 template_id, variant, theme_id)
 
     log.info("[carousel] ═══ START ═══ user=%s template=%s variant=%s theme=%s",
              user_id[:8], template_id, variant, theme_id)
@@ -548,9 +591,11 @@ def generate_instagram_carousel(
     content = _generate_content(prompt)
     log.info("[carousel] content: title=%s", content.get("title", "")[:60])
 
-    # 4) Generate image prompts
+    # 4) Generate image prompts (with asset roles from planner if available)
     log.info("[carousel] step 2: generating %d image prompts…", num_images)
-    image_prompts = _generate_image_prompts(prompt, num_images=num_images)
+    image_prompts = _generate_image_prompts(
+        prompt, num_images=num_images, asset_roles=asset_roles,
+    )
     log.info("[carousel] image prompts: %s", [p[:60] for p in image_prompts])
 
     # 5) Generate and store assets
@@ -602,7 +647,7 @@ def generate_instagram_carousel(
     log.info("[carousel] ═══ DONE in %.1fs ═══ slides=%d assets=%d",
              elapsed, len(slide_urls), len(successful_assets))
 
-    return {
+    result = {
         "slides": slide_urls,
         "assets": successful_assets,
         "template": template_id,
@@ -610,3 +655,6 @@ def generate_instagram_carousel(
         "theme": theme_id,
         "content": content,
     }
+    if design_plan is not None:
+        result["design_plan"] = design_plan
+    return result
