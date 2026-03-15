@@ -1,0 +1,30 @@
+{
+  "minimal_layout": {
+    "name": "Minimal Layout",
+    "description": "Clean layout with accent line, text stacked vertically",
+    "variants": ["center", "split"],
+    "default_theme": "industrial_dark",
+    "themes": ["industrial_dark", "luxury_gold", "luxury_rose", "tech_vibrant", "startup_blue", "clean_light"]
+  },
+  "bold_layout": {
+    "name": "Bold Layout",
+    "description": "Full-bleed image background with large centered text",
+    "variants": ["center"],
+    "default_theme": "tech_vibrant",
+    "themes": ["industrial_dark", "luxury_gold", "luxury_rose", "tech_vibrant", "startup_blue", "clean_light"]
+  },
+  "minimal_industrial": {
+    "name": "Minimal Industrial (legacy)",
+    "description": "Dark elegant self-contained template with inline styling",
+    "variants": [],
+    "default_theme": "",
+    "themes": ["industrial_dark", "luxury_gold", "luxury_rose", "tech_vibrant", "startup_blue", "clean_light"]
+  },
+  "modern_gradient": {
+    "name": "Modern Gradient (legacy)",
+    "description": "Vibrant gradient self-contained template with inline styling",
+    "variants": [],
+    "default_theme": "",
+    "themes": ["industrial_dark", "luxury_gold", "luxury_rose", "tech_vibrant", "startup_blue", "clean_light"]
+  }
+}

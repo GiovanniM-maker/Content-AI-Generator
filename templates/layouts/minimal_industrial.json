@@ -1,0 +1,209 @@
+{
+  "id": "minimal_industrial",
+  "name": "Minimal Industrial",
+  "description": "Dark elegant theme with gold accent, suited for luxury and professional brands",
+
+  "canvas": {
+    "width": 1080,
+    "height": 1080,
+    "background": "#111111"
+  },
+
+  "slides": [
+    {
+      "name": "cover",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#00000090"
+        },
+        {
+          "type": "rect",
+          "x": 80, "y": 420,
+          "width": 64, "height": 5,
+          "color": "#c9a36a"
+        },
+        {
+          "type": "title",
+          "content_key": "title",
+          "x": 80, "y": 440,
+          "max_width": 920,
+          "font": "Inter", "size": 72, "weight": 800,
+          "color": "#ffffff",
+          "line_gap": 10
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 80, "y": 600,
+          "max_width": 920,
+          "font": "Inter", "size": 36, "weight": 400,
+          "color": "#aaaaaa",
+          "line_gap": 8
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#aaaaaa"
+        }
+      ]
+    },
+
+    {
+      "name": "text",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#000000A0"
+        },
+        {
+          "type": "rect",
+          "x": 80, "y": 120,
+          "width": 64, "height": 5,
+          "color": "#c9a36a"
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 80, "y": 150,
+          "max_width": 920,
+          "font": "Inter", "size": 36, "weight": 400,
+          "color": "#ffffff",
+          "line_gap": 10
+        },
+        {
+          "type": "body",
+          "content_key": "body",
+          "x": 80, "y": 280,
+          "max_width": 920,
+          "font": "Inter", "size": 32, "weight": 400,
+          "color": "#aaaaaa",
+          "line_gap": 10
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#aaaaaa"
+        }
+      ]
+    },
+
+    {
+      "name": "list",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#000000A0"
+        },
+        {
+          "type": "rect",
+          "x": 80, "y": 120,
+          "width": 64, "height": 5,
+          "color": "#c9a36a"
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 80, "y": 150,
+          "max_width": 920,
+          "font": "Inter", "size": 36, "weight": 400,
+          "color": "#ffffff",
+          "line_gap": 10
+        },
+        {
+          "type": "bullet_list",
+          "content_key": "bullets",
+          "x": 80, "y": 280,
+          "max_width": 920,
+          "font": "Inter", "size": 32, "weight": 400,
+          "color": "#ffffff",
+          "marker_color": "#c9a36a",
+          "marker_size": 12,
+          "indent": 30,
+          "item_gap": 16,
+          "line_gap": 8
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#aaaaaa"
+        }
+      ]
+    },
+
+    {
+      "name": "cta",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#0000008C"
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 120, "y": 380,
+          "max_width": 840,
+          "font": "Inter", "size": 36, "weight": 400,
+          "color": "#aaaaaa",
+          "align": "center",
+          "line_gap": 8
+        },
+        {
+          "type": "cta",
+          "content_key": "cta",
+          "x": 120, "y": 480,
+          "max_width": 840,
+          "font": "Inter", "size": 40, "weight": 700,
+          "color": "#ffffff",
+          "align": "center",
+          "button_color": "#c9a36a",
+          "button_padding_x": 60,
+          "button_padding_y": 30,
+          "button_radius": 12,
+          "line_gap": 10
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#aaaaaa"
+        }
+      ]
+    }
+  ]
+}

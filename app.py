@@ -4067,7 +4067,102 @@ REGOLE:
         return jsonify({"error": "Errore nella generazione. Riprova tra poco."}), 500
 
 
+# =========================================================================
+# NEW CAROUSEL PIPELINE (v2 — template + content + assets, no Playwright)
+# =========================================================================
+
+@app.route("/api/generate-carousel", methods=["POST"])
+@auth.require_auth
+def api_generate_carousel():
+    """Generate an Instagram carousel using the template + theme pipeline.
+
+    Request body::
+
+        {
+            "prompt": "5 strategie per aumentare le vendite",
+            "template": "minimal_layout",        // optional
+            "variant": "center",                  // optional
+            "theme": "industrial_dark",           // optional
+            "num_images": 3,                      // optional, 1-3
+            "selected_asset": 0,                  // optional
+            "asset_mapping": {                    // optional, explicit mapping
+                "background_asset": 0
+            },
+            "overrides": {                        // optional
+                "title_font": "Montserrat",
+                "title_color": "#FFD700"
+            },
+            "auto_plan": true                     // optional, AI picks design
+        }
+
+    Response::
+
+        {
+            "slides": ["url1", ...],
+            "assets": [{"id": "...", "image_url": "...", ...}, ...],
+            "template": "minimal_layout",
+            "variant": "center",
+            "theme": "industrial_dark",
+            "content": {"title": "...", ...}
+        }
+    """
+    from services.carousel_pipeline import generate_instagram_carousel
+
+    user_id = _get_user_id()
+    body = request.json or {}
+
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"error": "prompt is required"}), 400
+
+    template_id = body.get("template", "minimal_layout")
+    variant = body.get("variant") or None
+    theme_id = body.get("theme") or None
+    num_images = min(max(int(body.get("num_images", 3)), 1), 3)
+    selected_asset = int(body.get("selected_asset", 0))
+    asset_mapping = body.get("asset_mapping") or None
+    overrides = body.get("overrides") or {}
+    auto_plan = bool(body.get("auto_plan", False))
+
+    try:
+        result = generate_instagram_carousel(
+            prompt=prompt,
+            user_id=user_id,
+            template_id=template_id,
+            variant=variant,
+            theme_id=theme_id,
+            num_images=num_images,
+            selected_asset_index=selected_asset,
+            asset_mapping=asset_mapping,
+            overrides=overrides,
+            auto_plan=auto_plan,
+        )
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        log.exception("[api/generate-carousel] failed")
+        return jsonify({"error": f"Carousel generation failed: {exc}"}), 500
+
+
+@app.route("/api/carousel-templates", methods=["GET"])
+@auth.optional_auth
+def api_list_carousel_templates():
+    """List available carousel templates with variants and themes."""
+    from services.carousel_pipeline import list_templates
+    return jsonify({"templates": list_templates()})
+
+
+@app.route("/api/carousel-themes", methods=["GET"])
+@auth.optional_auth
+def api_list_carousel_themes():
+    """List available carousel themes."""
+    from services.carousel_pipeline import list_themes
+    return jsonify({"themes": list_themes()})
+
+
 @app.route("/api/debug/image-pipeline", methods=["POST", "GET"])
+@auth.require_auth
 def debug_image_pipeline():
     """Diagnostic endpoint: test the image generation pipeline end-to-end.
 

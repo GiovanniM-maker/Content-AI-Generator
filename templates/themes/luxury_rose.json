@@ -1,0 +1,13 @@
+{
+  "id": "luxury_rose",
+  "name": "Luxury Rose",
+  "description": "Rose gold accents on deep black, extends luxury_gold with warmer tones",
+  "extends": "luxury_gold",
+
+  "colors": {
+    "accent": "#b76e79",
+    "marker": "#b76e79",
+    "button": "#b76e79",
+    "title": "#e8c4c8"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "luxury_gold",
+  "name": "Luxury Gold",
+  "description": "Warm gold tones on deep black, designed for high-end fashion and jewelry brands",
+
+  "canvas": {
+    "background": "#0a0a0a"
+  },
+
+  "fonts": {
+    "title": "Playfair Display",
+    "subtitle": "Inter",
+    "body": "Inter",
+    "cta": "Inter",
+    "slide_counter": "Inter"
+  },
+
+  "sizes": {
+    "title": 76,
+    "subtitle": 34,
+    "body": 30,
+    "cta": 38,
+    "bullet_list": 30,
+    "slide_counter": 22
+  },
+
+  "weights": {
+    "title": 700,
+    "subtitle": 400,
+    "body": 400,
+    "cta": 700,
+    "bullet_list": 400
+  },
+
+  "colors": {
+    "background": "#0a0a0a",
+    "title": "#d4af37",
+    "subtitle": "#c0c0c0",
+    "body": "#b0b0b0",
+    "cta": "#0a0a0a",
+    "bullet_list": "#e0d5c0",
+    "slide_counter": "#666666",
+    "accent": "#d4af37",
+    "overlay": "#0a0a0a88",
+    "overlay_heavy": "#0a0a0aB0",
+    "marker": "#d4af37",
+    "button": "#d4af37"
+  },
+
+  "button": {
+    "padding_x": 50,
+    "padding_y": 28,
+    "radius": 8
+  }
+}

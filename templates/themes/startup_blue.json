@@ -1,0 +1,23 @@
+{
+  "id": "startup_blue",
+  "name": "Startup Blue",
+  "description": "Modern blue tones, extends tech_vibrant with softer accent",
+  "extends": "tech_vibrant",
+
+  "sizes": {
+    "title": "typography.h1",
+    "subtitle": "typography.h3",
+    "body": "typography.body",
+    "cta": "typography.cta",
+    "bullet_list": "typography.body",
+    "slide_counter": "typography.caption"
+  },
+
+  "colors": {
+    "accent": "#4a90d9",
+    "marker": "#4a90d9",
+    "button": "#4a90d9",
+    "title": "colors.white",
+    "subtitle": "colors.indigo_200"
+  }
+}

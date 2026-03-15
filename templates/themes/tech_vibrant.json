@@ -1,0 +1,55 @@
+{
+  "id": "tech_vibrant",
+  "name": "Tech Vibrant",
+  "description": "Deep blue gradient with red accent, ideal for tech and startups",
+
+  "canvas": {
+    "background": "#1a1a2e"
+  },
+
+  "fonts": {
+    "title": "Inter",
+    "subtitle": "Inter",
+    "body": "Inter",
+    "cta": "Inter",
+    "slide_counter": "Inter"
+  },
+
+  "sizes": {
+    "title": 68,
+    "subtitle": 34,
+    "body": 30,
+    "cta": 38,
+    "bullet_list": 30,
+    "slide_counter": 24
+  },
+
+  "weights": {
+    "title": 800,
+    "subtitle": 400,
+    "body": 400,
+    "cta": 700,
+    "bullet_list": 400
+  },
+
+  "colors": {
+    "background": "#1a1a2e",
+    "title": "#ffffff",
+    "subtitle": "#b0b0d0",
+    "body": "#b0b0d0",
+    "cta": "#ffffff",
+    "bullet_list": "#ffffff",
+    "slide_counter": "#b0b0d0",
+    "accent": "#e94560",
+    "overlay": "#1a1a2e99",
+    "overlay_heavy": "#1a1a2eCC",
+    "marker": "#e94560",
+    "button": "#e94560"
+  },
+
+  "button": {
+    "padding_x": 50,
+    "padding_y": 28,
+    "radius": 10
+  }
+}

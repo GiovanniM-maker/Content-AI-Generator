@@ -1,0 +1,209 @@
+{
+  "id": "modern_gradient",
+  "name": "Modern Gradient",
+  "description": "Vibrant gradient background with clean white text, ideal for tech and startups",
+
+  "canvas": {
+    "width": 1080,
+    "height": 1080,
+    "background": "#1a1a2e"
+  },
+
+  "slides": [
+    {
+      "name": "cover",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#1a1a2e99"
+        },
+        {
+          "type": "title",
+          "content_key": "title",
+          "x": 80, "y": 380,
+          "max_width": 920,
+          "font": "Inter", "size": 68, "weight": 800,
+          "color": "#ffffff",
+          "line_gap": 12
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 80, "y": 560,
+          "max_width": 920,
+          "font": "Inter", "size": 34, "weight": 400,
+          "color": "#b0b0d0",
+          "line_gap": 8
+        },
+        {
+          "type": "rect",
+          "x": 80, "y": 700,
+          "width": 120, "height": 4,
+          "color": "#e94560"
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#b0b0d0"
+        }
+      ]
+    },
+
+    {
+      "name": "text",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#1a1a2eCC"
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 80, "y": 140,
+          "max_width": 920,
+          "font": "Inter", "size": 40, "weight": 700,
+          "color": "#ffffff",
+          "line_gap": 10
+        },
+        {
+          "type": "rect",
+          "x": 80, "y": 240,
+          "width": 80, "height": 4,
+          "color": "#e94560"
+        },
+        {
+          "type": "body",
+          "content_key": "body",
+          "x": 80, "y": 280,
+          "max_width": 920,
+          "font": "Inter", "size": 30, "weight": 400,
+          "color": "#b0b0d0",
+          "line_gap": 12
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#b0b0d0"
+        }
+      ]
+    },
+
+    {
+      "name": "list",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#1a1a2eCC"
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 80, "y": 140,
+          "max_width": 920,
+          "font": "Inter", "size": 40, "weight": 700,
+          "color": "#ffffff",
+          "line_gap": 10
+        },
+        {
+          "type": "rect",
+          "x": 80, "y": 240,
+          "width": 80, "height": 4,
+          "color": "#e94560"
+        },
+        {
+          "type": "bullet_list",
+          "content_key": "bullets",
+          "x": 80, "y": 290,
+          "max_width": 920,
+          "font": "Inter", "size": 30, "weight": 400,
+          "color": "#ffffff",
+          "marker_color": "#e94560",
+          "marker_size": 12,
+          "indent": 30,
+          "item_gap": 20,
+          "line_gap": 8
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#b0b0d0"
+        }
+      ]
+    },
+
+    {
+      "name": "cta",
+      "elements": [
+        {
+          "type": "image",
+          "asset_id": "background_asset",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080
+        },
+        {
+          "type": "rect",
+          "x": 0, "y": 0,
+          "width": 1080, "height": 1080,
+          "color": "#1a1a2eBB"
+        },
+        {
+          "type": "subtitle",
+          "content_key": "subtitle",
+          "x": 140, "y": 400,
+          "max_width": 800,
+          "font": "Inter", "size": 34, "weight": 400,
+          "color": "#b0b0d0",
+          "align": "center",
+          "line_gap": 8
+        },
+        {
+          "type": "cta",
+          "content_key": "cta",
+          "x": 140, "y": 490,
+          "max_width": 800,
+          "font": "Inter", "size": 38, "weight": 700,
+          "color": "#ffffff",
+          "align": "center",
+          "button_color": "#e94560",
+          "button_padding_x": 50,
+          "button_padding_y": 28,
+          "button_radius": 10,
+          "line_gap": 10
+        },
+        {
+          "type": "slide_counter",
+          "x": 1000, "y": 1000,
+          "font": "Inter", "size": 24,
+          "color": "#b0b0d0"
+        }
+      ]
+    }
+  ]
+}

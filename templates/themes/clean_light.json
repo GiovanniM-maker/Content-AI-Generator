@@ -1,0 +1,55 @@
+{
+  "id": "clean_light",
+  "name": "Clean Light",
+  "description": "Light minimal theme with soft shadows, ideal for wellness, coaching, and lifestyle",
+
+  "canvas": {
+    "background": "#f5f0eb"
+  },
+
+  "fonts": {
+    "title": "Inter",
+    "subtitle": "Inter",
+    "body": "Inter",
+    "cta": "Inter",
+    "slide_counter": "Inter"
+  },
+
+  "sizes": {
+    "title": 68,
+    "subtitle": 34,
+    "body": 30,
+    "cta": 36,
+    "bullet_list": 30,
+    "slide_counter": 22
+  },
+
+  "weights": {
+    "title": 800,
+    "subtitle": 400,
+    "body": 400,
+    "cta": 700,
+    "bullet_list": 400
+  },
+
+  "colors": {
+    "background": "#f5f0eb",
+    "title": "#2c2c2c",
+    "subtitle": "#5a5a5a",
+    "body": "#666666",
+    "cta": "#ffffff",
+    "bullet_list": "#2c2c2c",
+    "slide_counter": "#999999",
+    "accent": "#b8860b",
+    "overlay": "#f5f0eb66",
+    "overlay_heavy": "#f5f0ebCC",
+    "marker": "#b8860b",
+    "button": "#2c2c2c"
+  },
+
+  "button": {
+    "padding_x": 50,
+    "padding_y": 26,
+    "radius": 24
+  }
+}
