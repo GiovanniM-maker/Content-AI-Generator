@@ -2223,6 +2223,30 @@ body::after {
 .tpl-select-card .pers-card-body { padding: 8px 10px; }
 .tpl-select-card .pers-card-name { font-size: 12px; }
 
+/* ── State Inspector Panel ── */
+.pers-inspector { border-top: 1px solid var(--border); background: var(--bg2); overflow: hidden; transition: max-height 0.25s ease; }
+.pers-inspector.collapsed { max-height: 32px; }
+.pers-inspector.expanded { max-height: 300px; }
+.pers-inspector-toggle { display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text2); user-select: none; }
+.pers-inspector-toggle:hover { color: var(--text); }
+.pers-inspector-toggle .arrow { transition: transform 0.2s; font-size: 10px; }
+.pers-inspector.expanded .pers-inspector-toggle .arrow { transform: rotate(90deg); }
+.pers-inspector-body { padding: 8px 12px 12px; overflow-y: auto; max-height: 260px; font-size: 12px; line-height: 1.5; }
+.pers-inspector-mode { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.pers-inspector-mode.mode-asset { background: #dcfce7; color: #166534; }
+.pers-inspector-mode.mode-design { background: #dbeafe; color: #1e40af; }
+.pers-inspector-mode.mode-mixed { background: #fef3c7; color: #92400e; }
+.pers-inspector-section { margin-top: 8px; }
+.pers-inspector-section-title { font-weight: 700; font-size: 10px; text-transform: uppercase; color: var(--text3); letter-spacing: 0.5px; margin-bottom: 4px; }
+.pers-inspector-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.pers-inspector-slot { font-weight: 600; color: var(--text); min-width: 110px; }
+.pers-inspector-value { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.pers-inspector-anchor { display: inline-block; padding: 1px 6px; border-radius: 3px; background: var(--glass3); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+.pers-inspector-slides { color: var(--text3); font-size: 10px; }
+.pers-inspector-error { color: var(--red); font-size: 11px; margin-top: 4px; padding: 4px 8px; background: rgba(220,38,38,0.06); border-radius: 4px; }
+.pers-inspector-change { color: var(--green); font-size: 11px; margin-top: 2px; }
+.pers-inspector-empty { color: var(--text3); font-style: italic; }
+
 /* Responsive */
 @media (max-width: 768px) {
   .pers-chat-layout { flex-direction: column; height: auto; }
@@ -2232,6 +2256,7 @@ body::after {
   .pers-type-choice { flex-direction: column; }
   .pers-preview-gallery { grid-template-columns: 1fr; }
   .pers-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .pers-inspector-body { max-height: 180px; }
 }
 </style>
 </head>
@@ -3160,6 +3185,17 @@ body::after {
           <div id="pers-chat-messages" class="pers-chat-messages">
             <div class="pers-chat-bubble bot">
               Ciao! Descrivi come vuoi il tuo template e lo creeremo insieme. Ad esempio: "Sfondo scuro con accento viola, testo bianco, stile moderno"
+            </div>
+          </div>
+          <!-- State Inspector Panel -->
+          <div id="pers-inspector" class="pers-inspector collapsed">
+            <div class="pers-inspector-toggle" onclick="togglePersInspector()">
+              <span class="arrow">&#9654;</span>
+              <span>Stato comandi</span>
+              <span id="pers-inspector-mode-badge" class="pers-inspector-mode" style="display:none;"></span>
+            </div>
+            <div class="pers-inspector-body" id="pers-inspector-body">
+              <div class="pers-inspector-empty">Nessun comando eseguito</div>
             </div>
           </div>
           <!-- Uploaded image preview (hidden until image selected) -->
@@ -9039,6 +9075,11 @@ async function sendTemplateMessage() {
       botBubble.textContent = data.reply || 'Template aggiornato!';
       msgContainer.appendChild(botBubble);
 
+      // Update state inspector panel
+      if (data.command_state) {
+        updatePersInspector(data.command_state);
+      }
+
       // Trigger preview refresh when backend returns updated content
       // html_content = rendered HTML slides, design_spec = updated design spec
       if (data.html_content || data.design_spec) {
@@ -9063,6 +9104,136 @@ async function sendTemplateMessage() {
   _persSending = false;
   msgContainer.scrollTop = msgContainer.scrollHeight;
   input.focus();
+}
+
+// ── State Inspector Panel ──
+
+function togglePersInspector() {
+  const panel = document.getElementById('pers-inspector');
+  if (!panel) return;
+  panel.classList.toggle('collapsed');
+  panel.classList.toggle('expanded');
+}
+
+function updatePersInspector(state) {
+  if (!state) return;
+  const body = document.getElementById('pers-inspector-body');
+  const badge = document.getElementById('pers-inspector-mode-badge');
+  if (!body || !badge) return;
+
+  // Show mode badge
+  const modeLabels = { asset: 'ASSET', design: 'DESIGN', mixed: 'MIXED' };
+  badge.textContent = modeLabels[state.mode] || state.mode;
+  badge.className = 'pers-inspector-mode mode-' + (state.mode || 'design');
+  badge.style.display = 'inline-block';
+
+  let html = '';
+
+  // Asset mapping section
+  const mapping = state.asset_mapping || {};
+  const hasMapping = Object.keys(mapping).length > 0;
+  if (hasMapping) {
+    html += '<div class="pers-inspector-section">';
+    html += '<div class="pers-inspector-section-title">Asset attivi</div>';
+    for (const [slot, val] of Object.entries(mapping)) {
+      const label = _slotLabel(slot);
+      const shortVal = _truncUrl(val);
+      html += '<div class="pers-inspector-row">';
+      html += '<span class="pers-inspector-slot">' + esc(label) + '</span>';
+      html += '<span class="pers-inspector-value" title="' + esc(val) + '">' + esc(shortVal) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Placement overrides
+  const placements = state.placement_overrides || {};
+  const hasPlacements = Object.keys(placements).length > 0;
+  if (hasPlacements) {
+    html += '<div class="pers-inspector-section">';
+    html += '<div class="pers-inspector-section-title">Posizionamento</div>';
+    for (const [slot, p] of Object.entries(placements)) {
+      const label = _slotLabel(slot);
+      const anchor = p.anchor || '-';
+      const slides = p.slides ? p.slides.join(', ') : 'tutte';
+      html += '<div class="pers-inspector-row">';
+      html += '<span class="pers-inspector-slot">' + esc(label) + '</span>';
+      html += '<span class="pers-inspector-anchor">' + esc(anchor) + '</span>';
+      html += '<span class="pers-inspector-slides">→ ' + esc(slides) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Changes
+  const changes = state.changes || [];
+  if (changes.length > 0) {
+    html += '<div class="pers-inspector-section">';
+    html += '<div class="pers-inspector-section-title">Azioni eseguite</div>';
+    for (const c of changes) {
+      html += '<div class="pers-inspector-change">' + esc(c) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Errors
+  const errors = state.errors || [];
+  if (errors.length > 0) {
+    html += '<div class="pers-inspector-section">';
+    html += '<div class="pers-inspector-section-title">Errori</div>';
+    for (const e of errors) {
+      html += '<div class="pers-inspector-error">' + esc(e) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Executed commands (compact list)
+  const cmds = state.executed_commands || [];
+  if (cmds.length > 0 && !hasMapping && !hasPlacements && changes.length === 0) {
+    html += '<div class="pers-inspector-section">';
+    html += '<div class="pers-inspector-section-title">Comandi</div>';
+    for (const c of cmds) {
+      html += '<div class="pers-inspector-row">';
+      html += '<span class="pers-inspector-slot">' + esc(c.type || '') + '</span>';
+      html += '<span class="pers-inspector-value">' + esc(c.slot || '') + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  if (!html) {
+    html = '<div class="pers-inspector-empty">Nessuna modifica strutturale</div>';
+  }
+
+  body.innerHTML = html;
+
+  // Auto-expand on first command state
+  const panel = document.getElementById('pers-inspector');
+  if (panel && (hasMapping || hasPlacements || errors.length > 0)) {
+    panel.classList.remove('collapsed');
+    panel.classList.add('expanded');
+  }
+}
+
+function _slotLabel(slot) {
+  const labels = {
+    logo_asset: 'Logo',
+    background_asset: 'Sfondo',
+    product_asset: 'Prodotto',
+    secondary_asset: 'Immagine',
+    cover_image: 'Cover',
+  };
+  return labels[slot] || slot;
+}
+
+function _truncUrl(url) {
+  if (!url) return '(vuoto)';
+  if (url.length <= 40) return url;
+  // Show last segment of URL
+  const parts = url.split('/');
+  const last = parts[parts.length - 1] || parts[parts.length - 2] || '';
+  if (last.length > 30) return last.substring(0, 27) + '...';
+  return '.../' + last;
 }
 
 // Example content for IG preview placeholders (matches backend's render_template_preview)

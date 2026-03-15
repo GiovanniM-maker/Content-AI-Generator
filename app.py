@@ -4104,6 +4104,46 @@ REGOLE:
             response_data["design_spec"] = new_design_spec
         if html_changed:
             response_data["html_content"] = new_html
+
+        # ── Structured command state for UI inspector ──
+        if template_type == "instagram":
+            command_state = {
+                "mode": parse_result.mode.value,
+                "executed_commands": [
+                    {"type": c.get("type"), "slot": c.get("slot"),
+                     "anchor": c.get("anchor"), "slides": c.get("slides")}
+                    for c in parse_result.commands
+                ],
+                "asset_mapping": {},
+                "placement_overrides": {},
+                "errors": [],
+            }
+            # Populate from exec_result if available (ASSET or MIXED mode)
+            try:
+                command_state["errors"] = exec_result.get("errors", [])
+                command_state["changes"] = exec_result.get("changes", [])
+            except NameError:
+                pass  # exec_result not defined in DESIGN mode
+            # Extract current asset state from design_spec
+            if new_design_spec:
+                imgs = new_design_spec.get("images", {})
+                si = imgs.get("slide_images", {})
+                if imgs.get("logo_url"):
+                    command_state["asset_mapping"]["logo_asset"] = imgs["logo_url"]
+                if imgs.get("background_image_url"):
+                    command_state["asset_mapping"]["background_asset"] = imgs["background_image_url"]
+                if si.get("cover"):
+                    command_state["asset_mapping"]["cover_image"] = si["cover"]
+                # Extract placement from commands
+                for c in parse_result.commands:
+                    if c.get("type") == "placement_override":
+                        command_state["placement_overrides"][c["slot"]] = {
+                            "anchor": c.get("anchor"),
+                            "slides": c.get("slides"),
+                            "box": c.get("box"),
+                        }
+            response_data["command_state"] = command_state
+
         return jsonify(response_data)
 
     except Exception as e:
