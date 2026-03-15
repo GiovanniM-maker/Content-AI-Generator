@@ -1,7 +1,8 @@
-"""Image generation service using fal.ai Flux Schnell.
+"""Image generation service using OpenRouter (Gemini Flash image model).
 
-Generates a single image from a text prompt, uploads it to Supabase Storage,
-and returns a stable public URL suitable for use in design_spec fields:
+Generates a single image from a text prompt via the same OpenRouter API used
+by the rest of the app, uploads it to Supabase Storage, and returns a stable
+public URL suitable for use in design_spec fields:
   - images.background_image_url  (shared background across all slides)
   - images.slide_images.cover    (cover-specific image)
 
@@ -19,122 +20,191 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
+import re
 import time
 import traceback
 import uuid
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 import requests as http_requests
 
 log = logging.getLogger(__name__)
 
-FAL_MODEL = "fal-ai/flux/schnell"
+# OpenRouter config — same env var and base URL used by the rest of the app
+OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+IMAGE_MODEL = "google/gemini-2.5-flash-image-preview"
 
-# Timeouts
-GENERATE_TIMEOUT = 120  # seconds — Flux Schnell is fast (~5-15s typical)
-DOWNLOAD_TIMEOUT = 30
-
-# Image spec for Instagram slides
-IMAGE_SIZE = {"width": 1080, "height": 1080}
+# Timeout for the full generation request (model inference can take 15-40s)
+GENERATE_TIMEOUT = 120
 
 
-def _get_fal_key() -> str:
-    """Read FAL_KEY from environment at call time (not import time).
-
-    This allows the key to be set after the module is imported,
-    which is common with .env loading or secrets injection.
-    """
-    key = os.getenv("FAL_KEY", "").strip()
+def _get_openrouter_key() -> str:
+    """Read OPENROUTER_API_KEY from environment at call time."""
+    key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not key:
         raise RuntimeError(
-            "[image_gen][config] FAL_KEY environment variable is missing or empty. "
-            "Set it to your fal.ai API key (https://fal.ai/dashboard/keys)."
+            "[image_gen][config] OPENROUTER_API_KEY environment variable is missing or empty."
         )
     return key
 
 
-def _run_with_timeout(fn, timeout: int, label: str = "operation"):
-    """Run a callable with a timeout."""
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(fn)
-        try:
-            return future.result(timeout=timeout)
-        except FuturesTimeoutError:
-            raise TimeoutError(f"{label} exceeded timeout of {timeout}s")
+def _generate_image_openrouter(prompt: str) -> bytes:
+    """Call OpenRouter image generation and return raw image bytes.
 
-
-def _generate_fal_image(prompt: str, num_inference_steps: int = 4) -> str:
-    """Call fal.ai Flux Schnell to generate an image.
-
-    Returns the temporary fal.ai URL of the generated image.
-    Raises on failure.
+    Uses the chat/completions endpoint with modalities=["image", "text"].
+    The model returns the image as a base64 data URL inline in the response.
     """
-    try:
-        import fal_client
-    except ImportError:
-        raise RuntimeError(
-            "[image_gen][config] fal-client package is not installed. "
-            "Run: pip install fal-client==0.5.9"
-        )
+    api_key = _get_openrouter_key()
+    log.info("[image_gen][config] OPENROUTER_API_KEY present (length=%d)", len(api_key))
 
-    fal_key = _get_fal_key()
-    os.environ["FAL_KEY"] = fal_key
-    log.info("[image_gen][config] FAL_KEY present (length=%d)", len(fal_key))
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5001",
+        "X-Title": "Content Dashboard",
+    }
 
     payload = {
-        "prompt": prompt,
-        "image_size": IMAGE_SIZE,
-        "num_inference_steps": num_inference_steps,
-        "num_images": 1,
-        "enable_safety_checker": True,
+        "model": IMAGE_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    f"Generate this image. Output ONLY the image, no text explanation.\n\n"
+                    f"{prompt}"
+                ),
+            }
+        ],
+        "modalities": ["image", "text"],
     }
-    log.info("[image_gen][fal] request starting → model=%s, image_size=%s, steps=%d",
-             FAL_MODEL, IMAGE_SIZE, num_inference_steps)
 
-    result = _run_with_timeout(
-        lambda: fal_client.subscribe(
-            FAL_MODEL,
-            arguments=payload,
-        ),
+    log.info("[image_gen][openrouter] request starting → model=%s", IMAGE_MODEL)
+    log.info("[image_gen][openrouter] prompt=%s", prompt[:200])
+
+    resp = http_requests.post(
+        f"{OPENROUTER_BASE}/chat/completions",
+        headers=headers,
+        json=payload,
         timeout=GENERATE_TIMEOUT,
-        label="Image generation (Flux Schnell)",
     )
 
-    log.info("[image_gen][fal] response received, keys=%s", list(result.keys()) if isinstance(result, dict) else type(result).__name__)
-
-    if not isinstance(result, dict):
-        raise RuntimeError(f"[image_gen][fal] unexpected response type: {type(result).__name__}")
-
-    images = result.get("images", [])
-    if not images:
+    # Check for HTTP errors
+    if resp.status_code != 200:
+        error_detail = ""
+        try:
+            error_data = resp.json()
+            if "error" in error_data:
+                error_detail = error_data["error"].get("message", str(error_data["error"]))
+        except Exception:
+            error_detail = resp.text[:300]
         raise RuntimeError(
-            f"[image_gen][fal] no images in response. "
-            f"Keys: {list(result.keys())}. "
-            f"Has 'images': {'images' in result}. "
-            f"Content sample: {str(result)[:200]}"
+            f"[image_gen][openrouter] HTTP {resp.status_code}: {error_detail}"
         )
 
-    url = images[0].get("url", "") if isinstance(images[0], dict) else str(images[0])
-    if not url:
-        raise RuntimeError(f"[image_gen][fal] first image has no URL. Image entry: {images[0]}")
+    data = resp.json()
+    log.info("[image_gen][openrouter] response received (status=%d)", resp.status_code)
 
-    log.info("[image_gen][fal] image URL received: %s", url[:100])
-    return url
+    # Check for API-level errors
+    if "error" in data:
+        err_msg = data["error"].get("message", str(data["error"]))
+        raise RuntimeError(f"[image_gen][openrouter] API error: {err_msg}")
+
+    # Extract image from response
+    # OpenRouter returns images as base64 data URLs in the message content
+    choices = data.get("choices", [])
+    if not choices:
+        raise RuntimeError(
+            f"[image_gen][openrouter] no choices in response. Keys: {list(data.keys())}"
+        )
+
+    message = choices[0].get("message", {})
+
+    # Strategy 1: Check message.images array (structured format)
+    images = message.get("images", [])
+    if images:
+        img_entry = images[0]
+        if isinstance(img_entry, dict):
+            url = img_entry.get("image_url", {}).get("url", "") or img_entry.get("url", "")
+        else:
+            url = str(img_entry)
+        if url:
+            log.info("[image_gen][openrouter] found image in message.images")
+            return _decode_data_url(url)
+
+    # Strategy 2: Check multipart content array
+    content = message.get("content", "")
+    if isinstance(content, list):
+        for part in content:
+            if isinstance(part, dict):
+                if part.get("type") == "image_url":
+                    url = part.get("image_url", {}).get("url", "")
+                    if url:
+                        log.info("[image_gen][openrouter] found image in content array (image_url)")
+                        return _decode_data_url(url)
+                elif part.get("type") == "image":
+                    # Some models return {"type": "image", "data": "base64..."}
+                    b64_data = part.get("data", "")
+                    if b64_data:
+                        log.info("[image_gen][openrouter] found image in content array (image data)")
+                        return base64.b64decode(b64_data)
+        # If content is a list, also try to find data URLs in text parts
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text = part.get("text", "")
+                img_bytes = _extract_data_url_from_text(text)
+                if img_bytes:
+                    return img_bytes
+
+    # Strategy 3: Check string content for embedded data URL
+    if isinstance(content, str) and content:
+        img_bytes = _extract_data_url_from_text(content)
+        if img_bytes:
+            return img_bytes
+
+    # Nothing found — log what we got for debugging
+    content_preview = str(content)[:300] if content else "(empty)"
+    raise RuntimeError(
+        f"[image_gen][openrouter] no image found in response. "
+        f"Message keys: {list(message.keys())}. "
+        f"Content type: {type(content).__name__}. "
+        f"Content preview: {content_preview}"
+    )
 
 
-def _download_image(url: str) -> bytes:
-    """Download image bytes from a URL."""
-    log.info("[image_gen][download] fetching URL=%s", url[:120])
-    resp = http_requests.get(url, timeout=DOWNLOAD_TIMEOUT)
-    resp.raise_for_status()
-    size = len(resp.content)
-    log.info("[image_gen][download] received %d bytes, content-type=%s",
-             size, resp.headers.get("content-type", "unknown"))
-    if size < 1000:
-        raise RuntimeError(f"Downloaded image is suspiciously small ({size} bytes)")
-    return resp.content
+def _decode_data_url(url: str) -> bytes:
+    """Decode a data:image/...;base64,... URL to raw bytes."""
+    if url.startswith("data:"):
+        # Strip the data URL prefix
+        match = re.match(r"data:[^;]+;base64,(.+)", url, re.DOTALL)
+        if match:
+            b64 = match.group(1)
+            img_bytes = base64.b64decode(b64)
+            log.info("[image_gen][decode] decoded base64 data URL → %d bytes", len(img_bytes))
+            if len(img_bytes) < 1000:
+                raise RuntimeError(f"Decoded image is suspiciously small ({len(img_bytes)} bytes)")
+            return img_bytes
+    elif url.startswith("http"):
+        # It's a regular URL — download it
+        log.info("[image_gen][download] fetching URL=%s", url[:120])
+        resp = http_requests.get(url, timeout=30)
+        resp.raise_for_status()
+        if len(resp.content) < 1000:
+            raise RuntimeError(f"Downloaded image is suspiciously small ({len(resp.content)} bytes)")
+        log.info("[image_gen][download] received %d bytes", len(resp.content))
+        return resp.content
+
+    raise RuntimeError(f"[image_gen][decode] unrecognized image URL format: {url[:100]}")
+
+
+def _extract_data_url_from_text(text: str) -> bytes | None:
+    """Try to extract a base64 data URL from text content."""
+    match = re.search(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", text)
+    if match:
+        log.info("[image_gen][openrouter] found data URL embedded in text content")
+        return _decode_data_url(match.group(0))
+    return None
 
 
 def _upload_to_supabase(
@@ -191,7 +261,7 @@ def generate_image(
 
     Raises:
         RuntimeError: If generation or upload fails.
-        TimeoutError: If fal.ai call exceeds timeout.
+        TimeoutError: If OpenRouter call exceeds timeout.
         ValueError: If target is invalid.
     """
     if target not in ("background", "cover"):
@@ -206,28 +276,22 @@ def generate_image(
 
     t0 = time.time()
 
-    # Step 1: Generate image via fal.ai
+    # Step 1: Generate image via OpenRouter
     try:
-        fal_url = _generate_fal_image(prompt.strip())
-    except TimeoutError:
-        log.error("[image_gen][fal] TIMEOUT after %.1fs", time.time() - t0)
-        raise
+        image_bytes = _generate_image_openrouter(prompt.strip())
+    except http_requests.exceptions.Timeout:
+        log.error("[image_gen][openrouter] TIMEOUT after %.1fs", time.time() - t0)
+        raise TimeoutError(f"Image generation timed out after {GENERATE_TIMEOUT}s")
     except RuntimeError:
-        raise  # Already has good error message from _generate_fal_image
+        raise  # Already has descriptive error message
     except Exception as e:
-        log.error("[image_gen][fal] unexpected error: %s\n%s", e, traceback.format_exc())
+        log.error("[image_gen][openrouter] unexpected error: %s\n%s", e, traceback.format_exc())
         raise RuntimeError(f"Image generation failed: {e}") from e
 
-    log.info("[image_gen][fal] completed in %.1fs", time.time() - t0)
+    log.info("[image_gen][openrouter] completed in %.1fs, image=%d bytes",
+             time.time() - t0, len(image_bytes))
 
-    # Step 2: Download from temporary fal.ai URL
-    try:
-        image_bytes = _download_image(fal_url)
-    except Exception as e:
-        log.error("[image_gen][download] FAILED: %s\n%s", e, traceback.format_exc())
-        raise RuntimeError(f"Failed to download generated image: {e}") from e
-
-    # Step 3: Upload to Supabase Storage (permanent URL)
+    # Step 2: Upload to Supabase Storage (permanent URL)
     try:
         public_url = _upload_to_supabase(image_bytes, user_id, template_id, target)
     except Exception as e:
