@@ -4082,7 +4082,13 @@ def api_generate_carousel():
             "prompt": "5 strategie per aumentare le vendite",
             "template": "minimal_industrial",   // optional, default minimal_industrial
             "num_images": 3,                     // optional, 1-3
-            "selected_asset": 0                  // optional, which asset as background
+            "selected_asset": 0,                 // optional, which asset as background
+            "overrides": {                       // optional, user customizations
+                "title_font": "Montserrat",
+                "title_color": "#FFD700",
+                "subtitle_size": 40,
+                "accent_color": "#ff0000"
+            }
         }
 
     Response::
@@ -4106,6 +4112,7 @@ def api_generate_carousel():
     template_id = body.get("template", "minimal_industrial")
     num_images = min(max(int(body.get("num_images", 3)), 1), 3)
     selected_asset = int(body.get("selected_asset", 0))
+    overrides = body.get("overrides") or {}
 
     try:
         result = generate_instagram_carousel(
@@ -4114,6 +4121,7 @@ def api_generate_carousel():
             template_id=template_id,
             num_images=num_images,
             selected_asset_index=selected_asset,
+            overrides=overrides,
         )
         return jsonify(result)
     except ValueError as exc:

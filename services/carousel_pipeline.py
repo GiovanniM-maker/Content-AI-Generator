@@ -213,6 +213,7 @@ def generate_instagram_carousel(
     template_id: str = "minimal_industrial",
     num_images: int = 3,
     selected_asset_index: int = 0,
+    overrides: dict | None = None,
 ) -> dict:
     """Generate a complete Instagram carousel.
 
@@ -222,6 +223,15 @@ def generate_instagram_carousel(
         template_id: Which template to use (from templates/layouts/).
         num_images: How many asset images to generate (2-3).
         selected_asset_index: Which generated asset to use as background.
+        overrides: Optional user overrides for fonts/colors/sizes.
+                   Keys follow ``{element_type}_{property}`` naming::
+
+                       {
+                           "title_font": "Montserrat",
+                           "title_color": "#FFD700",
+                           "subtitle_size": 40,
+                           "accent_color": "#ff0000",
+                       }
 
     Returns::
 
@@ -238,6 +248,7 @@ def generate_instagram_carousel(
     t0 = time.time()
     session_id = uuid.uuid4().hex[:12]
     num_images = max(1, min(num_images, 3))
+    overrides = overrides or {}
 
     log.info("[carousel] ═══ START ═══ user=%s template=%s", user_id[:8], template_id)
     log.info("[carousel] prompt: %s", prompt[:200])
@@ -263,20 +274,23 @@ def generate_instagram_carousel(
     log.info("[carousel] assets generated: %d/%d successful",
              len(successful_assets), len(assets))
 
-    # 5) Select asset for background
-    asset_img = None
+    # 5) Build asset_map — maps template asset_ids to PIL Images
+    asset_map: dict = {}
     if successful_assets:
         idx = min(selected_asset_index, len(successful_assets) - 1)
-        selected = successful_assets[idx]
         try:
-            asset_img = load_asset_image(selected["image_url"])
-            log.info("[carousel] using asset %d as background", idx)
+            asset_map["background_asset"] = load_asset_image(
+                successful_assets[idx]["image_url"]
+            )
+            log.info("[carousel] mapped background_asset → asset %d", idx)
         except Exception as exc:
             log.warning("[carousel] failed to load asset image: %s", exc)
 
     # 6) Render slides
     log.info("[carousel] step 5: rendering slides…")
-    png_buffers = render_slides(template, content, asset_img=asset_img)
+    png_buffers = render_slides(
+        template, content, asset_map=asset_map, overrides=overrides,
+    )
     log.info("[carousel] rendered %d slides", len(png_buffers))
 
     # 7) Upload slides to Supabase

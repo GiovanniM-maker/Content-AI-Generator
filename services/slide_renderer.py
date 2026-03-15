@@ -1,13 +1,48 @@
-"""Pillow-based deterministic slide renderer for Instagram carousels.
+"""Template-driven Pillow slide renderer for Instagram carousels.
 
-Renders slides from three inputs:
-  - **template** — layout, fonts, colors, spacing (JSON dict)
-  - **content**  — structured text from the LLM (title, subtitle, bullets, cta)
-  - **asset**    — optional background/overlay image (PIL Image or URL)
+The renderer is **generic** — it contains zero layout logic.  All positioning,
+sizing, fonts, and colors come from the template JSON.  Each slide is defined
+as an ordered list of *elements*, and the renderer simply iterates and draws.
 
-Output: list of PNG byte buffers, one per slide (1080x1080 by default).
+Supported element types
+-----------------------
+- ``image``        — background or positioned image (asset or solid fill)
+- ``rect``         — filled rectangle (accent lines, overlays, dividers)
+- ``title``        — word-wrapped title text from content
+- ``subtitle``     — word-wrapped subtitle text from content
+- ``body``         — word-wrapped body paragraph from content
+- ``bullet_list``  — bulleted list from content["bullets"]
+- ``cta``          — call-to-action text (optionally inside a button rect)
+- ``slide_counter``— slide number indicator
 
-No HTML, no browser, no Playwright.  Pure pixel-level rendering with Pillow.
+Content binding
+---------------
+Each text element pulls its value from the structured content dict via a
+``content_key`` field (defaults to the element type name).  This means
+templates can map any element to any content field.
+
+Asset mapping
+-------------
+Image elements reference assets by an ``asset_id`` string.  The caller
+passes an ``asset_map`` dict that maps IDs to PIL Images::
+
+    asset_map = {"background_asset": <PIL.Image>, "logo": <PIL.Image>}
+
+User overrides
+--------------
+Callers may pass an ``overrides`` dict to change fonts, sizes, and colors
+without editing the template::
+
+    overrides = {
+        "title_font": "Montserrat",
+        "title_size": 80,
+        "title_color": "#FFD700",
+        "subtitle_font": "Inter",
+        "body_color": "#cccccc",
+        "accent_color": "#ff0000",
+    }
+
+The override keys follow the pattern ``{element_type}_{property}``.
 """
 
 from __future__ import annotations
@@ -15,7 +50,6 @@ from __future__ import annotations
 import io
 import logging
 import os
-import textwrap
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -40,14 +74,12 @@ def _resolve_font(family: str, size: int, weight: int = 400) -> ImageFont.FreeTy
     if cache_key in _font_cache:
         return _font_cache[cache_key]
 
-    # Map font family names to filenames we might have
     candidates = []
     if family.lower() == "inter":
         candidates = ["InterVariable.ttf", "Inter.ttc"]
     elif family.lower() == "playfair display":
         candidates = ["PlayfairDisplay-VariableFont_wght.ttf"]
     else:
-        # Try the family name as a filename
         candidates = [f"{family}.ttf", f"{family}.ttc"]
 
     # Always add Inter as fallback
@@ -64,7 +96,6 @@ def _resolve_font(family: str, size: int, weight: int = 400) -> ImageFont.FreeTy
                 except Exception:
                     continue
 
-    # Ultimate fallback: Pillow default
     log.warning("[renderer] no font found for %s/%d, using default", family, size)
     font = ImageFont.load_default(size=size)
     _font_cache[cache_key] = font
@@ -88,7 +119,7 @@ def _parse_color(color_str: str) -> tuple[int, ...]:
 
 
 # ---------------------------------------------------------------------------
-# Text wrapping helper
+# Text wrapping
 # ---------------------------------------------------------------------------
 
 def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont,
@@ -112,342 +143,274 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFon
 
 
 # ---------------------------------------------------------------------------
-# Individual slide renderers
+# Override application
 # ---------------------------------------------------------------------------
 
-def _render_cover(
-    template: dict, content: dict, asset_img: Optional[Image.Image],
-) -> Image.Image:
-    """Render the cover slide: big title + subtitle over background."""
-    colors = template["colors"]
-    typo = template["typography"]
-    layout = template["layout"]
-    w, h = layout["width"], layout["height"]
-    pad = layout["padding"]
+def _apply_overrides(element: dict, overrides: dict) -> dict:
+    """Return a shallow copy of *element* with user overrides merged in.
 
-    bg_color = _parse_color(colors["background"])
-    img = Image.new("RGBA", (w, h), bg_color)
+    Override keys follow ``{element_type}_{property}`` naming, e.g.
+    ``title_font``, ``subtitle_color``, ``cta_size``.
+    """
+    if not overrides:
+        return element
+    etype = element.get("type", "")
+    merged = dict(element)
+    for prop in ("font", "size", "color", "weight"):
+        key = f"{etype}_{prop}"
+        if key in overrides:
+            merged[prop] = overrides[key]
+    # Generic accent override applies to rect elements with role "accent"
+    if etype == "rect" and "accent_color" in overrides:
+        merged["color"] = overrides["accent_color"]
+    return merged
 
-    # Composite asset as background if available
-    if asset_img:
-        asset_resized = asset_img.resize((w, h), Image.LANCZOS)
-        # Darken overlay for text readability
-        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 140))
-        img = Image.alpha_composite(img, asset_resized.convert("RGBA"))
-        img = Image.alpha_composite(img, overlay)
 
-    draw = ImageDraw.Draw(img)
-    text_area_w = w - 2 * pad
+# ---------------------------------------------------------------------------
+# Element renderers — each handles one element type
+# ---------------------------------------------------------------------------
 
-    # Accent line
-    if layout.get("accent_line"):
-        accent_color = _parse_color(colors["accent"])
-        line_w = layout.get("accent_line_width", 64)
-        line_h = layout.get("accent_line_height", 5)
-        draw.rectangle(
-            [pad, h // 2 - 120, pad + line_w, h // 2 - 120 + line_h],
-            fill=accent_color,
-        )
+def _draw_image(
+    img: Image.Image, draw: ImageDraw.ImageDraw,
+    el: dict, content: dict, asset_map: dict,
+    slide_number: int,
+) -> None:
+    """Draw an image element (background asset, logo, etc.)."""
+    asset_id = el.get("asset_id", "")
+    pil_asset = asset_map.get(asset_id) if asset_id else None
+    if pil_asset is None:
+        # Fill with solid color if specified, otherwise skip
+        fill = el.get("fill")
+        if fill:
+            overlay = Image.new("RGBA", img.size, _parse_color(fill))
+            img.paste(Image.alpha_composite(img.convert("RGBA"), overlay), (0, 0))
+        return
 
-    # Title
-    title = content.get("title", "")
-    title_font = _resolve_font(
-        template["fonts"]["title"], typo["title_size"], typo["title_weight"]
+    x, y = int(el.get("x", 0)), int(el.get("y", 0))
+    w, h = int(el.get("width", img.width)), int(el.get("height", img.height))
+    resized = pil_asset.resize((w, h), Image.LANCZOS).convert("RGBA")
+    img.paste(Image.alpha_composite(
+        img.crop((x, y, x + w, y + h)).convert("RGBA"), resized
+    ), (x, y))
+
+
+def _draw_rect(
+    img: Image.Image, draw: ImageDraw.ImageDraw,
+    el: dict, content: dict, asset_map: dict,
+    slide_number: int,
+) -> None:
+    """Draw a filled rectangle (accent line, divider, overlay)."""
+    x, y = int(el.get("x", 0)), int(el.get("y", 0))
+    w = int(el.get("width", 64))
+    h = int(el.get("height", 5))
+    color = _parse_color(el.get("color", "#ffffff"))
+    radius = int(el.get("radius", 0))
+    if radius:
+        draw.rounded_rectangle([x, y, x + w, y + h], radius=radius, fill=color)
+    else:
+        draw.rectangle([x, y, x + w, y + h], fill=color)
+
+
+def _draw_text_element(
+    img: Image.Image, draw: ImageDraw.ImageDraw,
+    el: dict, content: dict, asset_map: dict,
+    slide_number: int,
+) -> None:
+    """Draw a single text block (title, subtitle, body, cta)."""
+    content_key = el.get("content_key", el.get("type", "title"))
+    text = content.get(content_key, "")
+    if not text:
+        return
+
+    font = _resolve_font(
+        el.get("font", "Inter"),
+        int(el.get("size", 36)),
+        int(el.get("weight", 400)),
     )
-    title_lines = _wrap_text(draw, title, title_font, text_area_w)
-    y = h // 2 - 100
-    for line in title_lines:
-        draw.text((pad, y), line, fill=_parse_color(colors["text"]), font=title_font)
-        bbox = draw.textbbox((0, 0), line, font=title_font)
-        y += (bbox[3] - bbox[1]) + 10
+    color = _parse_color(el.get("color", "#ffffff"))
+    x, y = int(el.get("x", 0)), int(el.get("y", 0))
+    max_w = int(el.get("max_width", img.width - x - 80))
+    align = el.get("align", "left")
+    line_gap = int(el.get("line_gap", 10))
 
-    # Subtitle
-    subtitle = content.get("subtitle", "")
-    if subtitle:
-        sub_font = _resolve_font(
-            template["fonts"]["body"], typo["subtitle_size"], typo["subtitle_weight"]
-        )
-        y += 20
-        sub_lines = _wrap_text(draw, subtitle, sub_font, text_area_w)
-        for line in sub_lines:
-            draw.text(
-                (pad, y), line,
-                fill=_parse_color(colors.get("secondary_text", colors["text"])),
-                font=sub_font,
-            )
-            bbox = draw.textbbox((0, 0), line, font=sub_font)
-            y += (bbox[3] - bbox[1]) + 8
-
-    # Slide counter
-    if layout.get("show_slide_counter"):
-        counter_font = _resolve_font(template["fonts"]["body"], 24)
-        draw.text(
-            (w - pad - 40, h - pad),
-            "1",
-            fill=_parse_color(colors.get("secondary_text", colors["text"])),
-            font=counter_font,
-        )
-
-    return img
+    lines = _wrap_text(draw, text, font, max_w)
+    for line in lines:
+        if align == "center":
+            bbox = draw.textbbox((0, 0), line, font=font)
+            lw = bbox[2] - bbox[0]
+            tx = x + (max_w - lw) // 2
+        elif align == "right":
+            bbox = draw.textbbox((0, 0), line, font=font)
+            lw = bbox[2] - bbox[0]
+            tx = x + max_w - lw
+        else:
+            tx = x
+        draw.text((tx, y), line, fill=color, font=font)
+        bbox = draw.textbbox((0, 0), line, font=font)
+        y += (bbox[3] - bbox[1]) + line_gap
 
 
-def _render_text(
-    template: dict, content: dict, asset_img: Optional[Image.Image],
-    slide_number: int = 2,
-) -> Image.Image:
-    """Render a text/content slide: subtitle heading + body text."""
-    colors = template["colors"]
-    typo = template["typography"]
-    layout = template["layout"]
-    w, h = layout["width"], layout["height"]
-    pad = layout["padding"]
+def _draw_bullet_list(
+    img: Image.Image, draw: ImageDraw.ImageDraw,
+    el: dict, content: dict, asset_map: dict,
+    slide_number: int,
+) -> None:
+    """Draw a bulleted list from content['bullets']."""
+    bullets = content.get(el.get("content_key", "bullets"), [])
+    if not bullets:
+        return
 
-    bg_color = _parse_color(colors["background"])
-    img = Image.new("RGBA", (w, h), bg_color)
-
-    if asset_img:
-        asset_resized = asset_img.resize((w, h), Image.LANCZOS)
-        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 160))
-        img = Image.alpha_composite(img, asset_resized.convert("RGBA"))
-        img = Image.alpha_composite(img, overlay)
-
-    draw = ImageDraw.Draw(img)
-    text_area_w = w - 2 * pad
-
-    # Heading
-    heading = content.get("subtitle", content.get("title", ""))
-    heading_font = _resolve_font(
-        template["fonts"]["title"], typo.get("subtitle_size", 36), typo.get("subtitle_weight", 400)
+    font = _resolve_font(
+        el.get("font", "Inter"),
+        int(el.get("size", 32)),
+        int(el.get("weight", 400)),
     )
-    y = pad + 40
-
-    if layout.get("accent_line"):
-        accent_color = _parse_color(colors["accent"])
-        draw.rectangle(
-            [pad, y, pad + layout.get("accent_line_width", 64), y + layout.get("accent_line_height", 5)],
-            fill=accent_color,
-        )
-        y += 30
-
-    heading_lines = _wrap_text(draw, heading, heading_font, text_area_w)
-    for line in heading_lines:
-        draw.text((pad, y), line, fill=_parse_color(colors["text"]), font=heading_font)
-        bbox = draw.textbbox((0, 0), line, font=heading_font)
-        y += (bbox[3] - bbox[1]) + 10
-
-    # Body (use first bullet or body text)
-    body = content.get("body", "")
-    if not body and content.get("bullets"):
-        body = " ".join(content["bullets"][:2])
-    if body:
-        body_font = _resolve_font(
-            template["fonts"]["body"], typo["body_size"], typo["body_weight"]
-        )
-        y += 40
-        body_lines = _wrap_text(draw, body, body_font, text_area_w)
-        for line in body_lines:
-            draw.text(
-                (pad, y), line,
-                fill=_parse_color(colors.get("secondary_text", colors["text"])),
-                font=body_font,
-            )
-            bbox = draw.textbbox((0, 0), line, font=body_font)
-            y += (bbox[3] - bbox[1]) + 10
-
-    if layout.get("show_slide_counter"):
-        counter_font = _resolve_font(template["fonts"]["body"], 24)
-        draw.text(
-            (w - pad - 40, h - pad),
-            str(slide_number),
-            fill=_parse_color(colors.get("secondary_text", colors["text"])),
-            font=counter_font,
-        )
-
-    return img
-
-
-def _render_list(
-    template: dict, content: dict, asset_img: Optional[Image.Image],
-    slide_number: int = 3,
-) -> Image.Image:
-    """Render a list/bullets slide."""
-    colors = template["colors"]
-    typo = template["typography"]
-    layout = template["layout"]
-    w, h = layout["width"], layout["height"]
-    pad = layout["padding"]
-
-    bg_color = _parse_color(colors["background"])
-    img = Image.new("RGBA", (w, h), bg_color)
-
-    if asset_img:
-        asset_resized = asset_img.resize((w, h), Image.LANCZOS)
-        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 160))
-        img = Image.alpha_composite(img, asset_resized.convert("RGBA"))
-        img = Image.alpha_composite(img, overlay)
-
-    draw = ImageDraw.Draw(img)
-    text_area_w = w - 2 * pad
-
-    # Heading
-    heading = content.get("subtitle", content.get("title", ""))
-    heading_font = _resolve_font(
-        template["fonts"]["title"], typo.get("subtitle_size", 36), typo.get("subtitle_weight", 400)
-    )
-    y = pad + 40
-
-    if layout.get("accent_line"):
-        accent_color = _parse_color(colors["accent"])
-        draw.rectangle(
-            [pad, y, pad + layout.get("accent_line_width", 64), y + layout.get("accent_line_height", 5)],
-            fill=accent_color,
-        )
-        y += 30
-
-    heading_lines = _wrap_text(draw, heading, heading_font, text_area_w)
-    for line in heading_lines:
-        draw.text((pad, y), line, fill=_parse_color(colors["text"]), font=heading_font)
-        bbox = draw.textbbox((0, 0), line, font=heading_font)
-        y += (bbox[3] - bbox[1]) + 10
-
-    # Bullets
-    bullets = content.get("bullets", [])
-    bullet_font = _resolve_font(
-        template["fonts"]["body"], typo["body_size"], typo["body_weight"]
-    )
-    accent_color = _parse_color(colors["accent"])
-    text_color = _parse_color(colors["text"])
-    y += 40
-    bullet_indent = 30
+    text_color = _parse_color(el.get("color", "#ffffff"))
+    marker_color = _parse_color(el.get("marker_color", el.get("color", "#ffffff")))
+    x, y = int(el.get("x", 0)), int(el.get("y", 0))
+    max_w = int(el.get("max_width", img.width - x - 80))
+    indent = int(el.get("indent", 30))
+    marker_size = int(el.get("marker_size", 12))
+    item_gap = int(el.get("item_gap", 16))
+    line_gap = int(el.get("line_gap", 8))
 
     for bullet in bullets:
-        # Bullet marker (accent colored circle)
+        # Marker
+        my = y + 8
         draw.ellipse(
-            [pad, y + 8, pad + 12, y + 20],
-            fill=accent_color,
+            [x, my, x + marker_size, my + marker_size],
+            fill=marker_color,
         )
-        # Bullet text
-        bullet_lines = _wrap_text(draw, bullet, bullet_font, text_area_w - bullet_indent)
-        for i, line in enumerate(bullet_lines):
-            draw.text(
-                (pad + bullet_indent, y), line,
-                fill=text_color, font=bullet_font,
-            )
-            bbox = draw.textbbox((0, 0), line, font=bullet_font)
-            y += (bbox[3] - bbox[1]) + 8
-        y += 16  # gap between bullets
-
-    if layout.get("show_slide_counter"):
-        counter_font = _resolve_font(template["fonts"]["body"], 24)
-        draw.text(
-            (w - pad - 40, h - pad),
-            str(slide_number),
-            fill=_parse_color(colors.get("secondary_text", colors["text"])),
-            font=counter_font,
-        )
-
-    return img
+        # Text
+        lines = _wrap_text(draw, bullet, font, max_w - indent)
+        for line in lines:
+            draw.text((x + indent, y), line, fill=text_color, font=font)
+            bbox = draw.textbbox((0, 0), line, font=font)
+            y += (bbox[3] - bbox[1]) + line_gap
+        y += item_gap
 
 
-def _render_cta(
-    template: dict, content: dict, asset_img: Optional[Image.Image],
-    slide_number: int = 4,
-) -> Image.Image:
-    """Render a call-to-action slide: CTA text centered with accent button."""
-    colors = template["colors"]
-    typo = template["typography"]
-    layout = template["layout"]
-    w, h = layout["width"], layout["height"]
-    pad = layout["padding"]
+def _draw_cta(
+    img: Image.Image, draw: ImageDraw.ImageDraw,
+    el: dict, content: dict, asset_map: dict,
+    slide_number: int,
+) -> None:
+    """Draw a call-to-action element, optionally with a button background."""
+    text = content.get(el.get("content_key", "cta"), "")
+    if not text:
+        return
 
-    bg_color = _parse_color(colors["background"])
-    img = Image.new("RGBA", (w, h), bg_color)
-
-    if asset_img:
-        asset_resized = asset_img.resize((w, h), Image.LANCZOS)
-        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 140))
-        img = Image.alpha_composite(img, asset_resized.convert("RGBA"))
-        img = Image.alpha_composite(img, overlay)
-
-    draw = ImageDraw.Draw(img)
-    text_area_w = w - 2 * pad
-
-    cta_text = content.get("cta", "Scopri di più")
-    cta_font = _resolve_font(
-        template["fonts"]["title"], typo.get("cta_size", 40), typo.get("cta_weight", 700)
+    font = _resolve_font(
+        el.get("font", "Inter"),
+        int(el.get("size", 40)),
+        int(el.get("weight", 700)),
     )
+    text_color = _parse_color(el.get("color", "#ffffff"))
+    x, y = int(el.get("x", 0)), int(el.get("y", 0))
+    max_w = int(el.get("max_width", img.width - x - 80))
+    align = el.get("align", "center")
+    line_gap = int(el.get("line_gap", 10))
 
-    # Center CTA text
-    cta_lines = _wrap_text(draw, cta_text, cta_font, text_area_w - 80)
-    total_text_height = 0
-    for line in cta_lines:
-        bbox = draw.textbbox((0, 0), line, font=cta_font)
-        total_text_height += (bbox[3] - bbox[1]) + 10
+    lines = _wrap_text(draw, text, font, max_w)
 
-    # Draw accent button background
-    accent_color = _parse_color(colors["accent"])
-    btn_pad_x, btn_pad_y = 60, 30
-    btn_w = text_area_w - 80
-    btn_h = total_text_height + 2 * btn_pad_y
-    btn_x = (w - btn_w) // 2
-    btn_y = (h - btn_h) // 2
+    # Optional button background
+    btn_color = el.get("button_color")
+    if btn_color:
+        total_h = 0
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            total_h += (bbox[3] - bbox[1]) + line_gap
+        btn_pad_x = int(el.get("button_padding_x", 60))
+        btn_pad_y = int(el.get("button_padding_y", 30))
+        btn_radius = int(el.get("button_radius", 12))
+        btn_w = max_w
+        btn_h = total_h + 2 * btn_pad_y
+        btn_x = x
+        btn_y = y
+        draw.rounded_rectangle(
+            [btn_x, btn_y, btn_x + btn_w, btn_y + btn_h],
+            radius=btn_radius,
+            fill=_parse_color(btn_color),
+        )
+        # Shift text inside button
+        y = btn_y + btn_pad_y
+        x = btn_x
 
-    draw.rounded_rectangle(
-        [btn_x, btn_y, btn_x + btn_w, btn_y + btn_h],
-        radius=12,
-        fill=accent_color,
+    for line in lines:
+        if align == "center":
+            bbox = draw.textbbox((0, 0), line, font=font)
+            lw = bbox[2] - bbox[0]
+            tx = x + (max_w - lw) // 2
+        else:
+            tx = x
+        draw.text((tx, y), line, fill=text_color, font=font)
+        bbox = draw.textbbox((0, 0), line, font=font)
+        y += (bbox[3] - bbox[1]) + line_gap
+
+
+def _draw_slide_counter(
+    img: Image.Image, draw: ImageDraw.ImageDraw,
+    el: dict, content: dict, asset_map: dict,
+    slide_number: int,
+) -> None:
+    """Draw the slide number indicator."""
+    font = _resolve_font(
+        el.get("font", "Inter"),
+        int(el.get("size", 24)),
     )
-
-    # Draw CTA text centered inside button
-    y = btn_y + btn_pad_y
-    for line in cta_lines:
-        bbox = draw.textbbox((0, 0), line, font=cta_font)
-        line_w = bbox[2] - bbox[0]
-        x = (w - line_w) // 2
-        draw.text((x, y), line, fill=_parse_color(colors["text"]), font=cta_font)
-        y += (bbox[3] - bbox[1]) + 10
-
-    # Optional subtitle above button
-    subtitle = content.get("subtitle", "")
-    if subtitle:
-        sub_font = _resolve_font(
-            template["fonts"]["body"], typo.get("subtitle_size", 36)
-        )
-        sub_lines = _wrap_text(draw, subtitle, sub_font, text_area_w)
-        sub_y = btn_y - 80
-        for line in sub_lines:
-            bbox = draw.textbbox((0, 0), line, font=sub_font)
-            line_w = bbox[2] - bbox[0]
-            x = (w - line_w) // 2
-            draw.text(
-                (x, sub_y), line,
-                fill=_parse_color(colors.get("secondary_text", colors["text"])),
-                font=sub_font,
-            )
-            sub_y += (bbox[3] - bbox[1]) + 8
-
-    if layout.get("show_slide_counter"):
-        counter_font = _resolve_font(template["fonts"]["body"], 24)
-        draw.text(
-            (w - pad - 40, h - pad),
-            str(slide_number),
-            fill=_parse_color(colors.get("secondary_text", colors["text"])),
-            font=counter_font,
-        )
-
-    return img
+    color = _parse_color(el.get("color", "#aaaaaa"))
+    x, y = int(el.get("x", img.width - 120)), int(el.get("y", img.height - 80))
+    draw.text((x, y), str(slide_number), fill=color, font=font)
 
 
 # ---------------------------------------------------------------------------
-# Slide-type dispatcher
+# Element dispatcher
 # ---------------------------------------------------------------------------
 
-_RENDERERS = {
-    "cover": _render_cover,
-    "text": _render_text,
-    "list": _render_list,
-    "cta": _render_cta,
+_ELEMENT_RENDERERS = {
+    "image": _draw_image,
+    "rect": _draw_rect,
+    "title": _draw_text_element,
+    "subtitle": _draw_text_element,
+    "body": _draw_text_element,
+    "bullet_list": _draw_bullet_list,
+    "cta": _draw_cta,
+    "slide_counter": _draw_slide_counter,
 }
+
+
+# ---------------------------------------------------------------------------
+# Single-slide renderer (generic)
+# ---------------------------------------------------------------------------
+
+def _render_slide(
+    canvas: dict,
+    elements: list[dict],
+    content: dict,
+    asset_map: dict,
+    overrides: dict,
+    slide_number: int,
+) -> Image.Image:
+    """Render one slide by iterating its element list."""
+    w = int(canvas.get("width", 1080))
+    h = int(canvas.get("height", 1080))
+    bg = _parse_color(canvas.get("background", "#111111"))
+
+    img = Image.new("RGBA", (w, h), bg)
+    draw = ImageDraw.Draw(img)
+
+    for el in elements:
+        el = _apply_overrides(el, overrides)
+        etype = el.get("type", "")
+        renderer = _ELEMENT_RENDERERS.get(etype)
+        if renderer is None:
+            log.warning("[renderer] unknown element type '%s', skipping", etype)
+            continue
+        renderer(img, draw, el, content, asset_map, slide_number)
+        # Re-acquire draw after potential image paste operations
+        draw = ImageDraw.Draw(img)
+
+    return img
 
 
 # ---------------------------------------------------------------------------
@@ -457,6 +420,10 @@ _RENDERERS = {
 def render_slides(
     template: dict,
     content: dict,
+    asset_map: dict | None = None,
+    overrides: dict | None = None,
+    # Legacy compat — if caller passes asset_img instead of asset_map,
+    # we wrap it into asset_map with the key "background_asset".
     asset_img: Optional[Image.Image] = None,
 ) -> list[bytes]:
     """Render all slides defined in the template and return PNG byte buffers.
@@ -470,36 +437,41 @@ def render_slides(
                       "subtitle": "...",
                       "bullets": ["...", "..."],
                       "cta": "...",
-                      "body": "..."   # optional
+                      "body": "..."
                     }
 
-        asset_img: Optional PIL Image to use as slide background.
+        asset_map: Dict mapping asset_id strings to PIL Images.
+        overrides: Optional user overrides for fonts/colors/sizes.
+        asset_img: Legacy parameter — single background image.
 
     Returns:
-        List of PNG byte buffers, one per slide in template["slides"] order.
+        List of PNG byte buffers, one per slide.
     """
-    slides_spec = template.get("slides", [
-        {"type": "cover"},
-        {"type": "text"},
-        {"type": "list"},
-        {"type": "cta"},
-    ])
+    asset_map = dict(asset_map or {})
+    overrides = overrides or {}
+
+    # Legacy compat: wrap single asset_img
+    if asset_img is not None and "background_asset" not in asset_map:
+        asset_map["background_asset"] = asset_img
+
+    canvas = template.get("canvas", {
+        "width": template.get("layout", {}).get("width", 1080),
+        "height": template.get("layout", {}).get("height", 1080),
+        "background": template.get("colors", {}).get("background", "#111111"),
+    })
+
+    slides = template.get("slides", [])
 
     png_buffers: list[bytes] = []
-    for idx, slide_def in enumerate(slides_spec):
-        slide_type = slide_def["type"]
-        renderer = _RENDERERS.get(slide_type, _render_text)
+    for idx, slide_def in enumerate(slides):
+        elements = slide_def.get("elements", [])
+        pil_img = _render_slide(canvas, elements, content, asset_map, overrides, idx + 1)
 
-        if slide_type == "cover":
-            pil_img = renderer(template, content, asset_img)
-        else:
-            pil_img = renderer(template, content, asset_img, slide_number=idx + 1)
-
-        # Convert to PNG bytes
         buf = io.BytesIO()
         pil_img.convert("RGB").save(buf, format="PNG", optimize=True)
         png_buffers.append(buf.getvalue())
-        log.info("[renderer] slide %d (%s) → %d bytes", idx + 1, slide_type, len(buf.getvalue()))
+        log.info("[renderer] slide %d → %d bytes (%d elements)",
+                 idx + 1, len(buf.getvalue()), len(elements))
 
     return png_buffers
 
@@ -516,5 +488,4 @@ def load_asset_image(source: str | bytes) -> Image.Image:
         resp.raise_for_status()
         return Image.open(io.BytesIO(resp.content))
 
-    # Local file path
     return Image.open(source)
